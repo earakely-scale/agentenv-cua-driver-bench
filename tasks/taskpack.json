@@ -1,0 +1,6 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop"},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop", "artifact_id": "taskpack", "destination_path": "bench"},
+  {"id": "check", "type": "run_container_unit_tests_verifier", "env_id": "desktop", "verifier_id": "taskpack",
+   "command": "cd bench && sha256sum --quiet --strict -c MANIFEST.sha256 && test -s probes/CDB-G02/task.json"}
+]

@@ -1,0 +1,4 @@
+/artifacts/taskpack/
+/.taskpack-*
+__pycache__/
+.pytest_cache/

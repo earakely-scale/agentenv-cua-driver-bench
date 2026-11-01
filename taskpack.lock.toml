@@ -1,0 +1,38 @@
+# trycua's Cua Driver Bench task pack, as tools/taskpack.py fetches it into artifacts/taskpack/: each include's files
+# at this commit of trycua's repo, under its "to", and sha256 over their MANIFEST.sha256. Repin with
+# python tools/taskpack.py pin <commit>.
+repo = "trycua/cua"
+commit = "6c0a8c3bb2d32580c3231592f60739c33edc567a"
+sha256 = ""
+
+[[include]]
+from = "libs/cua-driver-bench/LICENSE"
+to = "LICENSE"
+
+[[include]]
+from = "libs/cua-driver-bench/taskpack"
+to = "taskpack"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/CDB-S02"
+to = "probes/CDB-S02"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/CDB-S03"
+to = "probes/CDB-S03"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/CDB-S04"
+to = "probes/CDB-S04"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/CDB-G02"
+to = "probes/CDB-G02"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/CDB-G03"
+to = "probes/CDB-G03"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/CDB-G04"
+to = "probes/CDB-G04"
