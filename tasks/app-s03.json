@@ -1,0 +1,6 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-s03"},
+  {"id": "check", "type": "run_code", "env_id": "desktop-s03", "script_artifact_id": "check_app",
+   "args": {"task": "cdb-s03"}, "timeout_seconds": 900},
+  {"id": "snapshot", "type": "snapshot_env", "env_id": "desktop-s03"}
+]

@@ -5,6 +5,10 @@ against the lock's digest. The task pack is never copied into this repo.
     python tools/taskpack.py              fetch it, or keep what's there when it matches the lock
     python tools/taskpack.py verify       check what's there against the lock
     python tools/taskpack.py pin COMMIT   fetch it at COMMIT and write that commit and its digest to the lock
+    python tools/taskpack.py apps         write each task app's files.json: the task's files its computer installs
+
+A task app's computer fetches its task's files itself, at put, by the URL and sha256 its ``files.json`` lists; this repo
+holds those hashes, never the files.
 
 ``GITHUB_TOKEN``, when set, is sent to GitHub's API, which allows few calls without one."""
 from __future__ import annotations
@@ -27,6 +31,10 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parent.parent
 LOCK = ROOT / "taskpack.lock.toml"
 TARGET = ROOT / "artifacts" / "taskpack"
+ENVS = ROOT / "envs"
+#: The bench tasks with an app of their own, each in envs/<task>/, and where their folders are in the task pack.
+TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
+TASK_DIR = "taskpack/tasks/shared"
 MANIFEST = "MANIFEST.sha256"
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
@@ -86,6 +94,44 @@ def pin(commit: str, lock_path: Path = LOCK, target: Path = TARGET) -> str:
     finally:
         shutil.rmtree(staged, ignore_errors=True)
     return got
+
+
+def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str, ...] = TASKS) -> list[Path]:
+    """Write ``files.json`` in each task's app folder: the task's files its computer installs, each by its URL at the
+    lock's commit and its sha256 as the verified task pack's manifest has it; the files written."""
+    verify(lock, target)
+    hashes = {name: sha for sha, name in (line.split("  ", 1) for line in (target / MANIFEST).read_text().splitlines())}
+    written = []
+    for task in tasks:
+        prefix = f"{TASK_DIR}/{task}/"
+        files = [{"path": name[len(prefix):], "url": _url(lock, name), "sha256": sha}
+                 for name, sha in sorted(hashes.items())
+                 if name.startswith(prefix) and _for_the_computer(name[len(prefix):])]
+        if not files:
+            raise SystemExit(f"the task pack has no files of {task}")
+        if not (envs / task).is_dir():
+            raise SystemExit(f"{envs / task} isn't there: it's the app of {task}")
+        path = envs / task / "files.json"
+        path.write_text(json.dumps({"commit": lock.commit, "files": files}, indent=1) + "\n", encoding="utf-8")
+        written.append(path)
+    return written
+
+
+def _for_the_computer(path: str) -> bool:
+    """Whether a file of a task's folder goes into its computer: its apps, reset scripts and fixture, its Linux launch,
+    brief and manifest; never its evaluator, tests or tools, which grade and build it outside."""
+    parts = PurePosixPath(path).parts
+    if parts[0] == "apps":
+        return "tests" not in parts
+    return parts[0] in ("reset", "fixture") or path in ("platform/launch.linux.json", "brief.md", "task.cuabench.json")
+
+
+def _url(lock: Lock, name: str) -> str:
+    """The URL of the task pack's file ``name`` at the lock's commit, by the include that put it there."""
+    for source, to in lock.include:
+        if name == to or name.startswith(f"{to}/"):
+            return f"{RAW}/{lock.repo}/{lock.commit}/{urllib.parse.quote(source + name[len(to):])}"
+    raise SystemExit(f"{name} isn't under any include of the lock")
 
 
 def download(lock: Lock, parent: Path) -> Path:
@@ -202,8 +248,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("verify", help="check artifacts/taskpack against the lock")
     pinned = sub.add_parser("pin", help="fetch at a commit and write it and its digest to the lock")
     pinned.add_argument("commit")
+    sub.add_parser("apps", help="write each task app's files.json from the verified task pack")
     args = parser.parse_args(argv)
-    if args.command == "pin":
+    if args.command == "apps":
+        for path in apps(read_lock()):
+            print(f"wrote {path.relative_to(ROOT)}")
+    elif args.command == "pin":
         print(f"pinned {args.commit}: {pin(args.commit)}")
     elif args.command == "verify":
         verify(read_lock())
