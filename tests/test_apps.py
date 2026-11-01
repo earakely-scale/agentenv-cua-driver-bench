@@ -53,7 +53,8 @@ def test_a_task_app_lists_its_tasks_files_at_the_locks_commit(task):
     for f in listed["files"]:
         assert f["url"].startswith(f"https://raw.githubusercontent.com/trycua/cua/{commit}/libs/cua-driver-bench/"
                                    f"taskpack/tasks/shared/{task}/")
-        assert "/tests/" not in f["url"] and "/evaluator/" not in f["url"]
+        assert not f["path"].startswith(("tests/", "evaluator/", "tools/"))
+        assert not (f["path"].startswith("apps/") and "/tests/" in f["path"])
 
 
 @pytest.mark.parametrize("task", TASKS)
