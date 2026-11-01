@@ -22,15 +22,23 @@ def run(input):
     workspace, spec = Path.home() / task, json.loads((APPS / task / "task/platform/launch.linux.json").read_text())
     windows = [app["window"] for app in spec["apps"] if app["kind"] != "browser" and "window" in app]
     rpc = _rpc(f"{input['env']['url']}/svc/{task}/agentenv", input["env"]["headers"])
-    report = {"pristine_at_boot": _pristine(task, workspace), "windows_at_boot": _shown_all(windows, 5)}
+    report = {"pristine_at_boot": _pristine(task, workspace), "windows_at_boot": _shown_all(windows, 5),
+              "one_of_each_window_at_boot": _one_each(windows)}
+    launcher = _launchers(task)
 
     rpc("data/add", {"parts": [{"kind": "file", "file": {"bytes": base64.b64encode(b"a note\n").decode()},
                                 "metadata": {DATA_OBJECTS: {"path": f"{task}/{NOTE}"}}}]})
     report["loaded"] = (workspace / NOTE).read_text() == "a note\n"
+    started = time.monotonic()
     rpc("data/reset", {})
+    report["reset_s"] = round(time.monotonic() - started, 1)
     report["reset_removed"] = not (workspace / NOTE).exists()
     report["pristine_after_reset"] = _pristine(task, workspace)
     report["windows_after_reset"] = _shown_all(windows, 180)
+    report["one_of_each_window_after_reset"] = _one_each(windows)
+    relaunched = _launchers(task)
+    report["one_launcher_before_and_after"] = len(launcher) == 1 and len(relaunched) == 1
+    report["launcher_relaunched"] = launcher.isdisjoint(relaunched)
     parts = rpc("data/get", {})["parts"]
     exported = {part["metadata"][DATA_OBJECTS]["path"] for part in parts}
     report["exported"] = len(exported)
@@ -84,10 +92,35 @@ def _shown_all(windows, wait_s):
 
 
 def _shown(window):
+    return bool(_windows(window))
+
+
+def _one_each(windows):
+    counts = {json.dumps(window, sort_keys=True): len(_windows(window)) for window in windows}
+    if any(count != 1 for count in counts.values()):
+        print("windows by match:", counts)
+    return all(count == 1 for count in counts.values())
+
+
+def _windows(window):
     title = window.get("title")
     pattern = f"^{_literal(title)}$" if title else _literal(window["title_contains"])
-    return subprocess.run(["xdotool", "search", "--onlyvisible", "--name", pattern],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    found = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", pattern], capture_output=True, text=True)
+    return found.stdout.split()
+
+
+def _launchers(task):
+    """The pids of the task app's launcher, which runs from its folder as bench_app.py."""
+    found = subprocess.run(["pgrep", "-f", f"{APPS / task}.*bench_app.py|venv/bin/python bench_app.py"],
+                           capture_output=True, text=True)
+    return {pid for pid in found.stdout.split() if _cwd(pid) == APPS / task}
+
+
+def _cwd(pid):
+    try:
+        return Path(f"/proc/{pid}/cwd").resolve()
+    except OSError:
+        return None
 
 
 def _literal(text):

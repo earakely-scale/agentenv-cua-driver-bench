@@ -4,8 +4,9 @@
 bundle: the bench's GUI tasks, run with `agent-env run` on a Linux computer that an agent drives through its
 computer-use driver.
 
-**Status:** the bench's computer and its pinned task pack. The bench's apps, its sentinel, the GUI-only guard,
-grading and the bench's own tasks come next.
+**Status:** the bench's computer, its pinned task pack, and the apps of its three shared tasks, each on a computer of
+its own. The bench's sentinel, the GUI-only guard, grading and the bench's own tasks come next, and s04's browser joins
+once the computer has one.
 
 ## What's here
 
@@ -16,7 +17,10 @@ grading and the bench's own tasks come next.
 | `tasks/probe.json` | Deploys the computer and runs the computer-use conformance probe at `full` against it (`artifacts/check_probe/`). |
 | `tasks/taskpack.json` | Loads the task pack into the computer and checks every file arrived intact, against the pack's own manifest. |
 | `evals/smoke.toml` | Both tasks. |
-| `tests/` | Tests of the fetch tool, offline. |
+| `envs/cdb-s02/`, `envs/cdb-s03/`, `envs/cdb-s04/` | Each shared task as one computer app: its windows, its workspace and how it resets (below). |
+| `envs/desktop-s02/` .. `envs/desktop-s04/` | Each task's computer: `desktop`'s base and driver, with that task's app. |
+| `tasks/app-s02.json` .. `tasks/app-s04.json`, `evals/apps.toml` | Each deploys a task's computer and checks its app inside it (`artifacts/check_app/`), then snapshots it. |
+| `tests/` | Tests of the fetch tool and of the apps as a computer reads them, offline. |
 
 ## Run it
 
@@ -32,6 +36,21 @@ agent-env run . --eval smoke
 The first run composes the computer: it builds an image of the base with the driver installed, then probes it. That
 takes a few minutes; later runs reuse the image. It builds for each arch your Docker can: on an amd64 machine without
 arm64 emulation it says it can't build linux/arm64 and goes on with amd64.
+
+## The task apps
+
+Each shared task (`cdb-s02`, `cdb-s03`, `cdb-s04`) is one computer app, so that every window it opens stops and starts
+with its data, as the bench stops its apps before it resets a task:
+
+- Its install brings the task's own files, at the pinned commit (`files.json`, each by URL and sha256, written by
+  `python tools/taskpack.py apps`), Electron 43.8.1 and, for s04, Node 22 at their official checksums, and the Ubuntu
+  packages its windows need: LibreOffice Calc for s02 and s03, GnuCash for s03.
+- Its install then builds the task's workspace in the session user's home (`~/cdb-s02`, ...) with the task's
+  `reset/setup.py`, and the build fails unless the task's `reset/verify.py` passes on it, byte for byte.
+- That workspace is its data: `data/get` returns it, `data/add` writes into it, and `data/reset` puts it back as
+  `setup.py` built it, with the windows closed and opened again.
+- It opens the task's windows at boot as the task's `platform/launch.linux.json` says, Electron without Chromium's
+  sandbox, which a container can't give it, and places each at the bench's bounds; it's ready once every one shows.
 
 ## The task pack
 
@@ -51,7 +70,7 @@ The tool uses GitHub's API, which allows few calls without a token; set `GITHUB_
 ## Tests
 
 ```bash
-pip install pytest
+pip install pytest 'agentenv-framework-protocol>=0.1.421'
 python -m pytest tests
 ```
 
