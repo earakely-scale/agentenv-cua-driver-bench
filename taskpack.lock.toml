@@ -3,7 +3,7 @@
 # python tools/taskpack.py pin <commit>.
 repo = "trycua/cua"
 commit = "6c0a8c3bb2d32580c3231592f60739c33edc567a"
-sha256 = ""
+sha256 = "0d6be7005c2b83f1c93e02425d4264b8c0a8b9fd28ef182048bb61ce50d0e8d4"
 
 [[include]]
 from = "libs/cua-driver-bench/LICENSE"
