@@ -30,7 +30,8 @@ agent-env run . --eval smoke
 ```
 
 The first run composes the computer: it builds an image of the base with the driver installed, then probes it. That
-takes a few minutes; later runs reuse the image.
+takes a few minutes; later runs reuse the image. It builds for each arch your Docker can: on an amd64 machine without
+arm64 emulation it says it can't build linux/arm64 and goes on with amd64.
 
 ## The task pack
 
