@@ -33,7 +33,8 @@ NODE_SHA256 = {"amd64": "1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca
 DESKTOP_APT = ["libasound2t64", "libatk-bridge2.0-0t64", "libatk1.0-0t64", "libcairo2", "libcups2t64", "libdbus-1-3",
                "libdrm2", "libexpat1", "libgbm1", "libgtk-3-0t64", "libnspr4", "libnss3", "libpango-1.0-0",
                "libxcomposite1", "libxdamage1", "libxfixes3", "libxkbcommon0", "libxrandr2", "libxshmfence1",
-               "libxss1", "xdotool", "unzip", "xz-utils", "librsvg2-common", "adwaita-icon-theme", "shared-mime-info"]
+               "libxss1", "xdotool", "wmctrl", "unzip", "xz-utils", "librsvg2-common", "adwaita-icon-theme",
+               "shared-mime-info"]
 CALC_APT = ["libreoffice-calc", "libreoffice-gtk3"]
 GNUCASH_APT = ["gnucash", "python3-gi"]
 _LAUNCH_TIMEOUT_S = 180
@@ -73,7 +74,7 @@ class BenchTaskApp(ComputerAppEnvironment):
 
     @ready_check(os="linux")
     def windows(self) -> bool:
-        return all(_shown(app["window"]) for app in _opened(_spec()) if "window" in app)
+        return all(claimed([app["window"] for app in _opened(_spec()) if "window" in app]))
 
 
 def launch() -> None:
@@ -88,16 +89,14 @@ def launch() -> None:
     for app in _opened(spec):
         env = {**{key: value for key, value in os.environ.items() if key not in app.get("unset_env", [])},
                **{key: _sub(value, values) for key, value in app.get("env", {}).items()}}
-        if app["id"] == "gnucash":
-            _quiet_gnucash(env)
+        command = _command(app, values)
+        _quiet(command, env)
         with open(logs / f"{app['id']}.log", "wb") as log:
-            running.append(subprocess.Popen(_command(app, values), cwd=_sub(app.get("cwd", "${bundle}"), values),
-                                            env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
+            running.append(subprocess.Popen(command, cwd=_sub(app.get("cwd", "${bundle}"), values), env=env,
+                                            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
         if ready := app.get("ready"):
             _wait_for(ready["url"], ready["timeout_seconds"])
-    for app in _opened(spec):
-        if "window" in app:
-            _place(app["window"])
+    _place([app["window"] for app in _opened(spec) if "window" in app])
     while any(process.poll() is None for process in running):
         time.sleep(1)
 
@@ -142,12 +141,39 @@ def _command(app: dict, values: dict[str, str]) -> list[str]:
     return argv
 
 
-def _quiet_gnucash(env: dict[str, str]) -> None:
-    """GnuCash's tip of the day off, in the settings file its keyfile backend reads from the runtime folder the task
-    gives it."""
-    keyfile = Path(env["XDG_CONFIG_HOME"]) / "glib-2.0" / "settings" / "keyfile"
+def _quiet(command: list[str], env: dict[str, str]) -> None:
+    """A first run's tip of the day off, GnuCash's and LibreOffice's, in the settings each keeps in the runtime folder
+    the task gives it, where a reset leaves none."""
+    if command[0] == "gnucash":
+        _setting(Path(env["XDG_CONFIG_HOME"]) / "glib-2.0" / "settings" / "keyfile",
+                 "[org/gnucash/GnuCash/dialogs/tip-of-the-day]", "show-at-startup=false")
+    profile = next((arg.split("=", 1)[1] for arg in command if arg.startswith("-env:UserInstallation=")), None)
+    if command[0] == "libreoffice" and profile:
+        path = Path(urllib.request.url2pathname(profile.removeprefix("file://"))) / "user" / "registrymodifications.xcu"
+        tip = ('<item oor:path="/org.openoffice.Office.Common/Misc"><prop oor:name="ShowTipOfTheDay" oor:op="fuse">'
+               "<value>false</value></prop></item>")
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('<?xml version="1.0" encoding="UTF-8"?>\n<oor:items xmlns:oor="http://openoffice.org/2001/'
+                            'registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/'
+                            f'XMLSchema-instance">\n{tip}\n</oor:items>\n', encoding="utf-8")
+        elif "ShowTipOfTheDay" not in (text := path.read_text(encoding="utf-8")):
+            path.write_text(text.replace("</oor:items>", f"{tip}\n</oor:items>"), encoding="utf-8")
+
+
+def _setting(keyfile: Path, section: str, line: str) -> None:
+    """``line`` in ``section`` of a GLib keyfile, in place of the same key's there."""
     keyfile.parent.mkdir(parents=True, exist_ok=True)
-    keyfile.write_text("[org/gnucash/GnuCash/dialogs/totd]\nshow-at-startup=false\n", encoding="utf-8")
+    text = keyfile.read_text(encoding="utf-8") if keyfile.exists() else ""
+    key = line.split("=", 1)[0]
+    if section not in text:
+        text = f"{text.rstrip()}\n\n{section}\n{line}\n".lstrip()
+    else:
+        head, _, rest = text.partition(section)
+        body, sep, tail = rest.partition("\n[")
+        body = "\n".join(entry for entry in body.split("\n") if not entry.startswith(f"{key}="))
+        text = f"{head}{section}\n{line}{body}{sep}{tail}"
+    keyfile.write_text(text, encoding="utf-8")
 
 
 def _wait_for(url: str, timeout_s: float) -> None:
@@ -171,22 +197,57 @@ def _literal(text: str) -> str:
     return re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", text)
 
 
-def _shown(window: dict) -> bool:
+def claimed(windows: list[dict]) -> list[list[str]]:
+    """The ids of the shown windows each of ``windows`` matches, a window matched by more than one belonging to the
+    most specific: a whole title first, then the longest part of one. GnuCash's "kestrel-wharf" also matches Calc's
+    "kestrel-wharf-reconciliation.ods" window, which Calc's longer match holds."""
+    order = sorted(range(len(windows)), key=lambda i: ("title" not in windows[i],
+                                                       -len(windows[i].get("title_contains", ""))))
+    taken: set[str] = set()
+    found: list[list[str]] = [[] for _ in windows]
+    for i in order:
+        found[i] = [wid for wid in _search(windows[i]) if wid not in taken]
+        taken.update(found[i])
+    return found
+
+
+def _search(window: dict) -> list[str]:
     return subprocess.run(["xdotool", "search", "--onlyvisible", "--name", _title(window)],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+                          capture_output=True, text=True).stdout.split()
 
 
-def _place(window: dict) -> None:
-    """Move the window to the bench's bounds once it shows; one that doesn't show is left to the app's readiness."""
-    if not (bounds := window.get("bounds")):
-        return
+def _place(windows: list[dict]) -> None:
+    """Move each window to the bench's bounds, again until it stays there three looks in a row, since an app may resize
+    itself once it's shown, as LibreOffice maximizes; a window that doesn't show is left to the app's readiness."""
+    deadline, held = time.monotonic() + _PLACE_TIMEOUT_S, [0] * len(windows)
+    while time.monotonic() < deadline:
+        for i, (window, ids) in enumerate(zip(windows, claimed(windows))):
+            if not (bounds := window.get("bounds")) or not ids:
+                continue
+            if _at(ids[0], bounds):
+                held[i] += 1
+            else:
+                held[i] = 0
+                subprocess.run(["wmctrl", "-ir", f"0x{int(ids[0]):x}", "-b", "remove,maximized_vert,maximized_horz"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["xdotool", "windowsize", ids[0], str(bounds["width"]), str(bounds["height"]),
+                                "windowmove", ids[0], str(bounds["x"]), str(bounds["y"])],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if all(held[i] >= 3 for i, window in enumerate(windows) if window.get("bounds")):
+            return
+        time.sleep(1)
+
+
+def _at(wid: str, bounds: dict) -> bool:
+    """Whether the window has the bounds' size, and its frame their place, give or take the window manager's frame."""
+    geometry = dict(line.split("=", 1) for line in subprocess.run(
+        ["xdotool", "getwindowgeometry", "--shell", wid], capture_output=True, text=True).stdout.split())
     try:
-        subprocess.run(["xdotool", "search", "--sync", "--onlyvisible", "--name", _title(window),
-                        "windowsize", str(bounds["width"]), str(bounds["height"]),
-                        "windowmove", str(bounds["x"]), str(bounds["y"])],
-                       timeout=_PLACE_TIMEOUT_S, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.TimeoutExpired:
-        pass
+        x, y, width, height = (int(geometry[key]) for key in ("X", "Y", "WIDTH", "HEIGHT"))
+    except (KeyError, ValueError):
+        return False
+    return (abs(width - bounds["width"]) <= 8 and abs(height - bounds["height"]) <= 8
+            and abs(x - bounds["x"]) <= 40 and abs(y - bounds["y"]) <= 60)
 
 
 if __name__ == "__main__":

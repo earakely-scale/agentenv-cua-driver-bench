@@ -96,6 +96,47 @@ def test_the_launcher_matches_a_whole_title_or_part_of_one_literally(bench_app):
     assert bench_app._title({"title_contains": "a.b (1)"}) == r"a\.b \(1\)"
 
 
+def test_a_window_two_matches_hold_belongs_to_the_more_specific(bench_app, monkeypatch):
+    shown = {"Ledger Lantern Mail": ["7"], "kestrel-wharf-reconciliation": ["1"], "kestrel-wharf": ["1", "2"]}
+    monkeypatch.setattr(bench_app, "_search", lambda window: shown[window.get("title") or window["title_contains"]])
+    windows = [{"title": "Ledger Lantern Mail"}, {"title_contains": "kestrel-wharf-reconciliation"},
+               {"title_contains": "kestrel-wharf"}]
+
+    assert bench_app.claimed(windows) == [["7"], ["1"], ["2"]]
+    shown["kestrel-wharf"] = ["1"]
+    assert bench_app.claimed(windows) == [["7"], ["1"], []]
+
+
+def test_a_tip_setting_takes_its_keys_place_in_a_keyfile_and_keeps_the_rest(bench_app, tmp_path):
+    keyfile = tmp_path / "glib-2.0" / "settings" / "keyfile"
+    section, line = "[org/gnucash/GnuCash/dialogs/tip-of-the-day]", "show-at-startup=false"
+
+    bench_app._setting(keyfile, section, line)
+    assert keyfile.read_text() == f"{section}\n{line}\n"
+    keyfile.write_text(f"[org/gnucash/GnuCash/general]\nprefs-version=5005\n\n{section}\nshow-at-startup=true\n"
+                       "current-tip=1\n\n[org/gnucash/GnuCash/history]\nfile0='/b'\n")
+    bench_app._setting(keyfile, section, line)
+    assert keyfile.read_text() == ("[org/gnucash/GnuCash/general]\nprefs-version=5005\n\n"
+                                   f"{section}\n{line}\ncurrent-tip=1\n\n[org/gnucash/GnuCash/history]\nfile0='/b'\n")
+    keyfile.write_text("[org/gnucash/GnuCash/general]\nprefs-version=5005\n")
+    bench_app._setting(keyfile, section, line)
+    assert keyfile.read_text() == f"[org/gnucash/GnuCash/general]\nprefs-version=5005\n\n{section}\n{line}\n"
+
+
+def test_libreoffice_starts_without_its_tip_in_a_new_profile_and_in_one_it_wrote(bench_app, tmp_path):
+    profile = tmp_path / "lo"
+    command = ["libreoffice", "--calc", f"-env:UserInstallation={profile.as_uri()}", "/w/a.ods"]
+    xcu = profile / "user" / "registrymodifications.xcu"
+
+    bench_app._quiet(command, {})
+    assert '<prop oor:name="ShowTipOfTheDay" oor:op="fuse"><value>false</value>' in xcu.read_text()
+    xcu.write_text('<?xml version="1.0"?>\n<oor:items xmlns:oor="http://openoffice.org/2001/registry">\n'
+                   '<item oor:path="/a"><prop oor:name="b"><value>1</value></prop></item>\n</oor:items>\n')
+    bench_app._quiet(command, {})
+    text = xcu.read_text()
+    assert '<prop oor:name="b">' in text and text.count("ShowTipOfTheDay") == 1 and text.endswith("</oor:items>\n")
+
+
 def test_a_launch_removes_the_locks_stopped_apps_left_and_nothing_else(bench_app, tmp_path):
     for name in ("planning/.~lock.replan.ods#", "book/k.gnucash.LCK", "book/k.gnucash.LNK", "book/k.gnucash",
                  "planning/replan.ods", "mail/messages.json"):
