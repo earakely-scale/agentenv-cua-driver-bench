@@ -6,9 +6,11 @@ against the lock's digest. The task pack is never copied into this repo.
     python tools/taskpack.py verify       check what's there against the lock
     python tools/taskpack.py pin COMMIT   fetch it at COMMIT and write that commit and its digest to the lock
     python tools/taskpack.py apps         write each task app's files.json: the task's files its computer installs
+    python tools/taskpack.py grader       write into artifacts/grade/verify.py the trycua files the grade fetches
 
-A task app's computer fetches its task's files itself, at put, by the URL and sha256 its ``files.json`` lists; this repo
-holds those hashes, never the files.
+A task app's computer fetches its task's files itself, at put, by the URL and sha256 its ``files.json`` lists, and the
+grade fetches the evaluator, oracle and fixture of the task, and trycua's scoring, by those its ``TRYCUA`` lists; this
+repo holds those hashes, never the files.
 
 ``GITHUB_TOKEN``, when set, is sent to GitHub's API, which allows few calls without one."""
 from __future__ import annotations
@@ -32,6 +34,10 @@ ROOT = Path(__file__).resolve().parent.parent
 LOCK = ROOT / "taskpack.lock.toml"
 TARGET = ROOT / "artifacts" / "taskpack"
 ENVS = ROOT / "envs"
+GRADER = ROOT / "artifacts" / "grade" / "verify.py"
+#: trycua's scoring of a sentinel's log, which the grade fetches with each task's evaluator and fixture.
+SCORING = ("scoring/summarize_sentinel.py", "scoring/bench_v2.py")
+_TABLE = re.compile(r"(?ms)^TRYCUA = \{.*?^\}$")
 #: The bench tasks with an app of their own, each in envs/<task>/, and where their folders are in the task pack.
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
 TASK_DIR = "taskpack/tasks/shared"
@@ -115,6 +121,27 @@ def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str,
         path.write_text(json.dumps({"commit": lock.commit, "files": files}, indent=1) + "\n", encoding="utf-8")
         written.append(path)
     return written
+
+
+def grader(lock: Lock, target: Path = TARGET, verifier: Path = GRADER, tasks: tuple[str, ...] = TASKS) -> Path:
+    """Write the ``TRYCUA`` of the grade's verifier: the trycua files it fetches, each by its URL at the lock's commit
+    and its sha256 as the verified task pack's manifest has it: each task's evaluator and fixture, and the scoring of
+    the sentinel's log."""
+    verify(lock, target)
+    hashes = {name: sha for sha, name in (line.split("  ", 1) for line in (target / MANIFEST).read_text().splitlines())}
+
+    def pinned(name: str) -> dict:
+        return {"url": _url(lock, name), "sha256": hashes[name]}
+
+    table = {"commit": lock.commit, "scoring": {PurePosixPath(name).name: pinned(name) for name in SCORING},
+             "tasks": {task: {name[len(prefix):]: pinned(name) for name in sorted(hashes)
+                              if name.startswith(prefix) and name[len(prefix):].split("/")[0] in ("evaluator", "fixture")}
+                       for task in tasks for prefix in [f"{TASK_DIR}/{task}/"]}}
+    text = verifier.read_text(encoding="utf-8")
+    if not _TABLE.search(text):
+        raise SystemExit(f"{verifier} has no TRYCUA = {{...}} to write")
+    verifier.write_text(_TABLE.sub(lambda _: "TRYCUA = " + json.dumps(table, indent=1), text, count=1), encoding="utf-8")
+    return verifier
 
 
 def _for_the_computer(path: str) -> bool:
@@ -249,8 +276,11 @@ def main(argv: list[str] | None = None) -> int:
     pinned = sub.add_parser("pin", help="fetch at a commit and write it and its digest to the lock")
     pinned.add_argument("commit")
     sub.add_parser("apps", help="write each task app's files.json from the verified task pack")
+    sub.add_parser("grader", help="write the trycua files the grade fetches into artifacts/grade/verify.py")
     args = parser.parse_args(argv)
-    if args.command == "apps":
+    if args.command == "grader":
+        print(f"wrote {grader(read_lock()).relative_to(ROOT)}")
+    elif args.command == "apps":
         for path in apps(read_lock()):
             print(f"wrote {path.relative_to(ROOT)}")
     elif args.command == "pin":
