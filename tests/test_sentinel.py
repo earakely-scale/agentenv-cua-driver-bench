@@ -53,7 +53,7 @@ class FakeDesktop:
         self.kinds = {DOCK: "_NET_WM_WINDOW_TYPE_DOCK", DIALOG: "_NET_WM_WINDOW_TYPE_DIALOG"}
         self.stack = [OTHER, OWN]
         self.desktops = {OWN: 0, OTHER: 0, DIALOG: 0, DOCK: 0xFFFFFFFF}
-        self.transients, self.minimized = {}, set()
+        self.transients, self.minimized, self.titles = {}, set(), {}
         self.active_window = self.focus_window = OWN
         self.at, self.current = [500, 400], 0
 
@@ -95,6 +95,9 @@ class FakeDesktop:
 
     def transient_for(self, window):
         return self.transients.get(window)
+
+    def title(self, window):
+        return self.titles.get(window, "")
 
 
 class Field:
@@ -250,6 +253,15 @@ def _terminal_in_front(seconds):
 def test_a_terminal_in_front_three_guard_samples_in_a_row_is_a_violation(sentinel_module):
     assert _guarded(Run(sentinel_module).trial(_terminal_in_front(2))) == [
         ("gui_only_transient", "front:xfce4-terminal"), ("gui_only_violation", "front:xfce4-terminal")]
+
+
+def test_libreoffices_macro_editor_in_front_is_a_violation(sentinel_module):
+    def editor(run):
+        run.desktop.titles[OTHER] = "My Macros & Dialogs.Standard — LibreOffice Basic"
+        run.desktop.active_window = OTHER
+        run.seconds(2)
+
+    assert _guarded(Run(sentinel_module).trial(editor))[-1] == ("gui_only_violation", "front:libreoffice-macros")
 
 
 def test_a_terminal_in_front_for_less_is_only_transient(sentinel_module):

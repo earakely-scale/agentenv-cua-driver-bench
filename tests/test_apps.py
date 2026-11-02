@@ -18,7 +18,7 @@ from agentenv_protocol.computer.app import ComputerAppEnvironment  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TASKS = {"cdb-s02": "CdbS02", "cdb-s03": "CdbS03", "cdb-s04": "CdbS04"}
-SHARED = ("bench_app.py", "install.sh")
+SHARED = ("bench_app.py", "install.sh", "devtools_hook.js")
 
 
 def _declared(task):
@@ -80,7 +80,8 @@ def test_a_task_app_declares_its_files_runtimes_workspace_and_launch(task):
     assert [check.name for check in declared.ready_checks] == ["windows"]
 
 
-def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node(bench_app, tmp_path):
+def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node_with_electrons_devtools_hooked(bench_app,
+                                                                                                  tmp_path):
     values = {"${bundle}": "/opt/b/task", "${workspace}": "/home/user/cdb-s02", "${workspace_uri}": "file:///x",
               "${python}": "/py"}
     electron = {"id": "mail", "command": ["npx", "electron", ".", "--surface=mail", "--workspace=${workspace}"]}
@@ -99,6 +100,9 @@ def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node(bench_app,
         "--class=BenchChromium", "--no-first-run", "--user-data-dir=/home/user/cdb-s02/.runtime/b", "--new-window",
         "http://127.0.0.1:4184/"]
     assert bench_app._sub("${unknown}/x", values) == "${unknown}/x"
+    assert bench_app._hooked(bench_app._command(electron, values)) == {
+        "NODE_OPTIONS": f"--require={bench_app.HERE / 'devtools_hook.js'}"}
+    assert bench_app._hooked(bench_app._command(browser, values)) == bench_app._hooked(bench_app._command(calc, values)) == {}
 
 
 def test_a_browser_install_unpacks_chromium_with_its_execute_bits_and_writes_the_policies(bench_app, tmp_path):
@@ -118,6 +122,7 @@ def test_a_browser_install_unpacks_chromium_with_its_execute_bits_and_writes_the
     assert os.access(runtime / "chromium/chrome", os.X_OK)
     policies = json.loads((tmp_path / "policies/agentenv-bench.json").read_text())
     assert policies["BrowserSignin"] == 0 and not policies["CommandLineFlagSecurityWarningsEnabled"]
+    assert policies["DeveloperToolsAvailability"] == 2
 
 
 def test_the_launcher_matches_a_whole_title_or_part_of_one_literally(bench_app):

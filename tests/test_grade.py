@@ -196,6 +196,21 @@ def test_a_log_that_doesnt_show_the_whole_trial_fails_the_grade(grader, sentinel
     assert results["gui_only"]["result"] is False and results["user_undisturbed"]["result"] is False
 
 
+@pytest.mark.parametrize("after_arming_ms, violations", [(-1000, []), (500, ["devtools:Copperfield Mail"])],
+                         ids=["before arming", "while armed"])
+def test_an_electron_apps_devtools_opened_while_armed_fails_gui_only(grader, sentinel_module, tmp_path, after_arming_ms,
+                                                                     violations):
+    run = Run(sentinel_module).trial()
+    armed = next(line["t"] for line in map(json.loads, run.lines) if line["ev"] == "armed")
+
+    def opened(lines):
+        (tmp_path / "home" / ".bench-sentinel" / "devtools.jsonl").write_text(json.dumps(
+            {"ev": "devtools_opened", "t": armed + after_arming_ms, "title": "Copperfield Mail"}) + "\n")
+        return lines
+
+    assert _results(grader, tmp_path, run, _trajectory(CLICK), edit=opened)["gui_only"]["violations"] == violations
+
+
 def test_a_sentinel_without_a_condition_fails_the_grade(grader, sentinel_module, tmp_path):
     results = _results(grader, tmp_path, Run(sentinel_module).trial(), _trajectory(CLICK), condition=None)
 

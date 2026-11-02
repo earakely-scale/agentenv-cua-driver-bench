@@ -20,6 +20,9 @@ from agentenv_protocol.computer import (ComputerAppEnvironment, Download, Launch
 HERE = Path(__file__).resolve().parent
 TASK = HERE / "task"
 RUNTIME = HERE / "runtime"
+#: Loaded into each of the task's Electron apps before its own main script: it logs each opening of their DevTools,
+#: docked in the app's own window where the guard can't see it, for the bench's grade.
+DEVTOOLS_HOOK = HERE / "devtools_hook.js"
 SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm64"]}]
 _ARCHES = {"amd64": "x64", "arm64": "arm64"}
 
@@ -48,7 +51,8 @@ BROWSER_APT = ["fonts-liberation", "libatspi2.0-0t64", "libglib2.0-0t64", "libvu
                "libxext6"]
 BROWSER_CLASS = "BenchChromium"
 #: Where Chrome for Testing reads managed policies, and those that keep a fresh profile free of first-run tabs,
-#: sign-in, sync, prompts and the warning bar its container flags would show.
+#: sign-in, sync, prompts and the warning bar its container flags would show, and keep its DevTools, a way out of the
+#: GUI the bench's guard can't see, shut.
 POLICY_DIR = Path("/etc/opt/chrome_for_testing/policies/managed")
 POLICIES = {
     "BrowserSignin": 0,
@@ -63,6 +67,7 @@ POLICIES = {
     "DefaultGeolocationSetting": 2,
     "DefaultNotificationsSetting": 2,
     "CommandLineFlagSecurityWarningsEnabled": False,
+    "DeveloperToolsAvailability": 2,
 }
 CALC_APT = ["libreoffice-calc", "libreoffice-gtk3"]
 GNUCASH_APT = ["gnucash", "python3-gi"]
@@ -144,6 +149,7 @@ def launch() -> None:
         env = {**{key: value for key, value in os.environ.items() if key not in app.get("unset_env", [])},
                **{key: _sub(value, values) for key, value in app.get("env", {}).items()}}
         command = _command(app, values)
+        env.update(_hooked(command))
         _quiet(command, env)
         with open(logs / f"{app['id']}.log", "wb") as log:
             running.append(subprocess.Popen(command, cwd=_sub(app.get("cwd", "${bundle}"), values), env=env,
@@ -192,6 +198,11 @@ def _command(app: dict, values: dict[str, str]) -> list[str]:
         return [str(RUNTIME / "chromium" / "chrome"), "--no-sandbox", "--disable-dev-shm-usage",
                 f"--class={BROWSER_CLASS}", *argv[1:]]
     return argv
+
+
+def _hooked(command: list[str]) -> dict[str, str]:
+    """For an Electron app, the environment that loads the DevTools hook into it."""
+    return {"NODE_OPTIONS": f"--require={DEVTOOLS_HOOK}"} if command[0] == str(RUNTIME / "electron" / "electron") else {}
 
 
 def _quiet(command: list[str], env: dict[str, str]) -> None:

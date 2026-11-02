@@ -5,7 +5,8 @@ their scan of the agent's tool calls after it. Each of trycua's files is fetched
 against its sha256 (``TRYCUA``, written by ``python tools/taskpack.py grader``), and kept in a cache by its sha256.
 
 All of its results must hold: ``sentinel``, its log shows the whole trial (a condition, armed, disarmed, no sample
-lost); ``task``, their evaluator passed; ``gui_only``, the guard logged no violation, and claude-code was offered and
+lost); ``task``, their evaluator passed; ``gui_only``, the guard logged no violation, no Electron app's DevTools
+opened, and claude-code was offered and
 called no tool but the computer env's and its Skill and Read, with no code in an input and no command run through
 cua-driver's ``launch_app``; and in the background condition ``user_undisturbed``, all eight A22 criteria measured and
 held and the user's window not asked to close. Together they are trycua's background completion, and in the
@@ -31,6 +32,8 @@ from agentenv_protocol import client
 
 SENTINEL = "bench-sentinel"
 LOG = Path(".bench-sentinel/sentinel.jsonl")
+#: Where the task's Electron apps log each opening of their DevTools, docked where the sentinel's guard can't see it.
+DEVTOOLS = Path(".bench-sentinel/devtools.jsonl")
 DATA_OBJECTS = "urn:agentenv:data-objects/v1"
 #: The built-in tools besides the computer env's that a GUI-only claude-code keeps, trycua's less the tool search its
 #: CLI hasn't: its skills, and Read, which reads only the agent's own container, never the computer.
@@ -229,7 +232,7 @@ def grade(task, home, scratch, trajectory):
     window = [line for line in lines if line["armed"] or line["ev"] == "disarmed"]
     armed = next((line for line in window if line["ev"] == "armed"), {})
     problems = _problems(window, condition)
-    live = {line["detail"] for line in window if line["ev"] == "gui_only_violation"}
+    live = {line["detail"] for line in window if line["ev"] == "gui_only_violation"} | _devtools(home / DEVTOOLS, window)
     events = _events(trajectory)
     scanned, mentions = _scan(v2, events or [])
     violations = sorted({*live, *scanned})
@@ -268,6 +271,15 @@ def _problems(window, condition):
         problems.append("the sentinel stopped before it was disarmed")
     errors = sorted({line.get("error") for line in window if line["ev"] == "sample_error"})
     return problems + [f"a sample failed: {error}" for error in errors[:5]]
+
+
+def _devtools(log, window):
+    """Each opening of an Electron app's DevTools while the sentinel was armed, as the app's hook logged it."""
+    if not window or not log.exists():
+        return set()
+    start, end = window[0]["t"], next((line["t"] for line in window if line["ev"] == "disarmed"), float("inf"))
+    return {f"devtools:{line.get('title')}" for line in map(json.loads, log.read_text().splitlines())
+            if start <= line["t"] <= end}
 
 
 def _evaluate(task, workspace, scratch):

@@ -22,6 +22,7 @@ import fcntl
 import json
 import os
 import queue
+import re
 import signal
 import subprocess
 import threading
@@ -67,6 +68,10 @@ SIDE_DOOR_PROGRAMS = frozenset({"xfce4-terminal", "xterm", "uxterm", "gnome-term
                                 "konsole", "lxterminal", "terminator", "tilix", "alacritty", "kitty", "urxvt", "rxvt",
                                 "qterminal", "mate-terminal", "terminology", "sakura", "guake", "tilda",
                                 "xfce4-appfinder", "xfrun4"})
+#: LibreOffice's macro editor and macro dialogs, by title, its scripting route as Script Editor is macOS's: a side door
+#: in front as ``libreoffice-macros``.
+SIDE_DOOR_TITLES = re.compile(r"[—-] LibreOffice Basic$|^(?:BASIC|Basic|Python|BeanShell|JavaScript|LibreOffice Basic) "
+                              r"Macros$|^Macro Selector$|^(?:LibreOffice )?Basic Macro Organizer$")
 #: trycua's guard samples every 0.5 s, and a side door in front three samples in a row is a violation.
 GUARD_EVERY_SAMPLES = 10
 FRONT_GRACE_SAMPLES = 3
@@ -123,6 +128,20 @@ class Desktop:
         geometry = node.get_geometry()
         border = 2 * geometry.border_width
         return geometry.x, geometry.y, geometry.width + border, geometry.height + border
+
+    def title(self, window: int | None) -> str:
+        """A window's title, its _NET_WM_NAME, else its WM_NAME; empty for none."""
+        if not window:
+            return ""
+        try:
+            resource = self.x.create_resource_object("window", window)
+            name = resource.get_full_property(self._atom("_NET_WM_NAME"), self._atom("UTF8_STRING"))
+            if name is not None:
+                return name.value.decode("utf-8", "replace") if isinstance(name.value, bytes) else str(name.value)
+            name = resource.get_wm_name()
+        except error.XError:
+            return ""
+        return name.decode("latin-1") if isinstance(name, bytes) else name or ""
 
     def workarea(self) -> list[int] | None:
         """The first desktop's area that docks and panels leave, x, y, width and height."""
@@ -310,7 +329,7 @@ class Sentinel:
         self.emit("s", **fields)
         self._samples += 1
         if self.armed and self._samples % GUARD_EVERY_SAMPLES == 0:
-            self.guard.sample(fields["front"])
+            self.guard.sample(fields["front"], self.desktop.title(self.desktop.active()))
 
     def toggle(self) -> None:
         """Arm, or disarm: disarming says first whether the user's text is what it typed. Arming starts the guard
@@ -328,7 +347,7 @@ class Sentinel:
 
 class Guard:
     """trycua's GUI-only guard on Linux, sampled every 0.5 s while the sentinel is armed: a side door in front three
-    samples in a row, a side door's program running, or a program started on a pseudo-terminal since arming, the shell
+    samples in a row (a terminal or run dialog by its class, LibreOffice's macro windows by their title), a side door's program running, or a program started on a pseudo-terminal since arming, the shell
     of a terminal session, is a violation, logged once with its evidence as ``gui_only_violation``; a side door in front
     for less is logged once as ``gui_only_transient``. ``processes`` lists each process's pid, name and controlling
     terminal."""
@@ -342,12 +361,13 @@ class Guard:
         self._logged: set[tuple[str, str]] = set()
         self._on_terminals = {pid for pid, _, tty in self._processes() if tty}
 
-    def sample(self, front: dict) -> None:
-        door = (front.get("bid") or "").lower()
-        for app in list(self._run_of):
-            if app != door:
-                del self._run_of[app]
-        if door in SIDE_DOOR_APPS:
+    def sample(self, front: dict, title: str = "") -> None:
+        app = (front.get("bid") or "").lower()
+        door = app if app in SIDE_DOOR_APPS else "libreoffice-macros" if SIDE_DOOR_TITLES.search(title) else None
+        for name in list(self._run_of):
+            if name != door:
+                del self._run_of[name]
+        if door is not None:
             self._run_of[door] = self._run_of.get(door, 0) + 1
             if self._run_of[door] >= FRONT_GRACE_SAMPLES:
                 self._log("gui_only_violation", "front", f"front:{door}", front=front)
