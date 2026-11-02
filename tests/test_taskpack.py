@@ -188,7 +188,7 @@ def test_repinning_writes_the_new_commit_and_digest_and_replaces_the_copy(github
     taskpack.verify(repinned, target)
 
 
-def test_apps_lists_each_tasks_files_its_computer_installs_by_url_at_the_commit_and_sha256(github, bundle):
+def test_apps_lists_each_apps_files_its_computer_installs_by_url_at_the_commit_and_sha256(github, bundle):
     task = "libs/bench/taskpack/tasks/shared/cdb-s02"
     github.commits["c1"] = {**FILES, **{f"{task}/{path}": f"{path}\n".encode() for path in (
         "apps/desk/main.js", "apps/desk/renderer/app.js", "apps/desk/tests/store.test.js", "evaluator/evaluate.py",
@@ -196,8 +196,9 @@ def test_apps_lists_each_tasks_files_its_computer_installs_by_url_at_the_commit_
         "tests/test_cdb_s02.py", "tools/build.py", "brief.md", "task.cuabench.json", "README.md")}}
     lock, target = _pinned(bundle)
     (bundle / "envs" / "cdb-s02").mkdir(parents=True)
+    (bundle / "envs" / "lab").mkdir()
 
-    [written] = taskpack.apps(lock, target, bundle / "envs", ("cdb-s02",))
+    written, lab = taskpack.apps(lock, target, bundle / "envs", ("cdb-s02",), {"lab": ("taskpack/README.md",)})
 
     listed = json.loads(written.read_text())
     assert listed["commit"] == "c1"
@@ -207,8 +208,13 @@ def test_apps_lists_each_tasks_files_its_computer_installs_by_url_at_the_commit_
     first = listed["files"][0]
     assert first["url"] == f"{taskpack.RAW}/{REPO}/c1/{task}/apps/desk/main.js"
     assert first["sha256"] == hashlib.sha256(b"apps/desk/main.js\n").hexdigest()
+    assert json.loads(lab.read_text())["files"] == [{"path": "taskpack/README.md", "url": f"{taskpack.RAW}/{REPO}/c1/"
+                                                     "libs/bench/taskpack/README.md",
+                                                     "sha256": hashlib.sha256(b"the pack\n").hexdigest()}]
     with pytest.raises(SystemExit, match="isn't there"):
-        taskpack.apps(lock, target, bundle / "missing", ("cdb-s02",))
+        taskpack.apps(lock, target, bundle / "missing", ("cdb-s02",), {})
+    with pytest.raises(SystemExit, match="has no taskpack/gone.py, which lab installs"):
+        taskpack.apps(lock, target, bundle / "envs", (), {"lab": ("taskpack/gone.py",)})
 
 
 def test_apps_refuses_a_copy_that_doesnt_match_the_lock(github, bundle):
@@ -216,7 +222,7 @@ def test_apps_refuses_a_copy_that_doesnt_match_the_lock(github, bundle):
     (target / "LICENSE").write_text("edited\n")
 
     with pytest.raises(SystemExit, match="fetch it again"):
-        taskpack.apps(lock, target, bundle / "envs", ("cdb-s02",))
+        taskpack.apps(lock, target, bundle / "envs", ("cdb-s02",), {})
 
 
 @pytest.mark.parametrize("to", ["../outside", "/abs", ""])

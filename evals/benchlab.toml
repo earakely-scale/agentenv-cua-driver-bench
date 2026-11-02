@@ -1,0 +1,12 @@
+tasks = [
+  "benchlab-listdrag",
+  "benchlab-hover",
+  "benchlab-tooltip",
+  "benchlab-irmodal",
+  "benchlab-irbanner",
+  "benchlab-irunsaved",
+  "benchlab-irconsent",
+  "benchlab-solve-ir-01",
+  "benchlab-solve-mb-10",
+  "benchlab-solve-mb-11",
+]

@@ -1,0 +1,15 @@
+{
+ "commit": "22a67eacd15dc71811e330ed88951dd615bb395d",
+ "files": [
+  {
+   "path": "linux/benchlab.py",
+   "url": "https://raw.githubusercontent.com/trycua/cua/22a67eacd15dc71811e330ed88951dd615bb395d/libs/cua-driver-bench/automated-eval/macos_bench/linux/benchlab.py",
+   "sha256": "7f92856ae07121921143a24bbfe3fafcd72b30bcf9e629d2417be8d216c13c32"
+  },
+  {
+   "path": "probes/_common/benchlab_common.py",
+   "url": "https://raw.githubusercontent.com/trycua/cua/22a67eacd15dc71811e330ed88951dd615bb395d/libs/cua-driver-bench/automated-eval/macos_bench/probes/_common/benchlab_common.py",
+   "sha256": "8d07dfb323eb9c50e8e7dce31c1fcb123fdba7ecd29d909c7f4e3162ca99fefc"
+  }
+ ]
+}

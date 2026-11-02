@@ -1,6 +1,8 @@
 """The bench's grade of a trial, in its grading container, on the trial's snapshot as ``load_artifact`` stages it
 (each app's files under ``/grade/trial/<app>/``, by their path in the home) and trycua's task pack
-(``/grade/trycua``): their evaluator for the task on the task's workspace, their A22 criteria on the sentinel's log,
+(``/grade/trycua``): their evaluator for the task on the task's workspace, or for a BenchLab task (``grade.py PROBE
+SEED``) on BenchLab's state and events with the trial's seed, as their runner gives it, their A22 criteria on the
+sentinel's log,
 and the GUI-only guard's violations, with each Electron app's DevTools openings, while the sentinel was armed. The
 files the agent left are parsed only here, never where the trial runs. Writes ``/grade/result.json`` and
 ``/grade/reward.txt``, 1 when every result holds, else 0; the trajectory's half of GUI-only is ``gui_only``'s verifier.
@@ -19,20 +21,26 @@ TRIAL = Path("/grade/trial")
 TRYCUA = Path("/grade/trycua")
 OUT = Path("/grade")
 SENTINEL = Path("bench-sentinel/.bench-sentinel")
+LAB = Path("benchlab/.benchlab")
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
 
 
 def main():
-    [task] = [path.name for path in TRIAL.iterdir() if path.name in TASKS]
+    if len(sys.argv) == 3:
+        task, seed = sys.argv[1], int(sys.argv[2])
+    else:
+        [task], seed = [path.name for path in TRIAL.iterdir() if path.name in TASKS], None
     with tempfile.TemporaryDirectory() as scratch:
-        results = grade(task, TRIAL, TRYCUA, Path(scratch))
+        results = grade(task, TRIAL, TRYCUA, Path(scratch), seed)
     (OUT / "result.json").write_text(json.dumps({"task": task, "results": results}, indent=1) + "\n")
     (OUT / "reward.txt").write_text("1\n" if all(result["result"] for result in results) else "0\n")
 
 
-def grade(task, trial, trycua, scratch):
-    """The results of a trial of ``task`` from its snapshot ``trial``, with trycua's task pack ``trycua``."""
-    evaluation = _evaluate(trycua / "taskpack" / "tasks" / "shared" / task, trial / task / task, scratch)
+def grade(task, trial, trycua, scratch, seed=None):
+    """The results of a trial of ``task``, a CDB task or with ``seed`` a BenchLab probe, from its snapshot ``trial``,
+    with trycua's task pack ``trycua``."""
+    evaluation = (_lab(trycua / "probes" / task, trial / LAB, seed, scratch) if seed is not None
+                  else _evaluate(trycua / "taskpack" / "tasks" / "shared" / task, trial / task / task, scratch))
     summarize, v2 = (_module(trycua / "scoring" / f"{name}.py") for name in ("summarize_sentinel", "bench_v2"))
     log = trial / SENTINEL / "sentinel.jsonl"
     lines = _lines(log)
@@ -54,7 +62,8 @@ def grade(task, trial, trycua, scratch):
          "description": "the sentinel's log shows the whole trial"},
         {"id": "task", "result": evaluation.get("passed") is True, "score": evaluation.get("score"),
          "description": f"trycua's evaluator for {task}",
-         "checks": {name: check.get("passed") for name, check in (evaluation.get("detail") or {}).get("checks", {}).items()}},
+         "checks": {name: check.get("passed")
+                    for name, check in (evaluation.get("detail") or evaluation).get("checks", {}).items()}},
         {"id": "gui_only", "result": gui_only, "violations": violations,
          "transient": sorted({line["detail"] for line in window if line["ev"] == "gui_only_transient"}),
          "description": "no way out of the GUI the guard saw, and no DevTools opened"},
@@ -94,6 +103,16 @@ def _evaluate(task, workspace, scratch):
     (scratch / "artifacts").mkdir(exist_ok=True)
     subprocess.run([sys.executable, "evaluator/evaluate.py", "--workspace", str(workspace), "--artifacts",
                     str(scratch / "artifacts"), "--result", str(result), "--agent-exit-code", "0"], cwd=task,
+                   check=True, timeout=300)
+    return json.loads(result.read_text())
+
+
+def _lab(probe, data, seed, scratch):
+    """trycua's evaluator for the BenchLab task ``probe`` on BenchLab's state and events in ``data``, with the trial's
+    ``seed``: its JSON result, which says why when they're missing."""
+    result = scratch / "result.json"
+    subprocess.run([sys.executable, str(probe / "evaluate.py"), "--seed", str(seed), "--state",
+                    str(data / "state.json"), "--events", str(data / "events.jsonl"), "--result", str(result)],
                    check=True, timeout=300)
     return json.loads(result.read_text())
 

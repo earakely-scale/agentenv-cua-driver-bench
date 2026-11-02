@@ -1,0 +1,5 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-benchlab", "env_params": {"app_settings": {"benchlab": {"mode": "tooltip", "seed": 160721}, "bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop-benchlab", "artifact_id": "taskpack", "destination_path": "bench", "depends_on": ["env"]},
+  {"id": "check", "type": "run_code", "env_id": "desktop-benchlab", "script_artifact_id": "check_benchlab", "args": {"mode": "tooltip", "seed": 160721}, "depends_on": ["load"]}
+]

@@ -303,6 +303,6 @@ def test_the_app_launches_the_sentinel_at_boot_and_keeps_its_log_as_data(sentine
 
 
 def test_each_task_computer_has_the_sentinel():
-    for task in ("s02", "s03", "s04"):
+    for task, app in (("s02", "cdb-s02"), ("s03", "cdb-s03"), ("s04", "cdb-s04"), ("benchlab", "benchlab")):
         env = tomllib.loads((ROOT / "envs" / f"desktop-{task}" / "env.toml").read_text())
-        assert env["apps"] == [f"cdb-{task}", "bench-sentinel"]
+        assert env["apps"] == [app, "bench-sentinel"]

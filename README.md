@@ -4,11 +4,12 @@
 bundle: the bench's GUI tasks, run with `agent-env run` on a Linux computer that an agent drives through its
 computer-use driver.
 
-**Status:** the bench's computer, its pinned task pack, and the apps of its three shared tasks, each on a computer of
-its own, s04's browser included: Chrome for Testing at the build agentenv's `chromium` app pins, pinned again here so
-the bench's browser stays the same whatever a framework release ships. Beside each task's app, the bench's sentinel,
-with trycua's GUI-only guard in it, and the grade, which scores a trial outside the computer with trycua's own
-evaluator, A22 criteria and GUI-only scan. The bench's own tasks come next.
+**Status:** all of trycua's Bench v2, its ten GUI-only tasks in both conditions, five runs each: the three multi-app
+tasks G02 to G04, each on a computer of its own with its shared task's apps, s04's browser included (Chrome for Testing
+at the build agentenv's `chromium` app pins, pinned again here so the bench's browser stays the same whatever a
+framework release ships), and the seven BenchLab tasks, MB-09 to MB-11 and IR-01 to IR-04, in trycua's own Linux
+BenchLab. Beside each task's app, the bench's sentinel, with trycua's GUI-only guard in it, and the grade, which scores
+a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-only scan.
 
 ## What's here
 
@@ -27,6 +28,10 @@ evaluator, A22 criteria and GUI-only scan. The bench's own tasks come next.
 | `artifacts/grader/`, `artifacts/gui_only/` | The grade of a trial: its grading container, and the trajectory's GUI-only check (below). |
 | `tasks/sentinel-background.json`, `tasks/sentinel-foreground.json`, `evals/sentinel.toml` | Each causes every disturbance on purpose inside s02's computer and checks trycua's scoring finds it (`artifacts/check_sentinel/`). |
 | `tasks/cdb-g02-background.json` .. `tasks/cdb-g04-foreground.json`, `evals/trials.toml` | The bench's GUI-only tasks, each in both of trycua's conditions, with a model (below). |
+| `envs/benchlab/`, `envs/desktop-benchlab/` | trycua's BenchLab as a computer app, in a task's mode and seed, and its computer, with the sentinel (below). |
+| `tasks/benchlab-listdrag.json` .. `tasks/benchlab-irconsent.json`, `tasks/benchlab-solve-*.json`, `evals/benchlab.toml` | BenchLab in each mode in its computer (`artifacts/check_benchlab/`), and three of its tasks done through the driver and graded with no model. |
+| `tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` | The BenchLab tasks, five runs each, each run with its seed, in both conditions, with a model (below). |
+| `evals/bench-v2.toml`, `evals/bench-v2-trials.txt` | All of Bench v2: each of its task files once, and its 100 trials in trycua's schedule (below). |
 | `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, and of the grade, offline. |
 
 ## Run it
@@ -40,6 +45,7 @@ python tools/taskpack.py            # fetch the task pack into artifacts/taskpac
 agent-env run . --eval smoke
 agent-env run . --eval apps         # each task's app in its computer
 agent-env run . --eval sentinel     # the sentinel and its guard in s02's computer, scored by trycua's files
+agent-env run . --eval benchlab     # BenchLab in each mode, and three of its tasks done through the driver and graded
 ```
 
 The first run composes the computer: it builds an image of the base with the driver installed, then probes it. That
@@ -60,6 +66,23 @@ with its data, as the bench stops its apps before it resets a task:
   `setup.py` built it, with the windows closed and opened again.
 - It opens the task's windows at boot as the task's `platform/launch.linux.json` says, Electron without Chromium's
   sandbox, which a container can't give it, and places each at the bench's bounds; it's ready once every one shows.
+
+## BenchLab
+
+trycua's precision and interruption tasks, MB-09 to MB-11 and IR-01 to IR-04, run in their BenchLab, one window with a
+mode per task. `envs/benchlab` is their Linux port of it, a GTK app, as a computer app:
+
+- Its install brings their `linux/benchlab.py` and `benchlab_common.py` at the pinned commit, by URL and sha256
+  (`files.json`, written by `python tools/taskpack.py apps`), and GTK's Python bindings.
+- Its app settings `mode` and `seed` pick the task's mode and the run's seed, from which BenchLab draws the task's
+  values. It starts BenchLab as their runner does, `/usr/bin/python3 benchlab.py --mode M --seed S --state ...
+  --events ...` with a throwaway home, and places its window where their macOS BenchLab puts its own, the outer frame's
+  top left at 60,80; their Linux port leaves that to the window manager. In the background condition the user's window
+  covers part of it, on purpose, as in theirs.
+- Its data is `~/.benchlab`, the state and events BenchLab writes, which trycua's evaluator for the task grades.
+- `artifacts/check_benchlab` checks it in its computer: the window in its mode, placed, its state and `app_start` for
+  that mode and seed, its data plane; and with `solve`, does the task as an agent does, through the driver over its MCP
+  endpoint, element by element, with the values trycua's files derive from the seed.
 
 ## The sentinel and the GUI-only guard
 
@@ -86,7 +109,8 @@ A trial is graded as trycua's runner grades one, in two halves, and passes when 
 - **In a container of its own.** After the agent, `snapshot_env` exports the computer's apps' files. A `deploy_sandbox`
   sandbox runs the bench's grading container (`artifacts/grader/`: Python 3 and Node 22, no network), and
   `load_artifact` stages trycua's task pack and the snapshot in it. There `run_container_unit_tests_verifier` runs
-  `grade.py`, which scores its reward: `sentinel`, its log shows the whole trial; `task`, trycua's evaluator passed;
+  `grade.py`, which scores its reward: `sentinel`, its log shows the whole trial; `task`, trycua's evaluator passed,
+  for a BenchLab task (`grade.py PROBE SEED`) theirs for that probe on BenchLab's state and events, with the run's seed;
   `gui_only`, the guard logged no violation and no Electron app's DevTools opened; and in the background condition
   `user_undisturbed`, all eight of trycua's A22 criteria measured and held. The files the agent left are parsed only
   there.
@@ -107,8 +131,23 @@ disarmed just after, under a recording; the prompt their runner gives, within th
 which runs whatever became of the agent. The prompts and the system prompt quote trycua's text, which
 `tests/test_trials.py` checks against the pinned task pack. They need a model endpoint (`[model]` in the config).
 
+`tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` are the BenchLab tasks the same way, one file per
+run: trycua seeds run `r` of a task with `probe_seed(task, r - 1)`, and the run's brief and BenchLab's values come from
+that seed. A G task's runs share one file, since its seed changes nothing.
+
+Each prompt is the one trycua's runner sends: the task's brief, in the background their background brief, and the line
+their runner adds by default, "You have about 6 minutes and at most 45 turns." trycua's BenchLab briefs say BenchLab
+"is already open on your Mac"; the trials keep their text as it is. MB-10's brief speaks of a toolbar strip whose
+"Actions" area reveals the buttons; their Linux BenchLab's zone reads "Hover here to reveal actions".
+
+`evals/bench-v2-trials.txt` lists Bench v2's 100 trials, one task file per line, in trycua's schedule: the v2 tasks in
+order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, the foreground's then the background's.
+`evals/bench-v2.toml` runs each of those task files once, since an eval runs a task once; a runner that repeats a G
+task's file per line runs them all.
+
 ```bash
 agent-env run . --task cdb-g02-background
+agent-env run . --task ir-01-r1-background
 ```
 
 ## The task pack

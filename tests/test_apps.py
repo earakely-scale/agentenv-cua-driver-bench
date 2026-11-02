@@ -1,6 +1,8 @@
 """The bench task apps, read as a computer reads them at put: each declares the task's files at the lock's commit, its
 runtimes, packages, workspace and launch; the files every app shares are the same in each; and the launcher's commands
-and lock cleanup."""
+and lock cleanup. BenchLab's app declares trycua's two files at the lock's commit, its data and launch and their modes,
+and starts BenchLab as their runner does."""
+import ast
 import importlib
 import json
 import os
@@ -8,6 +10,7 @@ import sys
 import tomllib
 import zipfile
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
@@ -181,3 +184,63 @@ def test_a_launch_removes_the_locks_stopped_apps_left_and_nothing_else(bench_app
 
     assert sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()) == [
         "book/k.gnucash", "mail/messages.json", "planning/replan.ods"]
+
+
+@pytest.fixture
+def lab():
+    for name in ("app", "lab"):
+        sys.modules.pop(name, None)
+    sys.path.insert(0, str(ROOT / "envs" / "benchlab"))
+    try:
+        yield importlib.import_module("lab")
+    finally:
+        sys.path.remove(str(ROOT / "envs" / "benchlab"))
+        for name in ("app", "lab"):
+            sys.modules.pop(name, None)
+
+
+def test_benchlab_declares_trycuas_files_at_the_locks_commit_its_data_and_launch_and_their_modes(lab):
+    app = sys.modules["app"]
+    linux = app.BenchLab.declaration().os["linux"]
+    commit = tomllib.loads((ROOT / "taskpack.lock.toml").read_text())["commit"]
+    listed = json.loads((ROOT / "envs" / "benchlab" / "files.json").read_text())
+
+    assert listed["commit"] == commit
+    assert [download["to"] for download in linux.install["downloads"]] == [
+        "lab/linux/benchlab.py", "lab/probes/_common/benchlab_common.py"]
+    assert all(f["url"].startswith(f"https://raw.githubusercontent.com/trycua/cua/{commit}/") for f in listed["files"])
+    assert {"python3-gi", "gir1.2-gtk-3.0", "xdotool"} <= set(linux.install["packages"]["apt"])
+    assert linux.paths == [app.DATA] == [".benchlab"]
+    assert linux.launch.command == ["venv/bin/python", "lab.py"] and linux.launch.window == {"class": "BenchLab"}
+    pack = ROOT / "artifacts" / "taskpack" / "linux" / "benchlab.py"
+    if pack.exists():
+        [modes] = [ast.literal_eval(node.value) for node in ast.parse(pack.read_text()).body
+                   if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == "MODES"]
+        assert get_args(app.BenchLab.Settings.model_fields["mode"].annotation) == modes
+    assert app.BenchLab.Settings().model_dump() == {"mode": "hover", "seed": 1}
+
+
+def test_benchlab_starts_as_trycuas_runner_starts_it_with_a_throwaway_home(lab, monkeypatch, tmp_path):
+    started = {}
+
+    class Lab:
+        pid = 7
+
+        def __init__(self, argv, env, **_):
+            started.update(argv=argv, home=env["HOME"])
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(lab.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(lab.subprocess, "Popen", Lab)
+    monkeypatch.setattr(lab, "_place", lambda process: None)
+    settings = sys.modules["app"].BenchLab.Settings(mode="irmodal", seed=517139)
+
+    with pytest.raises(SystemExit):
+        lab.main(settings)
+
+    data = tmp_path / ".benchlab"
+    assert started["argv"] == ["/usr/bin/python3", str(lab.LAB), "--mode", "irmodal", "--seed", "517139",
+                               "--state", str(data / "state.json"), "--events", str(data / "events.jsonl")]
+    assert data.is_dir() and started["home"] != str(tmp_path)

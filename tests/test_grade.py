@@ -3,7 +3,9 @@
 untouched one, which fails, or one trycua's own tests solve; the sentinel's log must show the whole trial; GUI-only
 fails on a violation the guard logged or DevTools opened while armed; the background condition adds trycua's A22
 criteria, the foreground none; and a solved trial that left the user undisturbed in the GUI is a background
-completion, with a reward of 1."""
+completion, with a reward of 1. A BenchLab trial is graded by trycua's evaluator for its probe on BenchLab's state and
+events, with the run's seed: the interruption handled as trycua's own tests handle it passes, another answer fails, and
+missing data or another seed's fails closed."""
 import importlib.util
 import json
 import shutil
@@ -18,6 +20,7 @@ from test_sentinel import OTHER, Run, sentinel_module  # noqa: F401
 ROOT = Path(__file__).resolve().parent.parent
 PACK = ROOT / "artifacts" / "taskpack"
 TASK = PACK / "taskpack" / "tasks" / "shared" / "cdb-s02"
+LAB = "IR-01"
 
 
 @pytest.fixture
@@ -49,6 +52,10 @@ def _staged(tmp_path, run, condition="background", solved=False, edit=None, devt
         shutil.copytree(_solved(tmp_path / "solving"), workspace)
     else:
         subprocess.run([sys.executable, "reset/setup.py", "--workspace", str(workspace)], cwd=TASK, check=True)
+    return _sentinel(trial, run, condition, edit, devtools)
+
+
+def _sentinel(trial, run, condition="background", edit=None, devtools=()):
     sentinel = trial / "bench-sentinel" / ".bench-sentinel"
     sentinel.mkdir(parents=True)
     lines = [json.loads(line) for line in run.lines]
@@ -170,3 +177,65 @@ def test_the_grading_image_has_the_node_cdb_s04_pins():
                 if line.startswith("NODE = "))
 
     assert f"FROM node:{node.split(chr(34))[1].split('.')[0]}-bookworm@sha256:" in dockerfile
+
+
+def _seed(run=1):
+    return _module(PACK / "runner" / "bench_core.py").probe_seed(LAB, run - 1)
+
+
+def _lab(tmp_path, run, seed, answer="deny", data=True):
+    """A BenchLab trial's snapshot: IR-01's state and events as trycua's own tests write a run that answers its
+    permission prompt with ``answer``, and the sentinel's log."""
+    trial = tmp_path / "trial"
+    if data:
+        folder = trial / "benchlab" / ".benchlab"
+        folder.mkdir(parents=True)
+        interrupts = _module(PACK / "probes" / "tests" / "test_interrupts.py")
+        interrupts.S.write_files(folder, *interrupts.irmodal_run(seed, answer=answer))
+    return _sentinel(trial, run)
+
+
+def _lab_results(grader, tmp_path, run, seed, graded_seed=None, **lab):
+    trial = _lab(tmp_path, run, seed, **lab)
+    return {result["id"]: result for result in grader.grade(LAB, trial, PACK, tmp_path, graded_seed or seed)}
+
+
+def test_a_benchlab_trial_handled_as_trycuas_tests_handle_it_is_a_background_completion(grader, sentinel_module,
+                                                                                       tmp_path):
+    results = _lab_results(grader, tmp_path, Run(sentinel_module).trial(), _seed())
+
+    assert results["task"]["result"] is True and results["task"]["score"] == 1.0
+    assert {"permission_denied", "fields_submitted", "integrity"} <= set(results["task"]["checks"])
+    assert results["user_undisturbed"]["background_completion"] is True
+
+
+@pytest.mark.parametrize("lab, graded_seed, failed", [
+    ({"answer": "allow"}, None, "permission_denied"),
+    ({"data": False}, None, "inputs_loadable"),
+    ({}, 1, "integrity"),
+], ids=["access granted", "no BenchLab data", "another seed"])
+def test_a_benchlab_trial_fails_trycuas_evaluator_on_another_answer_missing_data_or_another_seed(
+        grader, sentinel_module, tmp_path, lab, graded_seed, failed):
+    task = _lab_results(grader, tmp_path, Run(sentinel_module).trial(), _seed(), graded_seed, **lab)["task"]
+
+    assert task["result"] is False and task["checks"][failed] is False
+
+
+def test_the_grade_of_a_benchlab_trial_takes_its_probe_and_seed(grader, sentinel_module, tmp_path, monkeypatch):
+    trial = _lab(tmp_path, Run(sentinel_module).trial(), _seed())
+    monkeypatch.setattr(grader, "TRIAL", trial)
+    monkeypatch.setattr(grader, "TRYCUA", PACK)
+    monkeypatch.setattr(grader, "OUT", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["grade.py", LAB, str(_seed())])
+
+    grader.main()
+
+    assert (tmp_path / "reward.txt").read_text() == "1\n"
+    assert json.loads((tmp_path / "result.json").read_text())["task"] == LAB
+
+
+def _module(path):
+    spec = importlib.util.spec_from_file_location(f"bench_test_{path.stem}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module

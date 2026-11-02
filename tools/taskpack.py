@@ -5,7 +5,7 @@ against the lock's digest. The task pack is never copied into this repo.
     python tools/taskpack.py              fetch it, or keep what's there when it matches the lock
     python tools/taskpack.py verify       check what's there against the lock
     python tools/taskpack.py pin COMMIT   fetch it at COMMIT and write that commit and its digest to the lock
-    python tools/taskpack.py apps         write each task app's files.json: the task's files its computer installs
+    python tools/taskpack.py apps         write each app's files.json: the task pack's files its computer installs
     python tools/taskpack.py grader       write into artifacts/gui_only/verify.py the trycua file its scan fetches
 
 A task app's computer fetches its task's files itself, at put, by the URL and sha256 its ``files.json`` lists, and the
@@ -41,6 +41,8 @@ _TABLE = re.compile(r"(?ms)^TRYCUA = \{.*?^\}$")
 #: The bench tasks with an app of their own, each in envs/<task>/, and where their folders are in the task pack.
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
 TASK_DIR = "taskpack/tasks/shared"
+#: The bench's apps of trycua's own windows, each in envs/<app>/, and the task pack's files each installs.
+LABS = {"benchlab": ("linux/benchlab.py", "probes/_common/benchlab_common.py")}
 MANIFEST = "MANIFEST.sha256"
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
@@ -102,22 +104,29 @@ def pin(commit: str, lock_path: Path = LOCK, target: Path = TARGET) -> str:
     return got
 
 
-def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str, ...] = TASKS) -> list[Path]:
-    """Write ``files.json`` in each task's app folder: the task's files its computer installs, each by its URL at the
-    lock's commit and its sha256 as the verified task pack's manifest has it; the files written."""
+def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str, ...] = TASKS,
+         labs: dict[str, tuple[str, ...]] = LABS) -> list[Path]:
+    """Write ``files.json`` in each app's folder: a task's files its computer installs, or a lab's, each by its URL at
+    the lock's commit and its sha256 as the verified task pack's manifest has it; the files written."""
     verify(lock, target)
     hashes = {name: sha for sha, name in (line.split("  ", 1) for line in (target / MANIFEST).read_text().splitlines())}
-    written = []
+    listed = {}
     for task in tasks:
         prefix = f"{TASK_DIR}/{task}/"
-        files = [{"path": name[len(prefix):], "url": _url(lock, name), "sha256": sha}
-                 for name, sha in sorted(hashes.items())
-                 if name.startswith(prefix) and _for_the_computer(name[len(prefix):])]
+        listed[task] = [{"path": name[len(prefix):], "url": _url(lock, name), "sha256": sha}
+                        for name, sha in sorted(hashes.items())
+                        if name.startswith(prefix) and _for_the_computer(name[len(prefix):])]
+    for lab, names in labs.items():
+        if missing := [name for name in names if name not in hashes]:
+            raise SystemExit(f"the task pack has no {', '.join(missing)}, which {lab} installs")
+        listed[lab] = [{"path": name, "url": _url(lock, name), "sha256": hashes[name]} for name in names]
+    written = []
+    for app, files in listed.items():
         if not files:
-            raise SystemExit(f"the task pack has no files of {task}")
-        if not (envs / task).is_dir():
-            raise SystemExit(f"{envs / task} isn't there: it's the app of {task}")
-        path = envs / task / "files.json"
+            raise SystemExit(f"the task pack has no files of {app}")
+        if not (envs / app).is_dir():
+            raise SystemExit(f"{envs / app} isn't there: it's the app of {app}")
+        path = envs / app / "files.json"
         path.write_text(json.dumps({"commit": lock.commit, "files": files}, indent=1) + "\n", encoding="utf-8")
         written.append(path)
     return written

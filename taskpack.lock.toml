@@ -3,7 +3,7 @@
 # python tools/taskpack.py pin <commit>.
 repo = "trycua/cua"
 commit = "22a67eacd15dc71811e330ed88951dd615bb395d"
-sha256 = "3e3474d20e0210b973d05fde7041cad1ef3ad6d12ddaba36fc87f9e1e57570d8"
+sha256 = "9fcd03b958b5c67611f604786d452ca27872c42643635722696b72e7dab82d11"
 
 [[include]]
 from = "libs/cua-driver-bench/LICENSE"
@@ -52,3 +52,51 @@ to = "scoring/bench_v2.py"
 [[include]]
 from = "libs/cua-driver-bench/automated-eval/macos_bench/claude_arms.py"
 to = "runner/claude_arms.py"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/run_bench.py"
+to = "runner/run_bench.py"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/bench_core.py"
+to = "runner/bench_core.py"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/linux/benchlab.py"
+to = "linux/benchlab.py"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/_common"
+to = "probes/_common"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/MB-09"
+to = "probes/MB-09"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/MB-10"
+to = "probes/MB-10"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/MB-11"
+to = "probes/MB-11"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/IR-01"
+to = "probes/IR-01"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/IR-02"
+to = "probes/IR-02"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/IR-03"
+to = "probes/IR-03"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/IR-04"
+to = "probes/IR-04"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/tests"
+to = "probes/tests"
