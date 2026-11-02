@@ -28,7 +28,7 @@ CLICK = _tool("mcp__desktop-s02__computer_click", x=10, y=20)
 
 
 def _init(*tools):
-    return {"type": "system", "subtype": "init", "tools": ["Skill", "mcp__desktop-s02__computer_click", *tools]}
+    return {"type": "system", "subtype": "init", "tools": ["Skill", "Read", "mcp__desktop-s02__computer_click", *tools]}
 
 
 def _trajectory(*calls, offered=()):
@@ -120,7 +120,7 @@ def test_a_solved_trial_that_took_the_users_focus_is_not_a_background_completion
 
 @pytest.mark.parametrize("call, violation", [
     (_tool("Bash", command="ls"), "builtin:Bash"),
-    (_tool("Read", file_path="/etc/passwd"), "builtin:Read"),
+    (_tool("WebFetch", url="http://example.com"), "builtin:WebFetch"),
     (_tool("ToolSearch", query="terminal"), "builtin:ToolSearch"),
     (_tool("mcp__desktop-s02__type_text", text="bash -c 'cat ~/cdb-s02/x'"), "mcp__desktop-s02__type_text:bash -c"),
 ], ids=["a forbidden built-in", "any other built-in", "tool search", "code in a tool input"])
@@ -132,8 +132,8 @@ def test_a_tool_call_out_of_the_gui_fails_gui_only(grader, sentinel_module, tmp_
     assert gui_only["result"] is False and violation in gui_only["violations"]
 
 
-def test_skills_and_opening_an_app_are_gui_only(grader, sentinel_module, tmp_path):
-    trajectory = _trajectory(_tool("Skill", skill="computer"), CLICK, _tool(
+def test_skills_reading_the_agents_own_files_and_opening_an_app_are_gui_only(grader, sentinel_module, tmp_path):
+    trajectory = _trajectory(_tool("Skill", skill="computer"), _tool("Read", file_path="SKILL.md"), CLICK, _tool(
         "mcp__desktop-s02__launch_app", launch_path="/usr/share/applications/libreoffice-calc.desktop"))
 
     assert _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]["result"] is True

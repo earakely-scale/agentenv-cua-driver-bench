@@ -1,7 +1,7 @@
 """The trials of the bench's GUI-only tasks, each in both of trycua's conditions: prompted as trycua's runner prompts
 them, with the task's brief, its workspace and, in the background, their background brief, and with their system
 prompt for a Linux desktop, all checked against the fetched task pack; with the sentinel in that condition,
-claude-code with no built-in tool but Skill, the sentinel armed just around the prompt within the task's time and
+claude-code with no built-in tools but Skill and Read, the sentinel armed just around the prompt within the task's time and
 turns, and the grade, which runs whatever became of the agent."""
 import ast
 import importlib.util
@@ -56,7 +56,7 @@ def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and
 
     assert trial["env"]["env_id"] == env
     assert trial["env"]["env_params"] == {"app_settings": {"bench-sentinel": {"condition": condition}}}
-    assert trial["agent"]["env_ids"] == [env] and trial["agent"]["builtin_tools"] == {"only": ["Skill"]}
+    assert trial["agent"]["env_ids"] == [env] and trial["agent"]["builtin_tools"] == {"only": ["Skill", "Read"]}
     assert (trial["arm"]["args"], trial["disarm"]["args"]) == ({"action": "arm", "condition": condition},
                                                                {"action": "disarm"})
     assert (trial["task"]["depends_on"], trial["disarm"]["depends_on"], trial["grade"]["depends_on"]) == (

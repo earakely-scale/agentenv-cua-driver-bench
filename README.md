@@ -94,7 +94,8 @@ trial is GUI-only, since its tool calls can't be checked.
 
 `tasks/cdb-g02-background.json` .. `tasks/cdb-g04-foreground.json` are trycua's GUI-only tasks G02, G03 and G04, each
 in both conditions, as their runner runs them: the task's computer with the sentinel in that condition; claude-code with
-no built-in tool but Skill and trycua's system prompt, for a Linux desktop; the sentinel armed just before the prompt and
+no built-in tools but Skill and Read, trycua's set less the tool search its CLI hasn't, and trycua's system prompt, for a
+Linux desktop; the sentinel armed just before the prompt and
 disarmed just after, under a recording; the prompt their runner gives, within the task's time and turns; and the grade,
 which runs whatever became of the agent. The prompts and the system prompt quote trycua's text, which
 `tests/test_trials.py` checks against the pinned task pack. They need a model endpoint (`[model]` in the config).

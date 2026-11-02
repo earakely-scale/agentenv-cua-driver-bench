@@ -6,7 +6,7 @@ against its sha256 (``TRYCUA``, written by ``python tools/taskpack.py grader``),
 
 All of its results must hold: ``sentinel``, its log shows the whole trial (a condition, armed, disarmed, no sample
 lost); ``task``, their evaluator passed; ``gui_only``, the guard logged no violation, and claude-code was offered and
-called no tool but the computer env's and its skill tool, with no code in an input and no command run through
+called no tool but the computer env's and its Skill and Read, with no code in an input and no command run through
 cua-driver's ``launch_app``; and in the background condition ``user_undisturbed``, all eight A22 criteria measured and
 held and the user's window not asked to close. Together they are trycua's background completion, and in the
 foreground their GUI-only pass. A trial whose agent's trajectory the verifier isn't given, or isn't claude-code's
@@ -32,8 +32,9 @@ from agentenv_protocol import client
 SENTINEL = "bench-sentinel"
 LOG = Path(".bench-sentinel/sentinel.jsonl")
 DATA_OBJECTS = "urn:agentenv:data-objects/v1"
-#: The built-in tools besides the computer env's that a GUI-only claude-code keeps: its skills.
-ALLOWED_BUILTINS = ("Skill",)
+#: The built-in tools besides the computer env's that a GUI-only claude-code keeps, trycua's less the tool search its
+#: CLI hasn't: its skills, and Read, which reads only the agent's own container, never the computer.
+ALLOWED_BUILTINS = ("Skill", "Read")
 CACHE = Path.home() / ".cache" / "agentenv-cua-driver-bench"
 DATA_TIMEOUT_S = 300
 #: Node for the evaluators that serve the task's site, at the version and checksums cdb-s04's own app pins.
