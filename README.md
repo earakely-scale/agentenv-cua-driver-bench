@@ -26,6 +26,7 @@ evaluator, A22 criteria and GUI-only scan. The bench's own tasks come next.
 | `artifacts/sentinel/` | Arms the sentinel just before the agent starts and disarms it just after, as `run_code` steps. |
 | `artifacts/grade/` | The grade of a trial, an `env_outcome_verifier` (below). |
 | `tasks/sentinel-background.json`, `tasks/sentinel-foreground.json`, `evals/sentinel.toml` | Each causes every disturbance on purpose inside s02's computer and checks trycua's scoring finds it (`artifacts/check_sentinel/`). |
+| `tasks/cdb-g02-background.json` .. `tasks/cdb-g04-foreground.json`, `evals/trials.toml` | The bench's GUI-only tasks, each in both of trycua's conditions, with a model (below). |
 | `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, and of the grade, offline. |
 
 ## Run it
@@ -89,6 +90,19 @@ background condition `user_undisturbed`, all eight A22 criteria measured and hel
 trajectory from agentenv-framework's [#439](https://github.com/scaleapi/agentenv-framework/pull/439) on; before it, no
 trial is GUI-only, since its tool calls can't be checked.
 
+## The trials
+
+`tasks/cdb-g02-background.json` .. `tasks/cdb-g04-foreground.json` are trycua's GUI-only tasks G02, G03 and G04, each
+in both conditions, as their runner runs them: the task's computer with the sentinel in that condition; claude-code with
+no built-in tool but Skill and trycua's system prompt, for a Linux desktop; the sentinel armed just before the prompt and
+disarmed just after, under a recording; the prompt their runner gives, within the task's time and turns; and the grade,
+which runs whatever became of the agent. The prompts and the system prompt quote trycua's text, which
+`tests/test_trials.py` checks against the pinned task pack. They need a model endpoint (`[model]` in the config).
+
+```bash
+agent-env run . --task cdb-g02-background
+```
+
 ## The task pack
 
 The task pack and the bench's GUI-only task variants are trycua's, under their licence (FSL-1.1-MIT), which travels
@@ -117,4 +131,4 @@ The sentinel's tests need tkinter.
 ## Licence
 
 This repo's own files are under the Apache License 2.0 (`LICENSE`). trycua's files, fetched into
-`artifacts/taskpack/`, stay under theirs.
+`artifacts/taskpack/`, stay under theirs, as do the briefs and system prompt the trials quote.

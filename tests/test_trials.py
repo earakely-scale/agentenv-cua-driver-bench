@@ -1,59 +1,65 @@
-"""The trials ``python tools/taskpack.py tasks`` writes from the fetched task pack: each GUI-only task in both of
-trycua's conditions, prompted as trycua's runner prompts it and within its time and turns, with the sentinel in that
-condition, claude-code with only the computer env's tools and trycua's system prompt for Linux, the sentinel armed just
-around the prompt, and the grade, which runs whatever became of the agent; git-ignored, since they hold trycua's
-text."""
+"""The trials of the bench's GUI-only tasks, each in both of trycua's conditions: prompted as trycua's runner prompts
+them, with the task's brief, its workspace and, in the background, their background brief, and with their system
+prompt for a Linux desktop, all checked against the fetched task pack; with the sentinel in that condition,
+claude-code with no built-in tool but Skill, the sentinel armed just around the prompt within the task's time and
+turns, and the grade, which runs whatever became of the agent."""
+import ast
+import importlib.util
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
-import taskpack  # noqa: E402
-
 PACK = ROOT / "artifacts" / "taskpack"
+TRIALS = {"cdb-g02": "cdb-s02", "cdb-g03": "cdb-s03", "cdb-g04": "cdb-s04"}
+CONDITIONS = ("background", "foreground")
+
+
+def _trial(probe, condition):
+    return {step["id"]: step for step in json.loads((ROOT / "tasks" / f"{probe}-{condition}.json").read_text())}
 
 
 @pytest.fixture
-def trials(tmp_path):
+def trycua():
     if not (PACK / "MANIFEST.sha256").exists():
         pytest.skip("the task pack isn't fetched: python tools/taskpack.py")
-    taskpack.tasks(taskpack.read_lock(), folder=tmp_path)
-    return lambda name: {step["id"]: step for step in json.loads((tmp_path / f"{name}.json").read_text())}
+    spec = importlib.util.spec_from_file_location("trycua_bench_v2", PACK / "scoring" / "bench_v2.py")
+    bench_v2 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bench_v2)
+    return bench_v2
 
 
-def test_a_background_trial_prompts_as_trycua_and_arms_the_user_window_just_around_the_agent(trials):
-    trial = trials("cdb-g02-background")
-    brief = (PACK / "taskpack/tasks/shared/cdb-s02/brief.md").read_text().strip()
+@pytest.mark.parametrize("probe", TRIALS)
+@pytest.mark.parametrize("condition", CONDITIONS)
+def test_each_trial_is_prompted_as_trycuas_runner_prompts_it(trycua, probe, condition):
+    task = TRIALS[probe]
+    brief = (PACK / "taskpack/tasks/shared" / task / "brief.md").read_text().replace(
+        "configured `cua` MCP server", "configured computer-use MCP server").strip()
+    expected = trycua.brief_for(f"{brief}\n\nYour workspace directory is `/home/user/{task}`.", condition)
+    runner = ast.parse((PACK / "runner" / "claude_arms.py").read_text())
+    [system] = [ast.literal_eval(node.value) for node in runner.body if isinstance(node, ast.Assign)
+                and any(getattr(target, "id", None) == "SYSTEM_PROMPT" for target in node.targets)]
+    limits = json.loads((PACK / "probes" / probe.upper() / "task.json").read_text())
+    trial = _trial(probe, condition)
 
-    assert trial["env"]["env_id"] == "desktop-s02"
-    assert trial["env"]["env_params"] == {"app_settings": {"bench-sentinel": {"condition": "background"}}}
-    assert trial["agent"]["builtin_tools"] == {"only": ["Skill"]}
-    assert trial["task"]["prompt"].startswith(brief) and "`/home/user/cdb-s02`" in trial["task"]["prompt"]
-    assert '"User activity"' in trial["task"]["prompt"] and trial["task"]["timeout_seconds"] == 360
-    assert "a Linux desktop" in trial["agent"]["system_prompt"] and "macOS" not in trial["agent"]["system_prompt"]
-    assert (trial["arm"]["args"], trial["disarm"]["args"]) == (
-        {"action": "arm", "condition": "background"}, {"action": "disarm"})
-    assert (trial["task"]["max_turns"], trial["task"]["fail_task_on_error"], trial["disarm"]["fail_task_on_error"]) == (
-        45, False, False)
+    assert trial["task"]["prompt"] == expected
+    assert trial["agent"]["system_prompt"] == system.replace("a macOS desktop", "a Linux desktop")
+    assert (trial["task"]["timeout_seconds"], trial["task"]["max_turns"]) == (limits["timeout_s"], limits["max_turns"])
+
+
+@pytest.mark.parametrize("probe", TRIALS)
+@pytest.mark.parametrize("condition", CONDITIONS)
+def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and_grades_it(probe, condition):
+    trial = _trial(probe, condition)
+    env = f"desktop-{TRIALS[probe].removeprefix('cdb-')}"
+
+    assert trial["env"]["env_id"] == env
+    assert trial["env"]["env_params"] == {"app_settings": {"bench-sentinel": {"condition": condition}}}
+    assert trial["agent"]["env_ids"] == [env] and trial["agent"]["builtin_tools"] == {"only": ["Skill"]}
+    assert (trial["arm"]["args"], trial["disarm"]["args"]) == ({"action": "arm", "condition": condition},
+                                                               {"action": "disarm"})
     assert (trial["task"]["depends_on"], trial["disarm"]["depends_on"], trial["grade"]["depends_on"]) == (
         ["arm"], ["task"], ["disarm"])
+    assert trial["task"]["fail_task_on_error"] is False and trial["disarm"]["fail_task_on_error"] is False
     assert (trial["grade"]["file_artifact_id"], trial["grade"]["prompt_id"]) == ("grade", "task")
-
-
-def test_each_gui_only_task_has_a_trial_in_each_condition(trials):
-    for probe, env in (("cdb-g02", "desktop-s02"), ("cdb-g03", "desktop-s03"), ("cdb-g04", "desktop-s04")):
-        foreground = trials(f"{probe}-foreground")
-        assert foreground["env"]["env_id"] == env
-        assert foreground["env"]["env_params"]["app_settings"]["bench-sentinel"]["condition"] == "foreground"
-        assert "User activity" not in foreground["task"]["prompt"]
-
-
-def test_the_trials_are_git_ignored():
-    ignored = subprocess.run(["git", "check-ignore", "tasks/cdb-g02-background.json", "tasks/cdb-g04-foreground.json"],
-                             cwd=ROOT, capture_output=True, text=True)
-
-    assert ignored.stdout.split() == ["tasks/cdb-g02-background.json", "tasks/cdb-g04-foreground.json"]
