@@ -3,8 +3,10 @@ runtimes, packages, workspace and launch; the files every app shares are the sam
 and lock cleanup."""
 import importlib
 import json
+import os
 import sys
 import tomllib
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -67,12 +69,14 @@ def test_a_task_app_declares_its_files_runtimes_workspace_and_launch(task):
     assert tos[:len(files)] == [f"task/{f['path']}" for f in files]
     assert sorted(tos[len(files):]) == sorted(
         ["runtime/electron-amd64.zip", "runtime/electron-arm64.zip",
-         *(["runtime/node-amd64.tar.xz", "runtime/node-arm64.tar.xz"] if task == "cdb-s04" else [])])
+         *(["runtime/node-amd64.tar.xz", "runtime/node-arm64.tar.xz", "runtime/chromium-amd64.zip",
+            "runtime/chromium-arm64.zip"] if task == "cdb-s04" else [])])
     apt = linux.install["packages"]["apt"]
     assert ("gnucash" in apt) == (task == "cdb-s03") and ("libreoffice-calc" in apt) == (task != "cdb-s04")
+    assert ("fonts-liberation" in apt) == (task == "cdb-s04")
     assert linux.paths == [task]
     assert linux.launch.command == ["venv/bin/python", "bench_app.py"] and linux.launch.at == "boot"
-    assert [step.name for step in declared.install_steps] == ["workspace"]
+    assert [step.name for step in declared.install_steps] == ["workspace", "browser"]
     assert [check.name for check in declared.ready_checks] == ["windows"]
 
 
@@ -82,13 +86,38 @@ def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node(bench_app,
     electron = {"id": "mail", "command": ["npx", "electron", ".", "--surface=mail", "--workspace=${workspace}"]}
     node = {"id": "archive", "command": ["node", "server.js"]}
     calc = {"id": "calc", "command": ["libreoffice", "--calc", "${workspace}/planning/a.ods"]}
+    browser = {"id": "browser", "command": ["google-chrome", "--no-first-run", "--user-data-dir=${workspace}/.runtime/b",
+                                            "--new-window", "http://127.0.0.1:4184/"]}
 
     assert bench_app._command(electron, values) == [
         str(bench_app.HERE / "runtime/electron/electron"), ".", "--surface=mail", "--workspace=/home/user/cdb-s02",
         "--no-sandbox", "--user-data-dir=/home/user/cdb-s02/.runtime/electron-mail"]
     assert bench_app._command(node, values) == [str(bench_app.HERE / "runtime/node/bin/node"), "server.js"]
     assert bench_app._command(calc, values) == ["libreoffice", "--calc", "/home/user/cdb-s02/planning/a.ods"]
+    assert bench_app._command(browser, values) == [
+        str(bench_app.HERE / "runtime/chromium/chrome"), "--no-sandbox", "--disable-dev-shm-usage",
+        "--class=BenchChromium", "--no-first-run", "--user-data-dir=/home/user/cdb-s02/.runtime/b", "--new-window",
+        "http://127.0.0.1:4184/"]
     assert bench_app._sub("${unknown}/x", values) == "${unknown}/x"
+
+
+def test_a_browser_install_unpacks_chromium_with_its_execute_bits_and_writes_the_policies(bench_app, tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    bench_app.install_browser(runtime, tmp_path / "policies")
+    assert not (tmp_path / "policies").exists()
+    with zipfile.ZipFile(runtime / "chromium-amd64.zip", "w") as archive:
+        executable = zipfile.ZipInfo("chrome-linux64/chrome")
+        executable.external_attr = 0o100755 << 16
+        archive.writestr(executable, "#!/bin/sh\n")
+
+    bench_app.install_browser(runtime, tmp_path / "policies")
+
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()) == [
+        "policies/agentenv-bench.json", "runtime/chromium/chrome"]
+    assert os.access(runtime / "chromium/chrome", os.X_OK)
+    policies = json.loads((tmp_path / "policies/agentenv-bench.json").read_text())
+    assert policies["BrowserSignin"] == 0 and not policies["CommandLineFlagSecurityWarningsEnabled"]
 
 
 def test_the_launcher_matches_a_whole_title_or_part_of_one_literally(bench_app):

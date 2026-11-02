@@ -19,6 +19,7 @@ from agentenv_protocol.computer import (ComputerAppEnvironment, Download, Launch
 
 HERE = Path(__file__).resolve().parent
 TASK = HERE / "task"
+RUNTIME = HERE / "runtime"
 SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm64"]}]
 _ARCHES = {"amd64": "x64", "arm64": "arm64"}
 
@@ -35,16 +36,46 @@ DESKTOP_APT = ["libasound2t64", "libatk-bridge2.0-0t64", "libatk1.0-0t64", "libc
                "libxcomposite1", "libxdamage1", "libxfixes3", "libxkbcommon0", "libxrandr2", "libxshmfence1",
                "libxss1", "xdotool", "wmctrl", "unzip", "xz-utils", "librsvg2-common", "adwaita-icon-theme",
                "shared-mime-info"]
+#: Chrome for Testing, at the build agentenv's chromium app pins, for a task's browser in place of google-chrome: its
+#: archive and sha256 by arch, what it links against beyond DESKTOP_APT, a font for the pages it shows, and its window
+#: class, its own, so its windows are never taken for another app's Chromium.
+CHROMIUM = "156.0.8078.4"
+CHROMIUM_ARCHIVES = {"amd64": ("linux64/chrome-linux64.zip",
+                               "43fd31766c7533a02dda2ded5ad50c2f861cd5400be7509c0abad71129f79d79"),
+                     "arm64": ("linux-arm64/chrome-linux-arm64.zip",
+                               "910a12fff6170202195f72ef3d353801c7063d301ab80b1f51b77d791fda60ce")}
+BROWSER_APT = ["fonts-liberation", "libatspi2.0-0t64", "libglib2.0-0t64", "libvulkan1", "libx11-6", "libxcb1",
+               "libxext6"]
+BROWSER_CLASS = "BenchChromium"
+#: Where Chrome for Testing reads managed policies, and those that keep a fresh profile free of first-run tabs,
+#: sign-in, sync, prompts and the warning bar its container flags would show.
+POLICY_DIR = Path("/etc/opt/chrome_for_testing/policies/managed")
+POLICIES = {
+    "BrowserSignin": 0,
+    "SyncDisabled": True,
+    "PromotionalTabsEnabled": False,
+    "DefaultBrowserSettingEnabled": False,
+    "MetricsReportingEnabled": False,
+    "PasswordManagerEnabled": False,
+    "AutofillSettings": [{"url_pattern": "*", "blocked_types": ["all"]}],
+    "TranslateEnabled": False,
+    "ComponentUpdatesEnabled": False,
+    "DefaultGeolocationSetting": 2,
+    "DefaultNotificationsSetting": 2,
+    "CommandLineFlagSecurityWarningsEnabled": False,
+}
 CALC_APT = ["libreoffice-calc", "libreoffice-gtk3"]
 GNUCASH_APT = ["gnucash", "python3-gi"]
 _LAUNCH_TIMEOUT_S = 180
 _PLACE_TIMEOUT_S = 90
 
 
-def install(*, workspace: str, first_window: str, apt: list[str] = (), node: bool = False) -> dict:
-    """The ``@linux(...)`` of a task's app: the task's files and runtimes, the packages its windows need beside
-    ``DESKTOP_APT``, its ``workspace`` folder of the home as its data, which a reset puts back as ``setup.py`` built
-    it, and a launch that's ready once ``first_window`` shows, after which its ``windows`` check waits for the rest."""
+def install(*, workspace: str, first_window: str, apt: list[str] = (), node: bool = False,
+            browser: bool = False) -> dict:
+    """The ``@linux(...)`` of a task's app: the task's files and runtimes (Node and Chromium where the task needs them),
+    the packages its windows need beside ``DESKTOP_APT``, its ``workspace`` folder of the home as its data, which a
+    reset puts back as ``setup.py`` built it, and a launch that's ready once ``first_window`` shows, after which its
+    ``windows`` check waits for the rest."""
     files = json.loads((HERE / "files.json").read_text(encoding="utf-8"))["files"]
     downloads = [Download(url=f["url"], sha256=f["sha256"], to=f"task/{f['path']}") for f in files]
     downloads += [Download(url=f"https://github.com/electron/electron/releases/download/v{ELECTRON}/"
@@ -55,6 +86,11 @@ def install(*, workspace: str, first_window: str, apt: list[str] = (), node: boo
         downloads += [Download(url=f"https://nodejs.org/dist/v{NODE}/node-v{NODE}-linux-{_ARCHES[arch]}.tar.xz",
                                sha256=sha256, to=f"runtime/node-{arch}.tar.xz", arch=arch)
                       for arch, sha256 in NODE_SHA256.items()]
+    if browser:
+        downloads += [Download(url=f"https://storage.googleapis.com/chrome-for-testing-public/{CHROMIUM}/{path}",
+                               sha256=sha256, to=f"runtime/chromium-{arch}.zip", arch=arch)
+                      for arch, (path, sha256) in CHROMIUM_ARCHIVES.items()]
+        apt = [*apt, *BROWSER_APT]
     return dict(packages=Packages(apt=sorted({*DESKTOP_APT, *apt})), downloads=downloads,
                 run=[RunScript(script="install.sh")], paths=[workspace],
                 launch=Launch(at="boot", command=["venv/bin/python", "bench_app.py"], window={"title": first_window},
@@ -72,9 +108,27 @@ class BenchTaskApp(ComputerAppEnvironment):
         for step in ("setup", "verify"):
             subprocess.run([_sub(arg, values) for arg in spec["semantics"]["reset"][step]], cwd=TASK, check=True)
 
+    @install_step(scope="system", os="linux")
+    def browser(self) -> None:
+        install_browser(RUNTIME, POLICY_DIR)
+
     @ready_check(os="linux")
     def windows(self) -> bool:
-        return all(claimed([app["window"] for app in _opened(_spec()) if "window" in app]))
+        return all(claimed([app["window"] for app in _spec()["apps"] if "window" in app]))
+
+
+def install_browser(runtime: Path, policies: Path) -> None:
+    """Where the task has a browser, Chromium's archive unpacked to ``runtime/chromium``, with unzip, which keeps its
+    execute bits, and ``POLICIES`` written to ``policies``."""
+    for archive in runtime.glob("chromium-*.zip"):
+        unpacked = runtime / "chromium-unpacked"
+        subprocess.run(["unzip", "-q", str(archive), "-d", str(unpacked)], check=True)
+        [top] = unpacked.iterdir()
+        top.rename(runtime / "chromium")
+        unpacked.rmdir()
+        archive.unlink()
+        policies.mkdir(parents=True, exist_ok=True)
+        (policies / "agentenv-bench.json").write_text(json.dumps(POLICIES, indent=1) + "\n", encoding="utf-8")
 
 
 def launch() -> None:
@@ -86,7 +140,7 @@ def launch() -> None:
     logs = workspace / ".runtime" / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     running = []
-    for app in _opened(spec):
+    for app in spec["apps"]:
         env = {**{key: value for key, value in os.environ.items() if key not in app.get("unset_env", [])},
                **{key: _sub(value, values) for key, value in app.get("env", {}).items()}}
         command = _command(app, values)
@@ -96,7 +150,7 @@ def launch() -> None:
                                             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
         if ready := app.get("ready"):
             _wait_for(ready["url"], ready["timeout_seconds"])
-    _place([app["window"] for app in _opened(spec) if "window" in app])
+    _place([app["window"] for app in spec["apps"] if "window" in app])
     while any(process.poll() is None for process in running):
         time.sleep(1)
 
@@ -113,11 +167,6 @@ def _spec() -> dict:
     return json.loads((TASK / "platform" / "launch.linux.json").read_text(encoding="utf-8"))
 
 
-def _opened(spec: dict) -> list[dict]:
-    """The task's apps this computer opens: all but a browser, which waits until the computer has one."""
-    return [app for app in spec["apps"] if app["kind"] != "browser"]
-
-
 def _values(spec: dict) -> dict[str, str]:
     workspace = Path(spec["workspace_root"].replace("${HOME}", str(Path.home())))
     return {"${bundle}": str(TASK), "${workspace}": str(workspace), "${workspace_uri}": workspace.as_uri(),
@@ -129,15 +178,19 @@ def _sub(text: str, values: dict[str, str]) -> str:
 
 
 def _command(app: dict, values: dict[str, str]) -> list[str]:
-    """The app's command as the task gives it, with Electron and Node this app installed in place of ``npx electron``
-    and ``node``. Electron runs without Chromium's sandbox, which a container can't give it, and with its own profile
-    under the workspace's runtime folder."""
+    """The app's command as the task gives it, with Electron, Node and Chromium this app installed in place of ``npx
+    electron``, ``node`` and ``google-chrome``. Electron and Chromium run without Chromium's sandbox, which a container
+    can't give them, Electron with its own profile under the workspace's runtime folder and Chromium without /dev/shm,
+    which no computer sizes, and with its own window class."""
     argv = [_sub(arg, values) for arg in app["command"]]
     if argv[:2] == ["npx", "electron"]:
         profile = Path(values["${workspace}"]) / ".runtime" / f"electron-{app['id']}"
-        return [str(HERE / "runtime" / "electron" / "electron"), *argv[2:], "--no-sandbox", f"--user-data-dir={profile}"]
+        return [str(RUNTIME / "electron" / "electron"), *argv[2:], "--no-sandbox", f"--user-data-dir={profile}"]
     if argv[0] == "node":
-        return [str(HERE / "runtime" / "node" / "bin" / "node"), *argv[1:]]
+        return [str(RUNTIME / "node" / "bin" / "node"), *argv[1:]]
+    if argv[0] == "google-chrome":
+        return [str(RUNTIME / "chromium" / "chrome"), "--no-sandbox", "--disable-dev-shm-usage",
+                f"--class={BROWSER_CLASS}", *argv[1:]]
     return argv
 
 

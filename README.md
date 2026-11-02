@@ -5,8 +5,9 @@ bundle: the bench's GUI tasks, run with `agent-env run` on a Linux computer that
 computer-use driver.
 
 **Status:** the bench's computer, its pinned task pack, and the apps of its three shared tasks, each on a computer of
-its own. The bench's sentinel, the GUI-only guard, grading and the bench's own tasks come next, and s04's browser joins
-once the computer has one.
+its own, s04's browser included: Chrome for Testing at the build agentenv's `chromium` app pins, pinned again here so
+the bench's browser stays the same whatever a framework release ships. The bench's sentinel, the GUI-only guard,
+grading and the bench's own tasks come next.
 
 ## What's here
 

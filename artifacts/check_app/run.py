@@ -20,7 +20,7 @@ NOTE = "agent-note.txt"
 def run(input):
     task = input["args"]["task"]
     workspace, spec = Path.home() / task, json.loads((APPS / task / "task/platform/launch.linux.json").read_text())
-    windows = [app["window"] for app in spec["apps"] if app["kind"] != "browser" and "window" in app]
+    windows = [app["window"] for app in spec["apps"] if "window" in app]
     rpc = _rpc(f"{input['env']['url']}/svc/{task}/agentenv", input["env"]["headers"])
     report = {"pristine_at_boot": _pristine(task, workspace), "windows_at_boot": _shown_all(windows, 5),
               "one_of_each_window_at_boot": _one_each(windows), "placed_at_boot": _placed(windows, 60),
