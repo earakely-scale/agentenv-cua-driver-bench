@@ -6,11 +6,11 @@ against the lock's digest. The task pack is never copied into this repo.
     python tools/taskpack.py verify       check what's there against the lock
     python tools/taskpack.py pin COMMIT   fetch it at COMMIT and write that commit and its digest to the lock
     python tools/taskpack.py apps         write each task app's files.json: the task's files its computer installs
-    python tools/taskpack.py grader       write into artifacts/grade/verify.py the trycua files the grade fetches
+    python tools/taskpack.py grader       write into artifacts/gui_only/verify.py the trycua file its scan fetches
 
 A task app's computer fetches its task's files itself, at put, by the URL and sha256 its ``files.json`` lists, and the
-grade fetches the evaluator, oracle and fixture of the task, and trycua's scoring, by those its ``TRYCUA`` lists; this
-repo holds those hashes, never the files.
+GUI-only check of a trial's trajectory fetches trycua's scan by those its ``TRYCUA`` lists; this repo holds those
+hashes, never the files.
 
 ``GITHUB_TOKEN``, when set, is sent to GitHub's API, which allows few calls without one."""
 from __future__ import annotations
@@ -34,9 +34,9 @@ ROOT = Path(__file__).resolve().parent.parent
 LOCK = ROOT / "taskpack.lock.toml"
 TARGET = ROOT / "artifacts" / "taskpack"
 ENVS = ROOT / "envs"
-GRADER = ROOT / "artifacts" / "grade" / "verify.py"
-#: trycua's scoring of a sentinel's log, which the grade fetches with each task's evaluator and fixture.
-SCORING = ("scoring/summarize_sentinel.py", "scoring/bench_v2.py")
+GRADER = ROOT / "artifacts" / "gui_only" / "verify.py"
+#: trycua's scan of an agent's tool calls, which the trajectory's GUI-only check fetches.
+SCAN = "scoring/bench_v2.py"
 _TABLE = re.compile(r"(?ms)^TRYCUA = \{.*?^\}$")
 #: The bench tasks with an app of their own, each in envs/<task>/, and where their folders are in the task pack.
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
@@ -123,20 +123,12 @@ def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str,
     return written
 
 
-def grader(lock: Lock, target: Path = TARGET, verifier: Path = GRADER, tasks: tuple[str, ...] = TASKS) -> Path:
-    """Write the ``TRYCUA`` of the grade's verifier: the trycua files it fetches, each by its URL at the lock's commit
-    and its sha256 as the verified task pack's manifest has it: each task's evaluator and fixture, and the scoring of
-    the sentinel's log."""
+def grader(lock: Lock, target: Path = TARGET, verifier: Path = GRADER) -> Path:
+    """Write the ``TRYCUA`` of the trajectory's GUI-only verifier: trycua's scan, by its URL at the lock's commit and
+    its sha256 as the verified task pack's manifest has it."""
     verify(lock, target)
     hashes = {name: sha for sha, name in (line.split("  ", 1) for line in (target / MANIFEST).read_text().splitlines())}
-
-    def pinned(name: str) -> dict:
-        return {"url": _url(lock, name), "sha256": hashes[name]}
-
-    table = {"commit": lock.commit, "scoring": {PurePosixPath(name).name: pinned(name) for name in SCORING},
-             "tasks": {task: {name[len(prefix):]: pinned(name) for name in sorted(hashes)
-                              if name.startswith(prefix) and name[len(prefix):].split("/")[0] in ("evaluator", "fixture")}
-                       for task in tasks for prefix in [f"{TASK_DIR}/{task}/"]}}
+    table = {"commit": lock.commit, PurePosixPath(SCAN).name: {"url": _url(lock, SCAN), "sha256": hashes[SCAN]}}
     text = verifier.read_text(encoding="utf-8")
     if not _TABLE.search(text):
         raise SystemExit(f"{verifier} has no TRYCUA = {{...}} to write")
@@ -278,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     pinned = sub.add_parser("pin", help="fetch at a commit and write it and its digest to the lock")
     pinned.add_argument("commit")
     sub.add_parser("apps", help="write each task app's files.json from the verified task pack")
-    sub.add_parser("grader", help="write the trycua files the grade fetches into artifacts/grade/verify.py")
+    sub.add_parser("grader", help="write the trycua file the trajectory's scan fetches into artifacts/gui_only/verify.py")
     args = parser.parse_args(argv)
     if args.command == "grader":
         print(f"wrote {grader(read_lock()).relative_to(ROOT)}")

@@ -2,7 +2,8 @@
 them, with the task's brief, its workspace and, in the background, their background brief, and with their system
 prompt for a Linux desktop, all checked against the fetched task pack; with the sentinel in that condition,
 claude-code with no built-in tools but Skill and Read, the sentinel armed just around the prompt within the task's time and
-turns, and the grade, which runs whatever became of the agent."""
+turns; and its grade, whatever became of the agent: in a container of its own with no network, on the trial's snapshot,
+and the trajectory's half outside."""
 import ast
 import importlib.util
 import json
@@ -59,7 +60,24 @@ def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and
     assert trial["agent"]["env_ids"] == [env] and trial["agent"]["builtin_tools"] == {"only": ["Skill", "Read"]}
     assert (trial["arm"]["args"], trial["disarm"]["args"]) == ({"action": "arm", "condition": condition},
                                                                {"action": "disarm"})
-    assert (trial["task"]["depends_on"], trial["disarm"]["depends_on"], trial["grade"]["depends_on"]) == (
+    assert (trial["task"]["depends_on"], trial["disarm"]["depends_on"], trial["snapshot"]["depends_on"]) == (
         ["arm"], ["task"], ["disarm"])
     assert trial["task"]["fail_task_on_error"] is False and trial["disarm"]["fail_task_on_error"] is False
-    assert (trial["grade"]["file_artifact_id"], trial["grade"]["prompt_id"]) == ("grade", "task")
+
+
+@pytest.mark.parametrize("probe", TRIALS)
+@pytest.mark.parametrize("condition", CONDITIONS)
+def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_trajectory_outside(probe, condition):
+    trial = _trial(probe, condition)
+    container = {"sandbox_name": "grader", "container_name": "grade"}
+
+    assert trial["box"]["network"] == "none" and trial["box"]["docker_context_artifact_id"] == "grader"
+    assert {key: trial["pack"][key] for key in (*container, "artifact_id")} == {**container, "artifact_id": "taskpack"}
+    assert {key: trial["trial"][key] for key in (*container, "artifact_from_step_id")} == {
+        **container, "artifact_from_step_id": "snapshot"}
+    assert trial["snapshot"]["env_id"] == trial["env"]["env_id"]
+    assert trial["grade"]["type"] == "run_container_unit_tests_verifier"
+    assert {key: trial["grade"][key] for key in (*container, "command", "reward_path")} == {
+        **container, "command": "python3 /grade/grade.py", "reward_path": "/grade/reward.txt"}
+    assert (trial["gui_only"]["type"], trial["gui_only"]["file_artifact_id"], trial["gui_only"]["prompt_id"]) == (
+        "env_outcome_verifier", "gui_only", "task")

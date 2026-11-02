@@ -24,7 +24,7 @@ evaluator, A22 criteria and GUI-only scan. The bench's own tasks come next.
 | `tasks/app-s02.json` .. `tasks/app-s04.json`, `evals/apps.toml` | Each deploys a task's computer and checks its app inside it (`artifacts/check_app/`), then snapshots it. |
 | `envs/bench-sentinel/` | The bench's sentinel, on every task's computer: the user's window, logging all that disturbs that user, with the GUI-only guard in it (below). |
 | `artifacts/sentinel/` | Arms the sentinel just before the agent starts and disarms it just after, as `run_code` steps. |
-| `artifacts/grade/` | The grade of a trial, an `env_outcome_verifier` (below). |
+| `artifacts/grader/`, `artifacts/gui_only/` | The grade of a trial: its grading container, and the trajectory's GUI-only check (below). |
 | `tasks/sentinel-background.json`, `tasks/sentinel-foreground.json`, `evals/sentinel.toml` | Each causes every disturbance on purpose inside s02's computer and checks trycua's scoring finds it (`artifacts/check_sentinel/`). |
 | `tasks/cdb-g02-background.json` .. `tasks/cdb-g04-foreground.json`, `evals/trials.toml` | The bench's GUI-only tasks, each in both of trycua's conditions, with a model (below). |
 | `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, and of the grade, offline. |
@@ -81,14 +81,21 @@ it stayed in the GUI. On macOS their `BenchSentinel` plays the user; `envs/bench
 
 ## The grade
 
-`artifacts/grade/verify.py`, an `env_outcome_verifier`, scores a trial outside the computer as trycua's runner does.
-It takes the task's workspace and the sentinel's log from their apps' data planes and fetches trycua's evaluator,
-oracle and fixture for the task, and their scoring, at the lock's commit by URL and sha256 (`python tools/taskpack.py
-grader` writes the list). Its results, all of which must hold: `task`, trycua's evaluator passed; `gui_only`, no guard
-violation and no tool call outside the computer env's, by trycua's scan of the agent's trajectory; and in the
-background condition `user_undisturbed`, all eight A22 criteria measured and held. A verifier is handed the agent's
-trajectory from agentenv-framework's [#439](https://github.com/scaleapi/agentenv-framework/pull/439) on; before it, no
-trial is GUI-only, since its tool calls can't be checked.
+A trial is graded as trycua's runner grades one, in two halves, and passes when both do:
+
+- **In a container of its own.** After the agent, `snapshot_env` exports the computer's apps' files. A `deploy_sandbox`
+  sandbox runs the bench's grading container (`artifacts/grader/`: Python 3 and Node 22, no network), and
+  `load_artifact` stages trycua's task pack and the snapshot in it. There `run_container_unit_tests_verifier` runs
+  `grade.py`, which scores its reward: `sentinel`, its log shows the whole trial; `task`, trycua's evaluator passed;
+  `gui_only`, the guard logged no violation and no Electron app's DevTools opened; and in the background condition
+  `user_undisturbed`, all eight of trycua's A22 criteria measured and held. The files the agent left are parsed only
+  there.
+- **Outside, from the trajectory.** `artifacts/gui_only/verify.py`, an `env_outcome_verifier`, runs trycua's scan on
+  claude-code's tool calls: no built-in tool offered but Skill and Read, none trycua forbids tried, no code in a tool
+  input, no command run through cua-driver's `launch_app`. trycua's scan is fetched at the lock's commit by URL and
+  sha256 (`python tools/taskpack.py grader` writes it). A verifier is handed the agent's trajectory from
+  agentenv-framework's [#439](https://github.com/scaleapi/agentenv-framework/pull/439) on; before it, this half fails,
+  since the tool calls can't be checked.
 
 ## The trials
 
