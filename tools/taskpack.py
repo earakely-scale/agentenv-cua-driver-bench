@@ -183,8 +183,10 @@ def download(lock: Lock, parent: Path) -> Path:
 
 
 def manifest(folder: Path) -> str:
-    """Each file under ``folder`` but the manifest, as ``sha256sum`` prints it, by path."""
-    files = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file() or p.is_symlink())
+    """Each file under ``folder`` but the manifest and Python's caches, which running trycua's tests there writes, as
+    ``sha256sum`` prints it, by path."""
+    files = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*")
+                   if (p.is_file() or p.is_symlink()) and "__pycache__" not in p.relative_to(folder).parts)
     return "".join(f"{hashlib.sha256((folder / name).read_bytes()).hexdigest()}  {name}\n"
                    for name in files if name != MANIFEST)
 

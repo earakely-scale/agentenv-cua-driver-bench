@@ -162,6 +162,9 @@ def test_verify_takes_the_pinned_copy_and_refuses_an_edited_added_or_missing_one
     lock, target = _pinned(bundle)
     taskpack.verify(lock, target)
 
+    (target / "taskpack" / "__pycache__").mkdir()
+    (target / "taskpack" / "__pycache__" / "test.cpython-312.pyc").write_bytes(b"run in place")
+    taskpack.verify(lock, target)
     (target / "taskpack" / "extra.txt").write_text("added\n")
     with pytest.raises(SystemExit, match="fetch it again"):
         taskpack.verify(lock, target)
