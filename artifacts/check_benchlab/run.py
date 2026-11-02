@@ -45,8 +45,12 @@ def run(input):
         lines = [json.loads(line) for line in SENTINEL_LOG.read_text().splitlines()[mark:] if line.strip()]
         samples = [line for line in lines if line["ev"] == "s"]
         report["user_kept_focus"] = bool(samples) and not any(line["ev"] in LOST for line in lines) and all(
-            sample["key"] and sample["active"] and not sample["above_n"] for sample in samples)
-        report["user_events"] = sorted({line["ev"] for line in lines if line["ev"] in LOST})
+            sample["key"] and sample["active"] for sample in samples)
+        report["user_window_on_top"] = bool(samples) and not any(sample["above_n"] for sample in samples)
+        report["user_samples"] = {"samples": len(samples), "not_key": sum(not s["key"] for s in samples),
+                                  "not_active": sum(not s["active"] for s in samples),
+                                  "under_another": sum(bool(s["above_n"]) for s in samples),
+                                  "lost": sorted({line["ev"] for line in lines if line["ev"] in LOST})}
     if args.get("solve"):
         driver.call("bring_to_front", pid=lab["pid"], window_id=lab["window_id"])
         report["solved"] = SOLVERS[args["mode"]](driver, lab, getattr(C, f"derive_{args['mode']}")(args["seed"]))
