@@ -1,12 +1,13 @@
 """Inside a bench task's computer with the bench's sentinel, run as its session user once the task pack is loaded into
 ``~/bench``: the sentinel's window is its condition's, with its title and outer frame; trycua's own summarizer and A22
 criteria, from the task pack, find each disturbance caused on purpose in its own criterion and a quiet window and
-background actions in none, with every criterion measured; and the sentinel's data plane returns its log, which a reset
-starts afresh. ``args``: ``condition``, the sentinel's, and ``other``, the title of a task window to disturb it with."""
+background actions in none, with every criterion measured; its GUI-only guard logs a terminal opened and a program on a
+pseudo-terminal, and nothing else; and the sentinel's data plane returns its log, which a reset starts afresh. ``args``: ``condition``, the sentinel's, and ``other``, the title of a task window to disturb it with."""
 import base64
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -44,7 +45,7 @@ def run(input):
         report["scenarios"] = [_scenario(log, user, other, *scenario) for scenario in _scenarios(user, other)]
         report["scenarios_ok"] = all(scenario["ok"] for scenario in report["scenarios"])
     else:
-        quiet = _scenario(log, user, None, "quiet", set(), lambda: None)
+        quiet = _scenario(log, user, None, "quiet", set(), set(), lambda: None)
         report["quiet"] = quiet
         report["quiet_ok"] = quiet["disturbed"] == [] and quiet["unmeasured"] == ["typing"]
     report.update(_data_plane(log, input["env"]))
@@ -55,34 +56,44 @@ def run(input):
 
 
 def _scenarios(user, other):
-    """Each disturbance caused on purpose, with the criteria it must trip, and background actions that must trip none.
-    xfwm4 refuses another app's activation the focus, so that only raises its window over the user's."""
+    """Each disturbance caused on purpose, with the criteria it must trip and the guard violations it must log, and
+    background actions that must do neither. xfwm4 refuses another app's activation the focus, so that only raises its
+    window over the user's."""
     point = _point_on(other)
-    return [
-        ("quiet", set(), lambda: None),
-        ("another app activated", {"window_raised"}, lambda: _sh("wmctrl", "-i", "-a", hex(other))),
-        ("a click on another app", {"key_focus", "window_raised", "typing", "pointer", "activation"},
+    terminal = next((name for name in ("xfce4-terminal", "xterm") if shutil.which(name)), None)
+    scenarios = [
+        ("quiet", set(), set(), lambda: None),
+        ("another app activated", {"window_raised"}, set(), lambda: _sh("wmctrl", "-i", "-a", hex(other))),
+        ("a click on another app", {"key_focus", "window_raised", "typing", "pointer", "activation"}, set(),
          lambda: _sh("xdotool", "mousemove", *point, "click", "1")),
-        ("another app's window kept above", {"window_raised"},
+        ("another app's window kept above", {"window_raised"}, set(),
          lambda: _sh("wmctrl", "-i", "-r", hex(other), "-b", "add,above")),
-        ("the pointer moved", {"pointer"}, lambda: _sh("xdotool", "mousemove_relative", "--", "200", "120")),
-        ("the clipboard taken", {"clipboard"}, lambda: _clipboard("disturbed")),
-        ("another desktop", {"space"}, lambda: _sh("wmctrl", "-s", "1")),
-        ("another app's dialog on the user's window", {"dialog"}, lambda: _dialog(user)),
-        ("keys typed while the user's window has the focus", {"typing"},
+        ("the pointer moved", {"pointer"}, set(), lambda: _sh("xdotool", "mousemove_relative", "--", "200", "120")),
+        ("the clipboard taken", {"clipboard"}, set(), lambda: _clipboard("disturbed")),
+        ("another desktop", {"space"}, set(), lambda: _sh("wmctrl", "-s", "1")),
+        ("another app's dialog on the user's window", {"dialog"}, set(), lambda: _dialog(user)),
+        ("keys typed while the user's window has the focus", {"typing"}, set(),
          lambda: _sh("xdotool", "type", "--delay", "20", "QQ")),
-        ("keys sent to the user's window", {"typing"}, lambda: _sh("xdotool", "type", "--window", str(user), "ZZ")),
-        ("a click in the user's window", {"typing", "pointer"},
+        ("keys sent to the user's window", {"typing"}, set(),
+         lambda: _sh("xdotool", "type", "--window", str(user), "ZZ")),
+        ("a click in the user's window", {"typing", "pointer"}, set(),
          lambda: _sh("xdotool", "mousemove", "700", "500", "click", "1")),
-        ("BACKGROUND keys sent to another app's window", set(),
+        ("a program on a pseudo-terminal", set(), {"terminal:session"},
+         lambda: _sh("script", "-qfc", "sleep 2", "/dev/null")),
+        ("BACKGROUND keys sent to another app's window", set(), set(),
          lambda: _sh("xdotool", "type", "--window", str(other), "hello")),
-        ("BACKGROUND another app's window moved beneath", set(),
+        ("BACKGROUND another app's window moved beneath", set(), set(),
          lambda: _sh("xdotool", "windowmove", str(other), "1300", "650")),
     ]
+    if terminal is not None:
+        scenarios.insert(-2, ("a terminal opened", {"window_raised"}, {f"process:{terminal}"},
+                              lambda: _terminal(terminal)))
+    return scenarios
 
 
-def _scenario(log, user, other, name, must, act):
-    """Put the user back in front, arm the sentinel, act, disarm it, and score the armed window as trycua does."""
+def _scenario(log, user, other, name, must, guard_must, act):
+    """Put the user back in front, arm the sentinel, act, disarm it, and score the armed window as trycua does, with
+    the guard's violations in it."""
     _sh("wmctrl", "-s", "0")
     if other is not None:
         _sh("wmctrl", "-i", "-r", hex(other), "-b", "remove,above")
@@ -94,16 +105,28 @@ def _scenario(log, user, other, name, must, act):
     act()
     time.sleep(SETTLE_S)
     disarmed = log.signal(signal.SIGUSR2, "disarmed")
+    lines = log.between(armed, disarmed)
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as window:
-        window.write("".join(json.dumps(line) + "\n" for line in log.between(armed, disarmed)))
+        window.write("".join(json.dumps(line) + "\n" for line in lines))
     summary = summarize_sentinel.summarize(window.name)
     os.unlink(window.name)
     criteria = bench_v2.multiplayer_criteria(summary)
     disturbed = sorted(key for key, held in criteria.items() if held is False)
     unmeasured = sorted(key for key, held in criteria.items() if held is None)
-    ok = summary["available"] and must <= set(disturbed) and (must or not disturbed) and (other is None or not unmeasured)
+    guarded = sorted(line["detail"] for line in lines if line["ev"] == "gui_only_violation")
+    ok = (summary["available"] and must <= set(disturbed) and (must or guard_must or not disturbed)
+          and guard_must <= set(guarded) and (guard_must or not guarded) and (other is None or not unmeasured))
     return {"scenario": name, "ok": bool(ok), "must": sorted(must), "disturbed": disturbed, "unmeasured": unmeasured,
+            "guard_must": sorted(guard_must), "guarded": guarded,
             "typed": (summary.get("user_activity") or {}).get("typed")}
+
+
+def _terminal(name):
+    """A terminal opened in front of the user and closed after the guard's grace."""
+    terminal = subprocess.Popen([name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    time.sleep(SETTLE_S)
+    terminal.terminate()
+    terminal.wait(timeout=10)
 
 
 def _data_plane(log, env):

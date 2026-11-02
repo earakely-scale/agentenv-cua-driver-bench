@@ -6,8 +6,9 @@ foreground condition it is the "Bench Sentinel" witness at the screen's bottom r
 Either way it logs, one JSON line per event with ``ev``, ``t`` (epoch ms) and ``armed``, all that disturbs that user: a
 20 Hz sample of the pointer, the front app, whether its window is active and holds the focus, the clipboard's change
 count, whether it is on the current desktop, a dialog on it and the other apps' windows above it; and its focus and
-activation changes, the front app's, the desktop's, and every key, click and scroll delivered to it. SIGUSR1 activates
-it, SIGUSR2 arms or disarms it, SIGTERM stops it.
+activation changes, the front app's, the desktop's, and every key, click and scroll delivered to it. While armed, its
+GUI-only guard logs the agent's way out of the GUI: a terminal or run dialog in front, a terminal's program, a program on
+a pseudo-terminal. SIGUSR1 activates it, SIGUSR2 arms or disarms it, SIGTERM stops it.
 
 X11 stands in for macOS: the input focus for the key window, ``_NET_ACTIVE_WINDOW`` for the active app, a window's
 WM_CLASS for an app's name, the window manager's stacking order for the windows above, the CLIPBOARD selection's owner
@@ -51,6 +52,19 @@ ALL_DESKTOPS = 0xFFFFFFFF
 #: X's buttons as macOS numbers them: left 0, right 1, middle 2; and X's scroll buttons as a scroll's dx and dy.
 MAC_BUTTONS = {1: 0, 2: 2, 3: 1}
 SCROLLS = {4: (0.0, 1.0), 5: (0.0, -1.0), 6: (1.0, 0.0), 7: (-1.0, 0.0)}
+#: Linux's side doors out of the GUI, the terminals and run dialogs, by their WM_CLASS class in lower case and by the
+#: names their programs run as, where trycua's macOS guard has Terminal, iTerm, Script Editor, Automator and Shortcuts.
+SIDE_DOOR_APPS = frozenset({"xfce4-terminal", "xterm", "uxterm", "gnome-terminal", "gnome-terminal-server", "konsole",
+                            "lxterminal", "terminator", "tilix", "alacritty", "kitty", "urxvt", "rxvt", "st",
+                            "st-256color", "qterminal", "mate-terminal", "terminology", "sakura", "guake", "tilda",
+                            "xfce4-appfinder", "xfrun4"})
+SIDE_DOOR_PROGRAMS = frozenset({"xfce4-terminal", "xterm", "uxterm", "gnome-terminal", "gnome-terminal-",
+                                "konsole", "lxterminal", "terminator", "tilix", "alacritty", "kitty", "urxvt", "rxvt",
+                                "qterminal", "mate-terminal", "terminology", "sakura", "guake", "tilda",
+                                "xfce4-appfinder", "xfrun4"})
+#: trycua's guard samples every 0.5 s, and a side door in front three samples in a row is a violation.
+GUARD_EVERY_SAMPLES = 10
+FRONT_GRACE_SAMPLES = 3
 
 
 class Desktop:
@@ -156,7 +170,8 @@ class Sentinel:
     foreground."""
 
     def __init__(self, desktop: Desktop, user: UserField | None, write: Callable[[str], None],
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time,
+                 running: Callable[[], list[tuple[int, str, int]]] = lambda: processes()) -> None:
         self.desktop, self.user, self._write, self._clock = desktop, user, write, clock
         self.armed = False
         self.clip = 0
@@ -164,6 +179,8 @@ class Sentinel:
         self.expected = ""
         self._active = desktop.own(desktop.active())
         self._front = self.front(desktop.active())
+        self.guard = Guard(self.emit, running)
+        self._samples = 0
 
     def emit(self, ev: str, **fields: object) -> None:
         self._write(json.dumps({"ev": ev, "t": self._clock() * 1000, "armed": self.armed, **fields}, sort_keys=True))
@@ -268,15 +285,66 @@ class Sentinel:
         self.expected = self.user.text()
         self.emit("user_type", n=self.typed)
 
+    def tick(self) -> None:
+        """A sample, and every 0.5 s while armed, the guard's."""
+        fields = self.sample()
+        self.emit("s", **fields)
+        self._samples += 1
+        if self.armed and self._samples % GUARD_EVERY_SAMPLES == 0:
+            self.guard.sample(fields["front"])
+
     def toggle(self) -> None:
-        """Arm, or disarm: disarming says first whether the user's text is what it typed."""
+        """Arm, or disarm: disarming says first whether the user's text is what it typed. Arming starts the guard
+        afresh."""
         self.armed = not self.armed
+        if self.armed:
+            self.guard.arm()
         if self.user is not None and not self.armed:
             text = self.user.text()
             self.emit("user_text", expected_len=len(self.expected), actual_len=len(text), intact=text == self.expected)
         if self.user is not None and self.armed:
             self.expected = self.user.text()
         self.emit("armed" if self.armed else "disarmed", **self.sample())
+
+
+class Guard:
+    """trycua's GUI-only guard on Linux, sampled every 0.5 s while the sentinel is armed: a side door in front three
+    samples in a row, a side door's program running, or a program started on a pseudo-terminal since arming, the shell
+    of a terminal session, is a violation, logged once with its evidence as ``gui_only_violation``; a side door in front
+    for less is logged once as ``gui_only_transient``. ``processes`` lists each process's pid, name and controlling
+    terminal."""
+
+    def __init__(self, emit: Callable[..., None], processes: Callable[[], list[tuple[int, str, int]]]) -> None:
+        self._emit, self._processes = emit, processes
+        self.arm()
+
+    def arm(self) -> None:
+        self._run_of: dict[str, int] = {}
+        self._logged: set[tuple[str, str]] = set()
+        self._on_terminals = {pid for pid, _, tty in self._processes() if tty}
+
+    def sample(self, front: dict) -> None:
+        door = (front.get("bid") or "").lower()
+        for app in list(self._run_of):
+            if app != door:
+                del self._run_of[app]
+        if door in SIDE_DOOR_APPS:
+            self._run_of[door] = self._run_of.get(door, 0) + 1
+            if self._run_of[door] >= FRONT_GRACE_SAMPLES:
+                self._log("gui_only_violation", "front", f"front:{door}", front=front)
+            else:
+                self._log("gui_only_transient", "front", f"front:{door}", front=front)
+        for pid, name, tty in self._processes():
+            if name in SIDE_DOOR_PROGRAMS:
+                self._log("gui_only_violation", "process", f"process:{name}", pid=pid, command=_command(pid))
+            elif tty and pid not in self._on_terminals:
+                self._log("gui_only_violation", "terminal", "terminal:session", pid=pid, name=name, tty=tty,
+                          command=_command(pid))
+
+    def _log(self, ev: str, kind: str, detail: str, **evidence: object) -> None:
+        if (ev, detail) not in self._logged:
+            self._logged.add((ev, detail))
+            self._emit(ev, kind=kind, detail=detail, evidence=evidence)
 
 
 class UserField:
@@ -315,6 +383,28 @@ def watch(changes: queue.Queue) -> None:
             changes.put(("clipboard", None))
 
 
+def processes() -> list[tuple[int, str, int]]:
+    """Each process's pid, name and controlling terminal (0 for none), from /proc."""
+    found = []
+    for entry in os.scandir("/proc"):
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = Path(entry.path, "stat").read_text()
+        except OSError:
+            continue
+        name, rest = stat[stat.index("(") + 1:stat.rindex(")")], stat[stat.rindex(")") + 2:].split()
+        found.append((int(entry.name), name, int(rest[4])))
+    return found
+
+
+def _command(pid: int) -> str:
+    try:
+        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()[:300]
+    except OSError:
+        return ""
+
+
 def main(condition: str) -> None:
     background = condition == "background"
     LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -336,7 +426,7 @@ def main(condition: str) -> None:
     def sample() -> None:
         while not changes.empty():
             sentinel.changed(*changes.get_nowait())
-        sentinel.emit("s", **sentinel.sample())
+        sentinel.tick()
         root.after(SAMPLE_MS, sample)
 
     def type_tick() -> None:

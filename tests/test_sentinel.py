@@ -1,6 +1,7 @@
 """The bench's sentinel on a fake desktop, scored by trycua's own summarizer and A22 criteria from the fetched task pack:
 a quiet armed window holds all eight criteria, each disturbance trips its own, and what macOS wouldn't count (a window
-above on another desktop, minimized, or a dock) trips none. Also its app's declaration and its two conditions."""
+above on another desktop, minimized, or a dock) trips none. The GUI-only guard's violations while armed: a terminal in
+front 1.5 s, a terminal's program, a new program on a pseudo-terminal. Also its app's declaration and its conditions."""
 import importlib
 import json
 import sys
@@ -116,12 +117,14 @@ class Run:
 
     def __init__(self, sentinel_module, background=True):
         self.desktop, self.field, self.lines, self.now = FakeDesktop(), Field() if background else None, [], 1.7e9
-        self.sentinel = sentinel_module.Sentinel(self.desktop, self.field, self.lines.append, lambda: self.now)
+        self.processes = [(1, "supervisord", 0)]
+        self.sentinel = sentinel_module.Sentinel(self.desktop, self.field, self.lines.append, lambda: self.now,
+                                                 lambda: list(self.processes))
 
     def seconds(self, n):
         for tick in range(n * 20):
             self.now += 0.05
-            self.sentinel.emit("s", **self.sentinel.sample())
+            self.sentinel.tick()
             if tick % 20 == 19:
                 self.sentinel.type_tick()
 
@@ -220,6 +223,48 @@ def test_a_log_line_is_trycuas(sentinel_module):
     assert [line["ev"] for line in lines if line["ev"] in ("armed", "user_text", "disarmed")] == [
         "armed", "user_text", "disarmed"]
     assert {"didResignKey", "didResignActive", "front", "user_blocked", "user_type"} <= {line["ev"] for line in lines}
+
+
+def _guarded(run):
+    return [(line["ev"], line["detail"]) for line in map(json.loads, run.lines) if line["ev"].startswith("gui_only")]
+
+
+def _terminal_in_front(seconds):
+    def act(run):
+        run.desktop.apps[OTHER] = ("Xfce4-terminal", 200)
+        run.desktop.active_window = OTHER
+        run.seconds(seconds)
+        run.desktop.active_window = OWN
+    return act
+
+
+def test_a_terminal_in_front_three_guard_samples_in_a_row_is_a_violation(sentinel_module):
+    assert _guarded(Run(sentinel_module).trial(_terminal_in_front(2))) == [
+        ("gui_only_transient", "front:xfce4-terminal"), ("gui_only_violation", "front:xfce4-terminal")]
+
+
+def test_a_terminal_in_front_for_less_is_only_transient(sentinel_module):
+    assert _guarded(Run(sentinel_module).trial(_terminal_in_front(1))) == [
+        ("gui_only_transient", "front:xfce4-terminal")]
+
+
+def test_a_terminals_program_or_a_new_program_on_a_terminal_is_a_violation_once(sentinel_module):
+    run = Run(sentinel_module)
+    run.processes.append((40, "bash", 34816))
+
+    run.trial(lambda run: run.processes.extend([(50, "xterm", 0), (51, "python3", 34817)]))
+
+    assert _guarded(run) == [("gui_only_violation", "process:xterm"), ("gui_only_violation", "terminal:session")]
+    violation = next(json.loads(line) for line in run.lines if "terminal:session" in line)
+    assert violation["evidence"]["pid"] == 51 and violation["armed"]
+
+
+def test_the_guard_watches_only_while_armed(sentinel_module):
+    run = Run(sentinel_module)
+    run.processes.append((50, "xterm", 0))
+    run.seconds(2)
+
+    assert _guarded(run) == []
 
 
 def test_the_app_launches_the_sentinel_at_boot_and_keeps_its_log_as_data(sentinel_module):
