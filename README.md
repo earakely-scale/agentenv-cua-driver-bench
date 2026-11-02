@@ -15,7 +15,8 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 
 | Path | What it is |
 |---|---|
-| `envs/desktop/` | The bench's computer: the shipped `ubuntu-24.04` base computer with the shipped `cua-driver` driver, at the 1920x1080 display the bench's tasks assume. |
+| `envs/desktop/` | The bench's computer: the shipped `ubuntu-24.04` base computer with the shipped `cua-driver` driver, at the 1920x1080 display the bench's tasks assume, on openbox (below). |
+| `envs/openbox/` | Every bench computer's window manager: openbox, as in trycua's Linux session, in place of the base's xfwm4 (below). |
 | `taskpack.lock.toml`, `tools/taskpack.py` | trycua's task pack, pinned to one commit of their repo and a checksum, and the tool that fetches it into `artifacts/taskpack/`. |
 | `tasks/probe.json` | Deploys the computer and runs the computer-use conformance probe at `full` against it (`artifacts/check_probe/`). |
 | `tasks/taskpack.json` | Loads the task pack into the computer and checks every file arrived intact, against the pack's own manifest. |
@@ -29,7 +30,7 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 | `tasks/sentinel-background.json`, `tasks/sentinel-foreground.json`, `evals/sentinel.toml` | Each causes every disturbance on purpose inside s02's computer and checks trycua's scoring finds it (`artifacts/check_sentinel/`). |
 | `tasks/cdb-g02-background.json` .. `tasks/cdb-g04-foreground.json`, `evals/trials.toml` | The bench's GUI-only tasks, each in both of trycua's conditions, with a model (below). |
 | `envs/benchlab/`, `envs/desktop-benchlab/` | trycua's BenchLab as a computer app, in a task's mode and seed, and its computer, with the sentinel (below). |
-| `tasks/benchlab-listdrag.json` .. `tasks/benchlab-irconsent.json`, `tasks/benchlab-solve-*.json`, `evals/benchlab.toml` | BenchLab in each mode in its computer (`artifacts/check_benchlab/`), and three of its tasks done through the driver and graded with no model. |
+| `tasks/benchlab-listdrag.json` .. `tasks/benchlab-irconsent.json`, `tasks/benchlab-solve-*.json`, `tasks/benchlab-background-*.json`, `evals/benchlab.toml` | BenchLab in each mode in its computer (`artifacts/check_benchlab/`), three of its tasks done through the driver and graded with no model, and the three interruptions that are dialogs brought up in the background while the user's window keeps the focus. |
 | `tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` | The BenchLab tasks, five runs each, each run with its seed, in both conditions, with a model (below). |
 | `evals/bench-v2.toml`, `evals/bench-v2-trials.txt` | All of Bench v2: each of its task files once, and its 100 trials in trycua's schedule (below). |
 | `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, and of the grade, offline. |
@@ -82,7 +83,36 @@ mode per task. `envs/benchlab` is their Linux port of it, a GTK app, as a comput
 - Its data is `~/.benchlab`, the state and events BenchLab writes, which trycua's evaluator for the task grades.
 - `artifacts/check_benchlab` checks it in its computer: the window in its mode, placed, its state and `app_start` for
   that mode and seed, its data plane; and with `solve`, does the task as an agent does, through the driver over its MCP
-  endpoint, element by element, with the values trycua's files derive from the seed.
+  endpoint, element by element, with the values trycua's files derive from the seed; with `background`, brings up the
+  mode's interruption by background actions alone, with the sentinel armed in the background condition, and fails
+  unless the user's window kept the focus and stayed active and in front throughout.
+
+## The window manager
+
+trycua's Linux session runs openbox, with its default configuration, and picom (`macos_bench/launch/linux_session.py`).
+The base computer's XFCE session starts xfwm4, which gives a newly mapped modal dialog the focus even when the app maps
+it in the background and asks not to take it, as BenchLab's interruptions do (`set_focus_on_map(False)`). In trycua's
+background condition that is a disturbance the agent never caused: under xfwm4 every IR-01, IR-03 and IR-04 trial in the
+background failed the user's criteria with its task done. `envs/openbox`, on every bench computer, makes the session
+start openbox in its place. Measured with the sentinel, a dialog brought up by a background click:
+
+| Window manager | Modal dialog | Other dialog | A new app's window |
+|---|---|---|---|
+| xfwm4 | takes the focus, 3 of 3 | 0 of 3 | takes the focus, 3 of 3 |
+| xfwm4, `focus_new` off | takes the focus, 3 of 3 | 0 of 3 | 0 of 3 |
+| xfwm4, `prevent_focus_stealing` on | takes the focus, 3 of 3 | 0 of 3 | takes the focus, 3 of 3 |
+| openbox | 0 of 3 | 0 of 3 | takes the focus, 3 of 3 |
+
+Two things differ from trycua's session, each because without the change the computer fails its own conformance probe
+at build (P6, a chord stops selecting in the probe's fixture, every time):
+
+- openbox keeps 10 of its 26 default key bindings, those that close, cycle and switch windows and desktops (Alt+F4,
+  Alt+Escape, Alt+Space, Alt+Tab, Alt+Shift+Tab, Ctrl+Alt+arrows, Ctrl+Alt+Tab), as xfwm4's shortcuts did. Each time
+  the driver types a character the keyboard map lacks, it remaps a key, and openbox binds every key binding again;
+  with all 26 that takes long enough to drop the chord that follows. The ones left out launch programs this computer
+  doesn't have (Super+E, Print) or move windows between desktops (Shift+Alt+arrows, Super+F1..F4, Super+Shift+arrows).
+- picom doesn't run. With it the chord drops too, and without it the driver captures a window that's behind another
+  the same, so nothing the bench measures changes.
 
 ## The sentinel and the GUI-only guard
 
