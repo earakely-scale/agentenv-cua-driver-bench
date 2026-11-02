@@ -245,6 +245,7 @@ def grade(task, home, scratch, trajectory):
          "description": f"trycua's evaluator for {task}",
          "checks": {name: check.get("passed") for name, check in (evaluation.get("detail") or {}).get("checks", {}).items()}},
         {"id": "gui_only", "result": gui_only, "violations": violations, "trajectory_checked": bool(events),
+         "refused_calls": _refused(v2, events or []),
          "transient": sorted({line["detail"] for line in window if line["ev"] == "gui_only_transient"}),
          "mentions": mentions, "description": "no way out of the GUI, live or in the agent's tool calls"},
     ]
@@ -324,15 +325,15 @@ def _events(trajectory):
 
 
 def _scan(v2, events):
-    """trycua's scan of the agent's tool calls, a forbidden built-in or code in a tool input; any built-in the CLI
-    offered or the agent called beside the computer env's tools; and cua-driver's launch_app running a command, which
-    on Linux it does where macOS's opens apps only: with arguments, a launch path that isn't an app's .desktop file, or
-    a name a shell would read as more than an app's. The violations, and the side doors merely named."""
+    """trycua's scan of the agent's tool calls, a forbidden built-in tried or code in a tool input; any built-in the CLI
+    offered beside the computer env's tools and Skill and Read; and cua-driver's launch_app running a command, which on
+    Linux it does where macOS's opens apps only: with arguments, a launch path that isn't an app's .desktop file, or a
+    name a shell would read as more than an app's. A call to a tool the CLI never offered ran nothing, so it isn't one,
+    unless trycua forbids it. The violations, and the side doors merely named."""
     hard, soft = v2.scan_events(events)
     offered = {f"offered:{name}" for event in events if (event.get("type"), event.get("subtype")) == ("system", "init")
                for name in event.get("tools") or [] if not name.startswith("mcp__") and name not in ALLOWED_BUILTINS}
     calls = [(name, tool_input) for event in events for name, tool_input in v2.tool_uses(event)]
-    outside = {f"builtin:{name}" for name, _ in calls if not name.startswith("mcp__") and name not in ALLOWED_BUILTINS}
     launches = set()
     for name, tool_input in calls:
         if name.endswith("__launch_app") and isinstance(tool_input, dict):
@@ -342,7 +343,19 @@ def _scan(v2, events):
                 launches.add(f"{name}:launch_path")
             if _COMMAND.search(str(tool_input.get("name") or "")):
                 launches.add(f"{name}:command")
-    return sorted({*hard, *offered, *outside, *launches}), soft
+    return sorted({*hard, *offered, *launches}), soft
+
+
+def _refused(v2, events):
+    """The tools the agent called that the CLI never offered it, which ran nothing, with how often."""
+    offered = {name for event in events if (event.get("type"), event.get("subtype")) == ("system", "init")
+               for name in event.get("tools") or []}
+    refused = {}
+    for event in events:
+        for name, _ in v2.tool_uses(event):
+            if name not in offered:
+                refused[name] = refused.get(name, 0) + 1
+    return refused
 
 
 def _armed(log):

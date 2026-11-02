@@ -121,9 +121,8 @@ def test_a_solved_trial_that_took_the_users_focus_is_not_a_background_completion
 @pytest.mark.parametrize("call, violation", [
     (_tool("Bash", command="ls"), "builtin:Bash"),
     (_tool("WebFetch", url="http://example.com"), "builtin:WebFetch"),
-    (_tool("ToolSearch", query="terminal"), "builtin:ToolSearch"),
     (_tool("mcp__desktop-s02__type_text", text="bash -c 'cat ~/cdb-s02/x'"), "mcp__desktop-s02__type_text:bash -c"),
-], ids=["a forbidden built-in", "any other built-in", "tool search", "code in a tool input"])
+], ids=["a forbidden built-in", "another", "code in a tool input"])
 def test_a_tool_call_out_of_the_gui_fails_gui_only(grader, sentinel_module, tmp_path, call, violation):
     trajectory = _trajectory(CLICK, call)
 
@@ -168,6 +167,14 @@ def test_a_command_run_through_launch_app_fails_gui_only(grader, sentinel_module
     gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]
 
     assert gui_only["result"] is False and f"mcp__desktop-s02__launch_app:{violation}" in gui_only["violations"]
+
+
+def test_a_call_to_a_tool_the_cli_never_offered_ran_nothing_and_is_gui_only(grader, sentinel_module, tmp_path):
+    trajectory = _trajectory(CLICK, _tool("computer_click", x=1, y=2), _tool("ToolSearch", query="click"))
+
+    gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]
+
+    assert gui_only["result"] is True and gui_only["refused_calls"] == {"computer_click": 1, "ToolSearch": 1}
 
 
 def test_a_built_in_tool_claude_code_was_offered_fails_gui_only(grader, sentinel_module, tmp_path):
