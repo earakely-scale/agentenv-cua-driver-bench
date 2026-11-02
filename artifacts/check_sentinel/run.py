@@ -33,7 +33,7 @@ def run(input):
     args = input["args"]
     background = args["condition"] == "background"
     log = Log(LOG)
-    user = _window(lambda wm_class, title: wm_class.endswith(".BenchSentinel"))
+    user = _window(lambda wm_class, title: wm_class.endswith(".Benchsentinel"))
     frame = _frame(user)
     report = {"title": _title(user), "frame": frame, "expected_frame": USER_FRAME if background else _witness()}
     report["title_ok"] = report["title"] == ("User activity" if background else "Bench Sentinel")

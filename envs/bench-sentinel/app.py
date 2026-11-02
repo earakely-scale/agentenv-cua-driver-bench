@@ -15,7 +15,7 @@ LOG_FOLDER = ".bench-sentinel"
 @computer_app(supports=SUPPORTS)
 @linux(packages=Packages(apt=["python3-tk", "fonts-dejavu-core", "wmctrl", "xclip"]), python="requirements.txt",
        paths=[LOG_FOLDER],
-       launch=Launch(at="boot", command=["venv/bin/python", "sentinel.py"], window={"class": "BenchSentinel"},
+       launch=Launch(at="boot", command=["venv/bin/python", "sentinel.py"], window={"class": "Benchsentinel"},
                      ready=Ready(window=True)))
 class BenchSentinel(ComputerAppEnvironment):
     class Settings(BaseModel):

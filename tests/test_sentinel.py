@@ -47,7 +47,7 @@ class FakeDesktop:
     """A desktop of the sentinel's window, another app's, and what a test adds, as the sentinel reads it."""
 
     def __init__(self):
-        self.apps = {OWN: ("BenchSentinel", 100), OTHER: ("Mail", 200), DIALOG: ("Confirm", 300),
+        self.apps = {OWN: ("Benchsentinel", 100), OTHER: ("Mail", 200), DIALOG: ("Confirm", 300),
                      DOCK: ("Panel", 400)}
         self.kinds = {DOCK: "_NET_WM_WINDOW_TYPE_DOCK", DIALOG: "_NET_WM_WINDOW_TYPE_DIALOG"}
         self.stack = [OTHER, OWN]

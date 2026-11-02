@@ -33,7 +33,8 @@ from app import BenchSentinel
 
 #: The sentinel's app as its log names it: trycua's bundle id, which their summarizer takes for the user's own app.
 OWN_BID = "ai.cua.benchsentinel"
-WM_CLASS = "BenchSentinel"
+#: Tk keeps only the first letter of a class name upper case.
+WM_CLASS = "Benchsentinel"
 LOG = Path.home() / ".bench-sentinel" / "sentinel.jsonl"
 USER_SCRIPT = "the user keeps writing notes while the agent works in the background. "
 #: The user's window in the background condition, its outer frame's x, y, width and height, as trycua's runner sets it.
