@@ -78,6 +78,8 @@ def test_an_untouched_workspace_fails_trycuas_evaluator_and_a_quiet_trial_holds_
     results = _results(grader, tmp_path, Run(sentinel_module).trial())
 
     assert results["task"]["result"] is False and results["task"]["checks"]["mail_preserved"] is True
+    failed = [name for name, passed in results["task"]["checks"].items() if not passed]
+    assert failed and all(results["task"]["check_details"][name] for name in failed)
     assert results["sentinel"]["result"] is True and results["gui_only"] == {**results["gui_only"], "result": True,
                                                                               "violations": []}
     assert results["user_undisturbed"]["result"] is True and results["user_undisturbed"]["unmeasured"] == []
@@ -165,7 +167,7 @@ def test_the_grade_writes_its_results_and_a_reward_the_verifier_scores(grader, s
     monkeypatch.setattr(grader, "TRYCUA", PACK)
     monkeypatch.setattr(grader, "OUT", tmp_path)
 
-    grader.main()
+    grader.main([])
 
     assert (tmp_path / "reward.txt").read_text() == reward
     assert json.loads((tmp_path / "result.json").read_text())["task"] == "cdb-s02"
@@ -206,6 +208,7 @@ def test_a_benchlab_trial_handled_as_trycuas_tests_handle_it_is_a_background_com
 
     assert results["task"]["result"] is True and results["task"]["score"] == 1.0
     assert {"permission_denied", "fields_submitted", "integrity"} <= set(results["task"]["checks"])
+    assert set(results["task"]["check_details"]["permission_denied"]) == {"weight", "detail"}
     assert results["user_undisturbed"]["background_completion"] is True
 
 
@@ -226,9 +229,8 @@ def test_the_grade_of_a_benchlab_trial_takes_its_probe_and_seed(grader, sentinel
     monkeypatch.setattr(grader, "TRIAL", trial)
     monkeypatch.setattr(grader, "TRYCUA", PACK)
     monkeypatch.setattr(grader, "OUT", tmp_path)
-    monkeypatch.setattr(sys, "argv", ["grade.py", LAB, str(_seed())])
 
-    grader.main()
+    grader.main([LAB, str(_seed())])
 
     assert (tmp_path / "reward.txt").read_text() == "1\n"
     assert json.loads((tmp_path / "result.json").read_text())["task"] == LAB

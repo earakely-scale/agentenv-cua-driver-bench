@@ -9,7 +9,9 @@ files the agent left are parsed only here, never where the trial runs. Writes ``
 
 Its results: ``sentinel``, its log shows the whole trial (a condition, armed, disarmed, no sample lost); ``task``,
 trycua's evaluator passed; ``gui_only``, no violation the guard logged and no DevTools opened; and in the background
-condition ``user_undisturbed``, all eight A22 criteria measured and held and the user's window not asked to close."""
+condition ``user_undisturbed``, all eight A22 criteria measured and held and the user's window not asked to close.
+``task`` keeps, beside each check's pass, what trycua's evaluator wrote for it: a BenchLab check's weight and detail, a
+CDB check's problems or reason."""
 import importlib.util
 import json
 import subprocess
@@ -25,9 +27,10 @@ LAB = Path("benchlab/.benchlab")
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
 
 
-def main():
-    if len(sys.argv) == 3:
-        task, seed = sys.argv[1], int(sys.argv[2])
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv:
+        task, seed = argv[0], int(argv[1])
     else:
         [task], seed = [path.name for path in TRIAL.iterdir() if path.name in TASKS], None
     with tempfile.TemporaryDirectory() as scratch:
@@ -54,6 +57,7 @@ def grade(task, trial, trycua, scratch, seed=None):
     violations = sorted({line["detail"] for line in window if line["ev"] == "gui_only_violation"}
                         | _devtools(trial / SENTINEL / "devtools.jsonl", window))
     gui_only = not violations and not problems
+    checks = (evaluation.get("detail") or evaluation).get("checks", {})
     multiplayer = v2.multiplayer_score(summary, bool(summary["available"] and armed.get("active") and armed.get("key")),
                                        bool(evaluation.get("passed")) and gui_only, condition)
     closes = sum(line["ev"] == "close_refused" for line in window)
@@ -62,8 +66,9 @@ def grade(task, trial, trycua, scratch, seed=None):
          "description": "the sentinel's log shows the whole trial"},
         {"id": "task", "result": evaluation.get("passed") is True, "score": evaluation.get("score"),
          "description": f"trycua's evaluator for {task}",
-         "checks": {name: check.get("passed")
-                    for name, check in (evaluation.get("detail") or evaluation).get("checks", {}).items()}},
+         "checks": {name: check.get("passed") for name, check in checks.items()},
+         "check_details": {name: {key: value for key, value in check.items() if key != "passed"}
+                           for name, check in checks.items()}},
         {"id": "gui_only", "result": gui_only, "violations": violations,
          "transient": sorted({line["detail"] for line in window if line["ev"] == "gui_only_transient"}),
          "description": "no way out of the GUI the guard saw, and no DevTools opened"},
