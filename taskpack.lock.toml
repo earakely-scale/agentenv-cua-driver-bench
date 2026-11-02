@@ -3,7 +3,7 @@
 # python tools/taskpack.py pin <commit>.
 repo = "trycua/cua"
 commit = "6c0a8c3bb2d32580c3231592f60739c33edc567a"
-sha256 = "0d6be7005c2b83f1c93e02425d4264b8c0a8b9fd28ef182048bb61ce50d0e8d4"
+sha256 = "7d99fda742c894181312e444225e67d00df750260e70139829d166482ac00a77"
 
 [[include]]
 from = "libs/cua-driver-bench/LICENSE"
@@ -36,3 +36,15 @@ to = "probes/CDB-G03"
 [[include]]
 from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/CDB-G04"
 to = "probes/CDB-G04"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/swift/summarize_sentinel.py"
+to = "scoring/summarize_sentinel.py"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/swift/tests/test_summarize_sentinel.py"
+to = "scoring/tests/test_summarize_sentinel.py"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py"
+to = "scoring/bench_v2.py"

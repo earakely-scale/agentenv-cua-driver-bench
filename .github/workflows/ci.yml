@@ -16,11 +16,13 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
-      - run: pip install pytest 'agentenv-framework-protocol>=0.1.421'
-      - run: python -m pytest tests -q
+      - run: pip install pytest python-xlib==0.33 'agentenv-framework-protocol>=0.1.421'
       - name: Fetch the pinned task pack and check it
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python tools/taskpack.py
           python tools/taskpack.py verify
+      - run: python -m pytest tests -q
+      - name: trycua's own tests of their sentinel summarizer, which scores the Linux sentinel's log
+        run: python -m pytest artifacts/taskpack/scoring/tests -q

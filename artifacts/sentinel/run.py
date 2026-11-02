@@ -1,0 +1,93 @@
+"""Inside a bench task's computer, as its session user: arm the bench's sentinel just before the agent starts, or disarm it
+just after, as trycua's runner does. Arming empties the clipboard, goes to the first desktop and activates the sentinel
+until its window is active and holds the focus, then arms it. Each waits for the sentinel's log to say it's done, and
+does nothing when the sentinel is already in that state. ``args``: ``action``, ``arm`` or ``disarm``. Returns the log's
+armed or disarmed line."""
+import json
+import os
+import signal
+import subprocess
+import time
+from pathlib import Path
+
+LOG = Path.home() / ".bench-sentinel" / "sentinel.jsonl"
+WAIT_S = 30.0
+ACTIVATE_EVERY_S = 3.0
+
+
+def run(input):
+    action = input["args"]["action"]
+    if action not in ("arm", "disarm"):
+        raise ValueError(f"action is arm or disarm, not {action!r}")
+    log = Log(LOG)
+    pid, armed = log.state()
+    if armed == (action == "arm"):
+        return {"action": action, "already": True, "line": log.last(("armed", "disarmed"))}
+    if action == "arm":
+        subprocess.run(["xclip", "-selection", "clipboard", "-i", "/dev/null"], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, check=True)
+        subprocess.run(["wmctrl", "-s", "0"], check=True)
+        log.activate(pid)
+    os.kill(pid, signal.SIGUSR2)
+    line = log.wait(lambda line: line["ev"] == ("armed" if action == "arm" else "disarmed"))
+    return {"action": action, "already": False, "line": line}
+
+
+class Log:
+    """The sentinel's log, read on from where it was last read."""
+
+    def __init__(self, path):
+        self.path, self.offset = path, 0
+
+    def state(self):
+        """The running sentinel's pid, from its last start line, and whether it's armed, waiting for it to start."""
+        deadline = time.monotonic() + WAIT_S
+        while True:
+            pid, armed = None, False
+            for line in self.read():
+                if line["ev"] == "start":
+                    pid, armed = line["pid"], False
+                elif line["ev"] in ("armed", "disarmed"):
+                    armed = line["ev"] == "armed"
+            if pid is not None:
+                return pid, armed
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"the sentinel hasn't started: {self.path} has no start line")
+            self.offset = 0
+            time.sleep(0.5)
+
+    def last(self, events):
+        self.offset = 0
+        return next((line for line in reversed(self.read()) if line["ev"] in events), None)
+
+    def activate(self, pid):
+        """Activate the sentinel until a sample says its window is active and holds the focus."""
+        deadline, sent = time.monotonic() + WAIT_S, 0.0
+        while time.monotonic() < deadline:
+            if time.monotonic() - sent > ACTIVATE_EVERY_S:
+                os.kill(pid, signal.SIGUSR1)
+                sent = time.monotonic()
+            if any(line["ev"] == "s" and line["active"] and line["key"] for line in self.read()):
+                return
+            time.sleep(0.2)
+        raise RuntimeError("the sentinel's window didn't become active with the focus")
+
+    def wait(self, wanted):
+        deadline = time.monotonic() + WAIT_S
+        while time.monotonic() < deadline:
+            line = next((line for line in self.read() if wanted(line)), None)
+            if line is not None:
+                return line
+            time.sleep(0.2)
+        raise RuntimeError("the sentinel didn't answer its signal")
+
+    def read(self):
+        """The whole lines written since the last read; a torn last line is left for the next."""
+        if not self.path.exists():
+            return []
+        with open(self.path, "rb") as log:
+            log.seek(self.offset)
+            data = log.read()
+        whole = data[:data.rfind(b"\n") + 1]
+        self.offset += len(whole)
+        return [json.loads(raw) for raw in whole.splitlines() if raw.strip()]

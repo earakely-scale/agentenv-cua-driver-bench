@@ -1,0 +1,7 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-s02",
+   "env_params": {"app_settings": {"bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop-s02", "artifact_id": "taskpack", "destination_path": "bench"},
+  {"id": "check", "type": "run_code", "env_id": "desktop-s02", "script_artifact_id": "check_sentinel",
+   "args": {"condition": "foreground"}, "timeout_seconds": 900}
+]
