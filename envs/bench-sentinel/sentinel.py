@@ -23,8 +23,8 @@ import subprocess
 import threading
 import time
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from Xlib import X, Xatom, display, error
 from Xlib.ext import xfixes
@@ -64,14 +64,14 @@ class Desktop:
         self._mask, self._base = mask, own_window & ~mask
         self._atoms: dict[str, int] = {}
         self._clients: tuple[int, ...] = ()
-        self._apps: dict[int, tuple[Optional[str], int]] = {}
-        self._kinds: dict[int, Optional[str]] = {}
-        self._main: Optional[int] = None
+        self._apps: dict[int, tuple[str | None, int]] = {}
+        self._kinds: dict[int, str | None] = {}
+        self._main: int | None = None
 
-    def own(self, window: Optional[int]) -> bool:
+    def own(self, window: int | None) -> bool:
         return bool(window) and window & ~self._mask == self._base
 
-    def main(self) -> Optional[int]:
+    def main(self) -> int | None:
         """The sentinel's window as the window manager manages it: its first client that's transient for nothing."""
         if self._main is None:
             self._main = next((w for w in self.clients() if self.own(w) and self.transient_for(w) is None), None)
@@ -81,24 +81,24 @@ class Desktop:
         reply = self.root.query_pointer()
         return [reply.root_x, reply.root_y]
 
-    def active(self) -> Optional[int]:
+    def active(self) -> int | None:
         return (self._prop(self.root.id, "_NET_ACTIVE_WINDOW") or [None])[0] or None
 
-    def focus(self) -> Optional[int]:
+    def focus(self) -> int | None:
         focus = self.x.get_input_focus().focus
         return focus if isinstance(focus, int) else focus.id
 
     def current_desktop(self) -> int:
         return (self._prop(self.root.id, "_NET_CURRENT_DESKTOP") or [0])[0]
 
-    def window_desktop(self, window: int) -> Optional[int]:
+    def window_desktop(self, window: int) -> int | None:
         return (self._prop(window, "_NET_WM_DESKTOP") or [None])[0]
 
     def frame_extents(self, window: int) -> list[int]:
         """The window manager's decorations around ``window``: left, right, top and bottom."""
         return (self._prop(window, "_NET_FRAME_EXTENTS") or [0, 0, 0, 0])[:4]
 
-    def workarea(self) -> Optional[list[int]]:
+    def workarea(self) -> list[int] | None:
         """The first desktop's area that docks and panels leave, x, y, width and height."""
         return (self._prop(self.root.id, "_NET_WORKAREA") or [])[:4] or None
 
@@ -113,7 +113,7 @@ class Desktop:
     def stacking(self) -> list[int]:
         return list(self._prop(self.root.id, "_NET_CLIENT_LIST_STACKING") or [])
 
-    def app(self, window: int) -> tuple[Optional[str], int]:
+    def app(self, window: int) -> tuple[str | None, int]:
         """The app a window belongs to: its WM_CLASS class and its _NET_WM_PID, None and -1 for what it doesn't say."""
         if window not in self._apps:
             try:
@@ -124,7 +124,7 @@ class Desktop:
                                   (self._prop(window, "_NET_WM_PID") or [-1])[0])
         return self._apps[window]
 
-    def kind(self, window: int) -> Optional[str]:
+    def kind(self, window: int) -> str | None:
         if window not in self._kinds:
             kinds = self._prop(window, "_NET_WM_WINDOW_TYPE")
             self._kinds[window] = self.x.get_atom_name(kinds[0]) if kinds else None
@@ -133,7 +133,7 @@ class Desktop:
     def hidden(self, window: int) -> bool:
         return self._atom("_NET_WM_STATE_HIDDEN") in (self._prop(window, "_NET_WM_STATE") or [])
 
-    def transient_for(self, window: int) -> Optional[int]:
+    def transient_for(self, window: int) -> int | None:
         return (self._prop(window, "WM_TRANSIENT_FOR", Xatom.WINDOW) or [None])[0] or None
 
     def _atom(self, name: str) -> int:
@@ -141,7 +141,7 @@ class Desktop:
             self._atoms[name] = self.x.intern_atom(name)
         return self._atoms[name]
 
-    def _prop(self, window: int, name: str, kind: int = X.AnyPropertyType) -> Optional[list[int]]:
+    def _prop(self, window: int, name: str, kind: int = X.AnyPropertyType) -> list[int] | None:
         try:
             value = self.x.create_resource_object("window", window).get_full_property(self._atom(name), kind)
         except error.XError:
@@ -154,7 +154,7 @@ class Sentinel:
     change the desktop reports write. ``user`` is the user's field in the background condition, None in the
     foreground."""
 
-    def __init__(self, desktop: Desktop, user: Optional[UserField], write: Callable[[str], None],
+    def __init__(self, desktop: Desktop, user: UserField | None, write: Callable[[str], None],
                  clock: Callable[[], float] = time.time) -> None:
         self.desktop, self.user, self._write, self._clock = desktop, user, write, clock
         self.armed = False
@@ -167,7 +167,7 @@ class Sentinel:
     def emit(self, ev: str, **fields: object) -> None:
         self._write(json.dumps({"ev": ev, "t": self._clock() * 1000, "armed": self.armed, **fields}, sort_keys=True))
 
-    def front(self, window: Optional[int]) -> dict:
+    def front(self, window: int | None) -> dict:
         """The app of ``window`` as macOS names the front app: its id and pid, the sentinel's own as trycua's."""
         if not window:
             return {"bid": None, "pid": -1}
@@ -188,7 +188,7 @@ class Sentinel:
             fields["above"] = above
         return fields
 
-    def _above(self, main: Optional[int], current: int) -> list[str]:
+    def _above(self, main: int | None, current: int) -> list[str]:
         """The apps whose shown windows the window manager stacks above the sentinel's, each once, in that order."""
         d, owners = self.desktop, []
         stacking = d.stacking()
@@ -204,7 +204,7 @@ class Sentinel:
                 owners.append(owner)
         return owners
 
-    def _sheet(self, main: Optional[int]) -> bool:
+    def _sheet(self, main: int | None) -> bool:
         """Whether a window of the sentinel's own besides its main one shows, or any app's window transient for it."""
         d = self.desktop
         return any(window != main and (d.own(window) or (main is not None and d.transient_for(window) == main))
@@ -229,7 +229,7 @@ class Sentinel:
             self.emit("mouseDown" if down else "mouseUp", button=MAC_BUTTONS.get(number, number - 1), loc=at,
                       synthetic=synthetic)
 
-    def changed(self, what: str, window: Optional[int] = None) -> None:
+    def changed(self, what: str, window: int | None = None) -> None:
         """Log a change the desktop reported: the active window (its app's activation and the front app), the current
         desktop, or the clipboard's owner."""
         if what == "active":
@@ -343,7 +343,7 @@ def main(condition: str) -> None:
         root.after(TYPE_MS, type_tick)
 
     def activate() -> None:
-        subprocess.run(["wmctrl", "-i", "-a", hex(desktop.main())], stdout=subprocess.DEVNULL,
+        subprocess.run(["wmctrl", "-i", "-a", hex(desktop.main())], check=False, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL)
         root.deiconify()
         root.lift()

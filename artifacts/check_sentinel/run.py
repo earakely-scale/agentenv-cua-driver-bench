@@ -246,7 +246,7 @@ def _numbers(text):
 
 
 def _sh(*argv):
-    return subprocess.run(argv, capture_output=True, text=True, timeout=30).stdout.strip()
+    return subprocess.run(argv, capture_output=True, text=True, timeout=30, check=False).stdout.strip()
 
 
 def _rpc(url, headers):
