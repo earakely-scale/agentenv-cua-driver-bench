@@ -1,8 +1,10 @@
 """Inside a bench task's computer, as its session user: arm the bench's sentinel just before the agent starts, or disarm it
 just after, as trycua's runner does. Arming empties the clipboard, goes to the first desktop and activates the sentinel
-until its window is active and holds the focus, then arms it. Each waits for the sentinel's log to say it's done, and
-does nothing when the sentinel is already in that state. ``args``: ``action``, ``arm`` or ``disarm``. Returns the log's
-armed or disarmed line."""
+until its window is active and holds the focus, then arms it, and fails unless the armed line says so too and, with
+``condition``, unless the sentinel runs in that condition. Each waits for the sentinel's log to say it's done, and does
+nothing when the sentinel is already in that state; disarming a sentinel that's no longer running says so, for the
+grade to fail the trial. ``args``: ``action``, ``arm`` or ``disarm``, and ``condition``. Returns the log's armed or
+disarmed line."""
 import json
 import os
 import signal
@@ -20,7 +22,9 @@ def run(input):
     if action not in ("arm", "disarm"):
         raise ValueError(f"action is arm or disarm, not {action!r}")
     log = Log(LOG)
-    pid, armed = log.state()
+    pid, armed, condition = log.state()
+    if input["args"].get("condition") not in (None, condition):
+        raise RuntimeError(f"the sentinel runs in the {condition} condition, not {input['args']['condition']}")
     if armed == (action == "arm"):
         return {"action": action, "already": True, "line": log.last(("armed", "disarmed"))}
     if action == "arm":
@@ -28,8 +32,15 @@ def run(input):
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, check=True)
         subprocess.run(["wmctrl", "-s", "0"], check=True)
         log.activate(pid)
-    os.kill(pid, signal.SIGUSR2)
+    try:
+        os.kill(pid, signal.SIGUSR2)
+    except ProcessLookupError:
+        if action == "arm":
+            raise
+        return {"action": action, "already": False, "line": None, "sentinel": "gone"}
     line = log.wait(lambda line: line["ev"] == ("armed" if action == "arm" else "disarmed"))
+    if action == "arm" and not (line["active"] and line["key"]):
+        raise RuntimeError(f"the sentinel armed without its window active and focused: {line}")
     return {"action": action, "already": False, "line": line}
 
 
@@ -40,17 +51,18 @@ class Log:
         self.path, self.offset = path, 0
 
     def state(self):
-        """The running sentinel's pid, from its last start line, and whether it's armed, waiting for it to start."""
+        """The running sentinel's pid and condition, from its last start line, and whether it's armed, waiting for it
+        to start."""
         deadline = time.monotonic() + WAIT_S
         while True:
-            pid, armed = None, False
+            pid, armed, condition = None, False, None
             for line in self.read():
                 if line["ev"] == "start":
-                    pid, armed = line["pid"], False
+                    pid, armed, condition = line["pid"], False, line.get("condition")
                 elif line["ev"] in ("armed", "disarmed"):
                     armed = line["ev"] == "armed"
             if pid is not None:
-                return pid, armed
+                return pid, armed, condition
             if time.monotonic() > deadline:
                 raise RuntimeError(f"the sentinel hasn't started: {self.path} has no start line")
             self.offset = 0

@@ -27,6 +27,14 @@ def _tool(name, **tool_input):
 CLICK = _tool("mcp__desktop-s02__computer_click", x=10, y=20)
 
 
+def _init(*tools):
+    return {"type": "system", "subtype": "init", "tools": ["Skill", "mcp__desktop-s02__computer_click", *tools]}
+
+
+def _trajectory(*calls, offered=()):
+    return [[_init(*offered), *calls]]
+
+
 @pytest.fixture
 def grader(tmp_path, monkeypatch):
     if not (PACK / "MANIFEST.sha256").exists():
@@ -46,7 +54,7 @@ def grader(tmp_path, monkeypatch):
         sys.modules.pop("verify", None)
 
 
-def _home(tmp_path, run, condition="background", solved=False):
+def _home(tmp_path, run, condition="background", solved=False, edit=None):
     home = tmp_path / "home"
     if solved:
         shutil.copytree(_solved(tmp_path / "solving"), home / "cdb-s02")
@@ -55,8 +63,9 @@ def _home(tmp_path, run, condition="background", solved=False):
     log = home / ".bench-sentinel" / "sentinel.jsonl"
     log.parent.mkdir(parents=True)
     lines = [json.loads(line) for line in run.lines]
-    lines[0]["condition"] = condition
-    log.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    if condition is not None:
+        lines[0]["condition"] = condition
+    log.write_text("".join(json.dumps(line) + "\n" for line in (edit or (lambda lines: lines))(lines)))
     return home
 
 
@@ -71,14 +80,14 @@ def _solved(scratch):
     return workspace.root
 
 
-def _results(grader, tmp_path, run, trajectory, condition="background", solved=False):
-    home = _home(tmp_path, run, condition, solved)
+def _results(grader, tmp_path, run, trajectory, condition="background", solved=False, edit=None):
+    home = _home(tmp_path, run, condition, solved, edit)
     return {result["id"]: result for result in grader.grade("cdb-s02", home, tmp_path / "scratch", trajectory)}
 
 
 def test_an_untouched_workspace_fails_trycuas_evaluator_and_a_quiet_gui_only_trial_holds_the_rest(
         grader, sentinel_module, tmp_path):
-    results = _results(grader, tmp_path, Run(sentinel_module).trial(), [[CLICK]])
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(), _trajectory(CLICK))
 
     assert results["task"]["result"] is False and results["task"]["checks"]["mail_preserved"] is True
     assert results["gui_only"] == {**results["gui_only"], "result": True, "violations": [], "trajectory_checked": True}
@@ -88,7 +97,7 @@ def test_an_untouched_workspace_fails_trycuas_evaluator_and_a_quiet_gui_only_tri
 
 def test_a_solved_trial_that_left_the_user_undisturbed_in_the_gui_is_a_background_completion(
         grader, sentinel_module, tmp_path):
-    results = _results(grader, tmp_path, Run(sentinel_module).trial(), [[CLICK]], solved=True)
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(), _trajectory(CLICK), solved=True)
 
     assert results["task"]["result"] is True and results["task"]["score"] == 1.0
     assert all(result["result"] for result in results.values())
@@ -101,7 +110,7 @@ def test_a_solved_trial_that_took_the_users_focus_is_not_a_background_completion
         run.sentinel.focus_changed(False)
         run.sentinel.changed("active", OTHER)
 
-    results = _results(grader, tmp_path, Run(sentinel_module).trial(steal), [[CLICK]], solved=True)
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(steal), _trajectory(CLICK), solved=True)
 
     assert results["task"]["result"] is True and results["gui_only"]["result"] is True
     assert results["user_undisturbed"]["result"] is False
@@ -116,15 +125,16 @@ def test_a_solved_trial_that_took_the_users_focus_is_not_a_background_completion
     (_tool("mcp__desktop-s02__type_text", text="bash -c 'cat ~/cdb-s02/x'"), "mcp__desktop-s02__type_text:bash -c"),
 ], ids=["a forbidden built-in", "any other built-in", "tool search", "code in a tool input"])
 def test_a_tool_call_out_of_the_gui_fails_gui_only(grader, sentinel_module, tmp_path, call, violation):
-    trajectory = [{"format": "claude-code-stream-json/1", "events": [CLICK, call]}]
+    trajectory = _trajectory(CLICK, call)
 
     gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]
 
     assert gui_only["result"] is False and violation in gui_only["violations"]
 
 
-def test_skills_are_gui_only(grader, sentinel_module, tmp_path):
-    trajectory = [[_tool("Skill", skill="computer"), CLICK]]
+def test_skills_and_opening_an_app_are_gui_only(grader, sentinel_module, tmp_path):
+    trajectory = _trajectory(_tool("Skill", skill="computer"), CLICK, _tool(
+        "mcp__desktop-s02__launch_app", launch_path="/usr/share/applications/libreoffice-calc.desktop"))
 
     assert _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]["result"] is True
 
@@ -133,21 +143,76 @@ def test_a_violation_the_guard_logged_fails_gui_only(grader, sentinel_module, tm
     run = Run(sentinel_module)
     run.trial(lambda run: run.processes.append((50, "xterm", 0)))
 
-    assert _results(grader, tmp_path, run, [[CLICK]])["gui_only"]["violations"] == ["process:xterm"]
+    assert _results(grader, tmp_path, run, _trajectory(CLICK))["gui_only"]["violations"] == ["process:xterm"]
 
 
-@pytest.mark.parametrize("trajectory", [None, [None], [{"format": "claude-code-stream-json/1", "events": []}]],
-                         ids=["none", "none for its turn", "no events"])
-def test_without_the_agents_tool_calls_a_trial_isnt_gui_only(grader, sentinel_module, tmp_path, trajectory):
+@pytest.mark.parametrize("trajectory", [
+    None, [None], [[]], [[CLICK]], [{"format": "claude-code-stream-json/1", "events": [_init(), CLICK]}],
+    [[_init(), CLICK], None],
+], ids=["none", "none for its turn", "no events", "not claude-code's", "another shape", "a turn without one"])
+def test_without_claude_codes_tool_calls_a_trial_isnt_gui_only(grader, sentinel_module, tmp_path, trajectory):
     gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]
 
     assert gui_only["result"] is False and gui_only["trajectory_checked"] is False
 
 
-def test_the_foreground_has_no_a22_result(grader, sentinel_module, tmp_path):
-    results = _results(grader, tmp_path, Run(sentinel_module, background=False).trial(), [[CLICK]], "foreground")
+@pytest.mark.parametrize("launch, violation", [
+    ({"name": "python3", "additional_arguments": ["-c", "open('x', 'w')"]}, "arguments"),
+    ({"launch_path": "sed -i s/a/b/ ~/cdb-s02/calendar/events.json"}, "launch_path"),
+    ({"name": "/usr/bin/python3"}, "command"),
+    ({"name": "xdg-open x; rm y"}, "command"),
+], ids=["arguments", "a command as its launch path", "a path as its name", "a shell line as its name"])
+def test_a_command_run_through_launch_app_fails_gui_only(grader, sentinel_module, tmp_path, launch, violation):
+    trajectory = _trajectory(_tool("mcp__desktop-s02__launch_app", **launch))
 
-    assert set(results) == {"task", "gui_only"}
+    gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]
+
+    assert gui_only["result"] is False and f"mcp__desktop-s02__launch_app:{violation}" in gui_only["violations"]
+
+
+def test_a_built_in_tool_claude_code_was_offered_fails_gui_only(grader, sentinel_module, tmp_path):
+    gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), _trajectory(CLICK, offered=["Bash"]))["gui_only"]
+
+    assert gui_only["violations"] == ["offered:Bash"]
+
+
+@pytest.mark.parametrize("edit, problem", [
+    (lambda lines: [line for line in lines if line["ev"] != "disarmed"], "stopped before it was disarmed"),
+    (lambda lines: [line for line in lines if line["ev"] != "armed" and not line["armed"]], "never armed"),
+    (lambda lines: [*lines[:-2], {"ev": "sample_error", "t": lines[-2]["t"], "armed": True, "error": "BadAtom"},
+                    *lines[-2:]], "a sample failed: BadAtom"),
+], ids=["not disarmed", "never armed", "a sample failed"])
+def test_a_log_that_doesnt_show_the_whole_trial_fails_the_grade(grader, sentinel_module, tmp_path, edit, problem):
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(), _trajectory(CLICK), edit=edit)
+
+    assert results["sentinel"]["result"] is False and any(problem in p for p in results["sentinel"]["problems"])
+    assert results["gui_only"]["result"] is False and results["user_undisturbed"]["result"] is False
+
+
+def test_a_sentinel_without_a_condition_fails_the_grade(grader, sentinel_module, tmp_path):
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(), _trajectory(CLICK), condition=None)
+
+    assert results["sentinel"]["problems"] == ["the sentinel's condition is None"]
+
+
+def test_the_users_window_asked_to_close_disturbs_the_user(grader, sentinel_module, tmp_path):
+    run = Run(sentinel_module).trial(lambda run: run.sentinel.emit("close_refused"))
+
+    undisturbed = _results(grader, tmp_path, run, _trajectory(CLICK))["user_undisturbed"]
+
+    assert undisturbed["result"] is False and undisturbed["close_refused"] == 1
+
+
+def test_the_node_the_grade_fetches_is_the_one_cdb_s04_pins(grader):
+    pinned = (ROOT / "envs" / "cdb-s04" / "bench_app.py").read_text()
+
+    assert f'NODE = "{grader.NODE}"' in pinned and all(sha in pinned for sha in grader.NODE_SHA256.values())
+
+
+def test_the_foreground_has_no_a22_result(grader, sentinel_module, tmp_path):
+    results = _results(grader, tmp_path, Run(sentinel_module, background=False).trial(), _trajectory(CLICK), "foreground")
+
+    assert set(results) == {"sentinel", "task", "gui_only"}
 
 
 def test_its_table_pins_each_trycua_file_it_fetches_at_the_locks_commit(grader):

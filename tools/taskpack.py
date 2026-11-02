@@ -17,6 +17,7 @@ repo holds those hashes, never the files.
 from __future__ import annotations
 
 import argparse
+import ast
 import functools
 import hashlib
 import importlib.util
@@ -155,10 +156,10 @@ def grader(lock: Lock, target: Path = TARGET, verifier: Path = GRADER, tasks: tu
 
 def tasks(lock: Lock, target: Path = TARGET, folder: Path = TRIALS) -> list[Path]:
     """Write each GUI-only task's trial in both of trycua's conditions, ``<probe id>-<condition>.json``: its computer
-    with the sentinel in that condition, claude-code with no built-in tools but ``GUI_ONLY_TOOLS``, the sentinel armed
-    around the prompt under a recording, and the grade. The prompt is the one trycua's runner builds from the verified
-    task pack, the task's brief, its workspace and their background brief, so the files hold trycua's text and are
-    git-ignored, as the task pack is."""
+    with the sentinel in that condition, claude-code with no built-in tools but ``GUI_ONLY_TOOLS`` and trycua's system
+    prompt, the sentinel armed around the prompt under a recording, within the task's time and turns, and the grade.
+    The prompts are the ones trycua's runner builds from the verified task pack, the task's brief, its workspace and
+    their background brief, so the files hold trycua's text and are git-ignored, as the task pack is."""
     verify(lock, target)
     spec = importlib.util.spec_from_file_location("trycua_bench_v2", target / "scoring" / "bench_v2.py")
     bench_v2 = importlib.util.module_from_spec(spec)
@@ -170,31 +171,43 @@ def tasks(lock: Lock, target: Path = TARGET, folder: Path = TRIALS) -> list[Path
         brief = (shared / "brief.md").read_text(encoding="utf-8").replace(
             "configured `cua` MCP server", "configured computer-use MCP server")
         brief = f"{brief.strip()}\n\nYour workspace directory is `{launch['workspace_root'].replace('${HOME}', SESSION_HOME)}`."
-        timeout_s = json.loads((target / "probes" / probe / "task.json").read_text(encoding="utf-8"))["timeout_s"]
+        limits = json.loads((target / "probes" / probe / "task.json").read_text(encoding="utf-8"))
         for condition in ("background", "foreground"):
             path = folder / f"{probe.lower()}-{condition}.json"
             steps = _trial(f"desktop-{task.removeprefix('cdb-')}", condition, bench_v2.brief_for(brief, condition),
-                           timeout_s)
+                           _system_prompt(target), limits)
             path.write_text(json.dumps(steps, indent=1) + "\n", encoding="utf-8")
             written.append(path)
     return written
 
 
-def _trial(env: str, condition: str, prompt: str, timeout_s: int) -> list[dict]:
+def _system_prompt(target: Path) -> str:
+    """trycua's system prompt for their claude-code arms, read from their runner without running it, for a Linux
+    desktop where theirs says macOS."""
+    module = ast.parse((target / "runner" / "claude_arms.py").read_text(encoding="utf-8"))
+    [prompt] = [ast.literal_eval(node.value) for node in module.body if isinstance(node, ast.Assign)
+                and any(isinstance(name, ast.Name) and name.id == "SYSTEM_PROMPT" for name in node.targets)]
+    return prompt.replace("a macOS desktop", "a Linux desktop")
+
+
+def _trial(env: str, condition: str, prompt: str, system_prompt: str, limits: dict) -> list[dict]:
+    """The trial's steps. An agent that fails or runs out of time is still graded, as trycua grades it, and so is one
+    whose sentinel is gone by the disarm, which the grade then fails."""
     computer = {"env_id": env}
     return [
         {"id": "env", "type": "deploy_env", **computer,
          "env_params": {"app_settings": {"bench-sentinel": {"condition": condition}}}},
         {"id": "agent", "type": "deploy_agent", "env_ids": [env], "builtin_tools": {"only": GUI_ONLY_TOOLS},
-         "depends_on": ["env"]},
+         "system_prompt": system_prompt, "depends_on": ["env"]},
         {"id": "skills", "type": "add_skills", "env_ids": [env], "depends_on": ["agent"]},
         {"id": "record", "type": "start_computer_recording", **computer, "name": "trial", "depends_on": ["env"]},
-        {"id": "arm", "type": "run_code", **computer, "script_artifact_id": "sentinel", "args": {"action": "arm"},
-         "depends_on": ["skills", "record"]},
-        {"id": "task", "type": "prompt_agent", "prompt_id": "task", "prompt": prompt, "timeout_seconds": timeout_s,
+        {"id": "arm", "type": "run_code", **computer, "script_artifact_id": "sentinel",
+         "args": {"action": "arm", "condition": condition}, "depends_on": ["skills", "record"]},
+        {"id": "task", "type": "prompt_agent", "prompt_id": "task", "prompt": prompt,
+         "timeout_seconds": limits["timeout_s"], "max_turns": limits["max_turns"], "fail_task_on_error": False,
          "depends_on": ["arm"]},
         {"id": "disarm", "type": "run_code", **computer, "script_artifact_id": "sentinel",
-         "args": {"action": "disarm"}, "depends_on": ["task"]},
+         "args": {"action": "disarm"}, "fail_task_on_error": False, "depends_on": ["task"]},
         {"id": "end", "type": "end_computer_recording", "name": "trial", "depends_on": ["disarm"]},
         {"id": "grade", "type": "env_outcome_verifier", **computer, "file_artifact_id": "grade", "verifier_id": "grade",
          "prompt_id": "task", "depends_on": ["disarm"]},

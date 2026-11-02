@@ -8,7 +8,9 @@ Either way it logs, one JSON line per event with ``ev``, ``t`` (epoch ms) and ``
 count, whether it is on the current desktop, a dialog on it and the other apps' windows above it; and its focus and
 activation changes, the front app's, the desktop's, and every key, click and scroll delivered to it. While armed, its
 GUI-only guard logs the agent's way out of the GUI: a terminal or run dialog in front, a terminal's program, a program on
-a pseudo-terminal. SIGUSR1 activates it, SIGUSR2 arms or disarms it, SIGTERM stops it.
+a pseudo-terminal. SIGUSR1 activates it, SIGUSR2 arms or disarms it, SIGTERM stops it. Only one runs at a time; a
+request to close its window is logged as ``close_refused`` and refused; a sample that fails is logged as
+``sample_error`` and the next goes on.
 
 X11 stands in for macOS: the input focus for the key window, ``_NET_ACTIVE_WINDOW`` for the active app, a window's
 WM_CLASS for an app's name, the window manager's stacking order for the windows above, the CLIPBOARD selection's owner
@@ -16,6 +18,7 @@ for the pasteboard, and the desktop for the Space. Its own windows are those its
 id base. Run as a script, it is the app's launch."""
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import queue
@@ -37,6 +40,8 @@ OWN_BID = "ai.cua.benchsentinel"
 #: Tk keeps only the first letter of a class name upper case.
 WM_CLASS = "Benchsentinel"
 LOG = Path.home() / ".bench-sentinel" / "sentinel.jsonl"
+#: Held while a sentinel runs, so a second one, from the app's launcher, say, leaves at once.
+LOCK = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "bench-sentinel.lock"
 USER_SCRIPT = "the user keeps writing notes while the agent works in the background. "
 #: The user's window in the background condition, its outer frame's x, y, width and height, as trycua's runner sets it.
 USER_FRAME = (420, 340, 900, 520)
@@ -148,7 +153,10 @@ class Desktop:
     def kind(self, window: int) -> str | None:
         if window not in self._kinds:
             kinds = self._prop(window, "_NET_WM_WINDOW_TYPE")
-            self._kinds[window] = self.x.get_atom_name(kinds[0]) if kinds else None
+            try:
+                self._kinds[window] = self.x.get_atom_name(kinds[0]) if kinds else None
+            except error.XError:
+                self._kinds[window] = None
         return self._kinds[window]
 
     def hidden(self, window: int) -> bool:
@@ -185,6 +193,7 @@ class Sentinel:
         self.expected = ""
         self._active = desktop.own(desktop.active())
         self._front = self.front(desktop.active())
+        self._desktop = desktop.current_desktop()
         self.guard = Guard(self.emit, running)
         self._samples = 0
 
@@ -255,7 +264,7 @@ class Sentinel:
 
     def changed(self, what: str, window: int | None = None) -> None:
         """Log a change the desktop reported: the active window (its app's activation and the front app), the current
-        desktop, or the clipboard's owner."""
+        desktop when it's another, or the clipboard's owner."""
         if what == "active":
             active, front = self.desktop.own(window), self.front(window)
             if active != self._active:
@@ -265,9 +274,13 @@ class Sentinel:
                 self._front = front
                 self.emit("front", front=front)
         elif what == "desktop":
+            current = self.desktop.current_desktop()
+            if current == self._desktop:
+                return
+            self._desktop = current
             main = self.desktop.main()
             mine = self.desktop.window_desktop(main) if main else None
-            self.emit("space", onspace=mine is None or mine in (self.desktop.current_desktop(), ALL_DESKTOPS))
+            self.emit("space", onspace=mine is None or mine in (current, ALL_DESKTOPS))
         elif what == "clipboard":
             self.clip += 1
 
@@ -412,6 +425,11 @@ def _command(pid: int) -> str:
 
 
 def main(condition: str) -> None:
+    lock = open(LOCK, "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return
     background = condition == "background"
     LOG.parent.mkdir(parents=True, exist_ok=True)
     log = os.open(LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
@@ -429,15 +447,30 @@ def main(condition: str) -> None:
                         lambda line: os.write(log, (line + "\n").encode()))
     changes: queue.Queue = queue.Queue()
 
-    def sample() -> None:
+    def drain() -> None:
         while not changes.empty():
             sentinel.changed(*changes.get_nowait())
-        sentinel.tick()
-        root.after(SAMPLE_MS, sample)
+
+    def sample() -> None:
+        try:
+            drain()
+            sentinel.tick()
+        except Exception as e:
+            sentinel.emit("sample_error", error=f"{type(e).__name__}: {e}"[:300])
+        finally:
+            root.after(SAMPLE_MS, sample)
 
     def type_tick() -> None:
-        sentinel.type_tick()
-        root.after(TYPE_MS, type_tick)
+        try:
+            sentinel.type_tick()
+        except Exception as e:
+            sentinel.emit("sample_error", error=f"{type(e).__name__}: {e}"[:300])
+        finally:
+            root.after(TYPE_MS, type_tick)
+
+    def toggle() -> None:
+        drain()
+        sentinel.toggle()
 
     def activate() -> None:
         subprocess.run(["wmctrl", "-i", "-a", hex(desktop.main())], check=False, stdout=subprocess.DEVNULL,
@@ -451,6 +484,7 @@ def main(condition: str) -> None:
         sentinel.emit("exit")
         root.destroy()
 
+    root.protocol("WM_DELETE_WINDOW", lambda: sentinel.emit("close_refused"))
     root.bind("<FocusIn>", lambda event: event.widget is root and sentinel.focus_changed(True))
     root.bind("<FocusOut>", lambda event: event.widget is root and sentinel.focus_changed(False))
     root.bind_all("<KeyPress>", lambda event: sentinel.key(event.char, event.keycode, bool(event.send_event)))
@@ -459,7 +493,7 @@ def main(condition: str) -> None:
     root.bind_all("<ButtonRelease>", lambda event: sentinel.button(event.num, False, [event.x, event.y],
                                                                    bool(event.send_event)))
     signal.signal(signal.SIGUSR1, lambda *_: root.after(0, activate))
-    signal.signal(signal.SIGUSR2, lambda *_: root.after(0, sentinel.toggle))
+    signal.signal(signal.SIGUSR2, lambda *_: root.after(0, toggle))
     signal.signal(signal.SIGTERM, lambda *_: root.after(0, stop))
     threading.Thread(target=watch, args=(changes,), daemon=True).start()
     sentinel.emit("start", pid=os.getpid(), bid=OWN_BID, condition=condition, front=sentinel.front(desktop.active()))

@@ -1,7 +1,8 @@
 """The trials ``python tools/taskpack.py tasks`` writes from the fetched task pack: each GUI-only task in both of
-trycua's conditions, prompted as trycua's runner prompts it, with the sentinel in that condition, claude-code with only
-the computer env's tools, the sentinel armed just around the prompt, and the grade; git-ignored, since they hold
-trycua's text."""
+trycua's conditions, prompted as trycua's runner prompts it and within its time and turns, with the sentinel in that
+condition, claude-code with only the computer env's tools and trycua's system prompt for Linux, the sentinel armed just
+around the prompt, and the grade, which runs whatever became of the agent; git-ignored, since they hold trycua's
+text."""
 import json
 import subprocess
 import sys
@@ -33,7 +34,11 @@ def test_a_background_trial_prompts_as_trycua_and_arms_the_user_window_just_arou
     assert trial["agent"]["builtin_tools"] == {"only": ["Skill"]}
     assert trial["task"]["prompt"].startswith(brief) and "`/home/user/cdb-s02`" in trial["task"]["prompt"]
     assert '"User activity"' in trial["task"]["prompt"] and trial["task"]["timeout_seconds"] == 360
-    assert (trial["arm"]["args"], trial["disarm"]["args"]) == ({"action": "arm"}, {"action": "disarm"})
+    assert "a Linux desktop" in trial["agent"]["system_prompt"] and "macOS" not in trial["agent"]["system_prompt"]
+    assert (trial["arm"]["args"], trial["disarm"]["args"]) == (
+        {"action": "arm", "condition": "background"}, {"action": "disarm"})
+    assert (trial["task"]["max_turns"], trial["task"]["fail_task_on_error"], trial["disarm"]["fail_task_on_error"]) == (
+        45, False, False)
     assert (trial["task"]["depends_on"], trial["disarm"]["depends_on"], trial["grade"]["depends_on"]) == (
         ["arm"], ["task"], ["disarm"])
     assert (trial["grade"]["file_artifact_id"], trial["grade"]["prompt_id"]) == ("grade", "task")

@@ -3,7 +3,7 @@
 # python tools/taskpack.py pin <commit>.
 repo = "trycua/cua"
 commit = "6c0a8c3bb2d32580c3231592f60739c33edc567a"
-sha256 = "7d99fda742c894181312e444225e67d00df750260e70139829d166482ac00a77"
+sha256 = "6ba06e38446b73eb34bfb19d3802893b5dd19865cf5bf08a9a4749ba01ca7c02"
 
 [[include]]
 from = "libs/cua-driver-bench/LICENSE"
@@ -48,3 +48,7 @@ to = "scoring/tests/test_summarize_sentinel.py"
 [[include]]
 from = "libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py"
 to = "scoring/bench_v2.py"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/claude_arms.py"
+to = "runner/claude_arms.py"

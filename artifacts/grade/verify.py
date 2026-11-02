@@ -4,17 +4,25 @@ computer; their A22 criteria on the sentinel's log; and their GUI-only checks, t
 their scan of the agent's tool calls after it. Each of trycua's files is fetched at the lock's commit and checked
 against its sha256 (``TRYCUA``, written by ``python tools/taskpack.py grader``), and kept in a cache by its sha256.
 
-All of its results must hold: ``task``, their evaluator passed; ``gui_only``, the guard logged no violation and the
-agent called no tool but the computer env's and claude-code's skill tool, with no code in an input; and in the background condition ``user_undisturbed``, all eight A22 criteria measured and held. Together they are
-trycua's background completion, and in the foreground their GUI-only pass. A trial whose agent's trajectory the verifier
-isn't given, or holds no events, isn't GUI-only, since it can't be checked."""
+All of its results must hold: ``sentinel``, its log shows the whole trial (a condition, armed, disarmed, no sample
+lost); ``task``, their evaluator passed; ``gui_only``, the guard logged no violation, and claude-code was offered and
+called no tool but the computer env's and its skill tool, with no code in an input and no command run through
+cua-driver's ``launch_app``; and in the background condition ``user_undisturbed``, all eight A22 criteria measured and
+held and the user's window not asked to close. Together they are trycua's background completion, and in the
+foreground their GUI-only pass. A trial whose agent's trajectory the verifier isn't given, or isn't claude-code's
+stream-json, isn't GUI-only, since its tool calls can't be checked."""
 import asyncio
 import base64
 import hashlib
 import importlib.util
 import json
+import os
+import platform
+import re
+import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
@@ -28,6 +36,14 @@ DATA_OBJECTS = "urn:agentenv:data-objects/v1"
 ALLOWED_BUILTINS = ("Skill",)
 CACHE = Path.home() / ".cache" / "agentenv-cua-driver-bench"
 DATA_TIMEOUT_S = 300
+#: Node for the evaluators that serve the task's site, at the version and checksums cdb-s04's own app pins.
+NODE = "22.23.4"
+NODE_SHA256 = {"amd64": "1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce",
+               "arm64": "6287aa46b6c375d816e63ae66d024fbbfd70404825aabdfdf898a970871d2f4b"}
+NEEDS_NODE = ("cdb-s04",)
+_ARCHES = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
+#: A launch_app name that a shell would read as more than an app's name.
+_COMMAND = re.compile(r"[;|&$`<>]|^[/.~]")
 
 TRYCUA = {
  "commit": "6c0a8c3bb2d32580c3231592f60739c33edc567a",
@@ -211,15 +227,19 @@ def grade(task, home, scratch, trajectory):
     condition = next((line.get("condition") for line in reversed(lines) if line["ev"] == "start"), None)
     window = [line for line in lines if line["armed"] or line["ev"] == "disarmed"]
     armed = next((line for line in window if line["ev"] == "armed"), {})
-    live = sorted({line["detail"] for line in window if line["ev"] == "gui_only_violation"})
+    problems = _problems(window, condition)
+    live = {line["detail"] for line in window if line["ev"] == "gui_only_violation"}
     events = _events(trajectory)
     scanned, mentions = _scan(v2, events or [])
     violations = sorted({*live, *scanned})
-    gui_only = bool(events) and not violations
+    gui_only = bool(events) and not violations and not problems
     passed = bool(evaluation.get("passed")) and gui_only
     multiplayer = v2.multiplayer_score(summary, bool(summary["available"] and armed.get("active") and armed.get("key")),
                                        passed, condition)
+    closes = sum(line["ev"] == "close_refused" for line in window)
     results = [
+        {"id": "sentinel", "result": not problems, "problems": problems,
+         "description": "the sentinel's log shows the whole trial"},
         {"id": "task", "result": evaluation.get("passed") is True, "score": evaluation.get("score"),
          "description": f"trycua's evaluator for {task}",
          "checks": {name: check.get("passed") for name, check in (evaluation.get("detail") or {}).get("checks", {}).items()}},
@@ -228,24 +248,55 @@ def grade(task, home, scratch, trajectory):
          "mentions": mentions, "description": "no way out of the GUI, live or in the agent's tool calls"},
     ]
     if condition == "background":
-        results.append({"id": "user_undisturbed", "result": multiplayer["user_undisturbed"] is True,
-                        "criteria": multiplayer["criteria"], "unmeasured": multiplayer["unmeasured"],
-                        "background_completion": multiplayer["background_completion"],
+        undisturbed = multiplayer["user_undisturbed"] is True and not closes and not problems
+        results.append({"id": "user_undisturbed", "result": undisturbed, "criteria": multiplayer["criteria"],
+                        "unmeasured": multiplayer["unmeasured"], "close_refused": closes,
+                        "background_completion": bool(multiplayer["background_completion"]) and undisturbed,
                         "description": "trycua's A22: the user could have kept working, undisturbed"})
     return results
 
 
+def _problems(window, condition):
+    """What keeps the sentinel's log from showing the whole trial: no condition, never armed, not disarmed (it stopped
+    while armed), or samples that failed while armed."""
+    problems = [] if condition in ("background", "foreground") else [f"the sentinel's condition is {condition!r}"]
+    if not any(line["ev"] == "armed" for line in window):
+        problems.append("the sentinel was never armed")
+    elif not any(line["ev"] == "disarmed" for line in window):
+        problems.append("the sentinel stopped before it was disarmed")
+    errors = sorted({line.get("error") for line in window if line["ev"] == "sample_error"})
+    return problems + [f"a sample failed: {error}" for error in errors[:5]]
+
+
 def _evaluate(task, workspace, scratch):
-    """trycua's evaluator for ``task`` on ``workspace``: its JSON result."""
+    """trycua's evaluator for ``task`` on ``workspace``: its JSON result. Node is on its path for a task that serves
+    a site."""
     folder = scratch / "trycua" / task
     for name, pinned in TRYCUA["tasks"][task].items():
         _fetched(pinned, folder / name)
     result = scratch / "result.json"
     (scratch / "artifacts").mkdir(exist_ok=True)
+    env = {**os.environ, "PATH": f"{_node(scratch)}{os.pathsep}{os.environ.get('PATH', '')}"} if task in NEEDS_NODE \
+        else None
     subprocess.run([sys.executable, "evaluator/evaluate.py", "--workspace", str(workspace), "--artifacts",
                     str(scratch / "artifacts"), "--result", str(result), "--agent-exit-code", "0"], cwd=folder,
-                   check=True, timeout=300)
+                   env=env, check=True, timeout=300)
     return json.loads(result.read_text())
+
+
+def _node(scratch):
+    """The folder of a node binary: on Linux the pinned one, fetched; elsewhere the one on the path."""
+    if sys.platform != "linux":
+        if (found := shutil.which("node")) is None:
+            raise RuntimeError(f"this task's evaluator needs node {NODE.split('.')[0]} on the path")
+        return Path(found).parent
+    arch = _ARCHES[platform.machine().lower()]
+    name = f"node-v{NODE}-linux-{'x64' if arch == 'amd64' else 'arm64'}"
+    archive = _fetched({"url": f"https://nodejs.org/dist/v{NODE}/{name}.tar.xz", "sha256": NODE_SHA256[arch]},
+                       scratch / f"{name}.tar.xz")
+    with tarfile.open(archive, "r:xz") as tar:
+        tar.extractall(scratch / "node", filter="data")
+    return scratch / "node" / name / "bin"
 
 
 def _scoring(scratch):
@@ -261,20 +312,36 @@ def _scoring(scratch):
 
 
 def _events(trajectory):
-    """The agent's events, each turn's as its document holds them, or None without any: a trajectory with no events
-    can't show the agent kept to the GUI."""
-    events = [event for document in trajectory or [] if document
-              for event in (document if isinstance(document, list) else document.get("events") or [])]
-    return events or None
+    """claude-code's stream-json events, every turn's document a list of them that opens with the CLI's init; None
+    without one, since the scan reads claude-code's tool calls and can't vouch for a turn it can't read."""
+    documents = list(trajectory or [])
+    if not documents or not all(isinstance(document, list) and document and isinstance(document[0], dict)
+                                and (document[0].get("type"), document[0].get("subtype")) == ("system", "init")
+                                for document in documents):
+        return None
+    return [event for document in documents for event in document]
 
 
 def _scan(v2, events):
-    """trycua's scan of the agent's tool calls, a forbidden built-in or code in a tool input, and any built-in the
-    computer env's tools don't stand in for: the violations and the side doors merely named."""
+    """trycua's scan of the agent's tool calls, a forbidden built-in or code in a tool input; any built-in the CLI
+    offered or the agent called beside the computer env's tools; and cua-driver's launch_app running a command, which
+    on Linux it does where macOS's opens apps only: with arguments, a launch path that isn't an app's .desktop file, or
+    a name a shell would read as more than an app's. The violations, and the side doors merely named."""
     hard, soft = v2.scan_events(events)
-    outside = {f"builtin:{name}" for event in events for name, _ in v2.tool_uses(event)
-               if not name.startswith("mcp__") and name not in ALLOWED_BUILTINS}
-    return sorted({*hard, *outside}), soft
+    offered = {f"offered:{name}" for event in events if (event.get("type"), event.get("subtype")) == ("system", "init")
+               for name in event.get("tools") or [] if not name.startswith("mcp__") and name not in ALLOWED_BUILTINS}
+    calls = [(name, tool_input) for event in events for name, tool_input in v2.tool_uses(event)]
+    outside = {f"builtin:{name}" for name, _ in calls if not name.startswith("mcp__") and name not in ALLOWED_BUILTINS}
+    launches = set()
+    for name, tool_input in calls:
+        if name.endswith("__launch_app") and isinstance(tool_input, dict):
+            if tool_input.get("additional_arguments"):
+                launches.add(f"{name}:arguments")
+            if tool_input.get("launch_path") and not str(tool_input["launch_path"]).endswith(".desktop"):
+                launches.add(f"{name}:launch_path")
+            if _COMMAND.search(str(tool_input.get("name") or "")):
+                launches.add(f"{name}:command")
+    return sorted({*hard, *offered, *outside, *launches}), soft
 
 
 def _armed(log):
@@ -293,15 +360,19 @@ def _write(home, parts):
 
 
 def _fetched(pinned, path):
-    """``pinned``'s file at ``path``, from the cache or its URL, checked against its sha256."""
+    """``pinned``'s file at ``path``, from the cache or its URL, checked against its sha256 either way; the cache is
+    written whole, under its name only once complete, so trials grading at once read it whole."""
     cached = CACHE / pinned["sha256"]
-    if not cached.exists():
-        with urllib.request.urlopen(pinned["url"], timeout=60) as response:
+    data = cached.read_bytes() if cached.exists() else b""
+    if hashlib.sha256(data).hexdigest() != pinned["sha256"]:
+        with urllib.request.urlopen(pinned["url"], timeout=120) as response:
             data = response.read()
         if hashlib.sha256(data).hexdigest() != pinned["sha256"]:
             raise RuntimeError(f"{pinned['url']} isn't the file the lock pins")
         CACHE.mkdir(parents=True, exist_ok=True)
-        cached.write_bytes(data)
+        with tempfile.NamedTemporaryFile(dir=CACHE, delete=False) as part:
+            part.write(data)
+        os.replace(part.name, cached)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(cached.read_bytes())
+    path.write_bytes(data)
     return path

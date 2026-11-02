@@ -225,6 +225,15 @@ def test_a_log_line_is_trycuas(sentinel_module):
     assert {"didResignKey", "didResignActive", "front", "user_blocked", "user_type"} <= {line["ev"] for line in lines}
 
 
+def test_a_desktop_notice_without_a_new_desktop_is_no_switch(sentinel_module):
+    run = Run(sentinel_module)
+    run.sentinel.changed("desktop")
+    run.desktop.current = 1
+    run.sentinel.changed("desktop")
+
+    assert [json.loads(line)["onspace"] for line in run.lines if json.loads(line)["ev"] == "space"] == [False]
+
+
 def _guarded(run):
     return [(line["ev"], line["detail"]) for line in map(json.loads, run.lines) if line["ev"].startswith("gui_only")]
 
