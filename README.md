@@ -32,6 +32,7 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 | `tasks/benchlab-listdrag.json` .. `tasks/benchlab-irconsent.json`, `tasks/benchlab-solve-*.json`, `evals/benchlab.toml` | BenchLab in each mode in its computer (`artifacts/check_benchlab/`), and three of its tasks done through the driver and graded with no model. |
 | `tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` | The BenchLab tasks, five runs each, each run with its seed, in both conditions, with a model (below). |
 | `evals/bench-v2.toml`, `evals/bench-v2-trials.txt` | All of Bench v2: each of its task files once, and its 100 trials in trycua's schedule (below). |
+| `evals/foreground.toml`, `evals/background.toml` | Bench v2's task files in one condition each. |
 | `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, and of the grade, offline. |
 
 ## Run it
@@ -163,7 +164,8 @@ their runner adds by default, "You have about 6 minutes and at most 45 turns." t
 `evals/bench-v2-trials.txt` lists Bench v2's 100 trials, one task file per line, in trycua's schedule: the v2 tasks in
 order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, the foreground's then the background's.
 `evals/bench-v2.toml` runs each of those task files once, since an eval runs a task once; a runner that repeats a G
-task's file per line runs them all.
+task's file per line runs them all. `evals/foreground.toml` and `evals/background.toml` are its two halves, one
+condition each.
 
 ```bash
 agent-env run . --task cdb-g02-background

@@ -19,7 +19,9 @@ from test_sentinel import OTHER, Run, sentinel_module  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 PACK = ROOT / "artifacts" / "taskpack"
-TASK = PACK / "taskpack" / "tasks" / "shared" / "cdb-s02"
+TASKS = PACK / "taskpack" / "tasks" / "shared"
+TASK = TASKS / "cdb-s02"
+NODE = pytest.mark.skipif(not shutil.which("node"), reason="trycua's cdb-s04 evaluator serves its site with node")
 LAB = "IR-01"
 
 
@@ -33,9 +35,10 @@ def grader():
     return module
 
 
-def _solved(scratch):
+def _solved(scratch, task="cdb-s02"):
     """The task's workspace as trycua's own tests of their evaluator solve it."""
-    spec = importlib.util.spec_from_file_location("trycua_test_cdb_s02", TASK / "tests" / "test_cdb_s02.py")
+    name = task.replace("-", "_")
+    spec = importlib.util.spec_from_file_location(f"trycua_test_{name}", TASKS / task / "tests" / f"test_{name}.py")
     tests = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tests)
     scratch.mkdir()
@@ -44,14 +47,14 @@ def _solved(scratch):
     return workspace.root
 
 
-def _staged(tmp_path, run, condition="background", solved=False, edit=None, devtools=()):
+def _staged(tmp_path, run, condition="background", solved=False, edit=None, devtools=(), task="cdb-s02"):
     """A trial's snapshot as load_artifact stages it in the grading container."""
     trial = tmp_path / "trial"
-    workspace = trial / "cdb-s02" / "cdb-s02"
+    workspace = trial / task / task
     if solved:
-        shutil.copytree(_solved(tmp_path / "solving"), workspace)
+        shutil.copytree(_solved(tmp_path / "solving", task), workspace)
     else:
-        subprocess.run([sys.executable, "reset/setup.py", "--workspace", str(workspace)], cwd=TASK, check=True)
+        subprocess.run([sys.executable, "reset/setup.py", "--workspace", str(workspace)], cwd=TASKS / task, check=True)
     return _sentinel(trial, run, condition, edit, devtools)
 
 
@@ -68,9 +71,9 @@ def _sentinel(trial, run, condition="background", edit=None, devtools=()):
     return trial
 
 
-def _results(grader, tmp_path, run, **staged):
-    trial = _staged(tmp_path, run, **staged)
-    return {result["id"]: result for result in grader.grade("cdb-s02", trial, PACK, tmp_path)}
+def _results(grader, tmp_path, run, task="cdb-s02", **staged):
+    trial = _staged(tmp_path, run, task=task, **staged)
+    return {result["id"]: result for result in grader.grade(task, trial, PACK, tmp_path)}
 
 
 def test_an_untouched_workspace_fails_trycuas_evaluator_and_a_quiet_trial_holds_the_rest(grader, sentinel_module,
@@ -86,9 +89,10 @@ def test_an_untouched_workspace_fails_trycuas_evaluator_and_a_quiet_trial_holds_
     assert results["user_undisturbed"]["background_completion"] is False
 
 
+@pytest.mark.parametrize("task", ["cdb-s02", "cdb-s03", pytest.param("cdb-s04", marks=NODE)])
 def test_a_solved_trial_that_left_the_user_undisturbed_in_the_gui_is_a_background_completion(grader, sentinel_module,
-                                                                                             tmp_path):
-    results = _results(grader, tmp_path, Run(sentinel_module).trial(), solved=True)
+                                                                                             tmp_path, task):
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(), task=task, solved=True)
 
     assert results["task"]["result"] is True and results["task"]["score"] == 1.0
     assert all(result["result"] for result in results.values())
