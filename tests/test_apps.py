@@ -2,7 +2,7 @@
 runtimes, packages, workspace and launch; the files every app shares are the same in each; and the launcher's commands
 and lock cleanup. BenchLab's app declares trycua's two files at the lock's commit, its data and launch and their modes,
 and starts BenchLab as their runner does. The openbox app makes the session start openbox in place of xfwm4, as trycua's
-Linux session does, keeping the key bindings that close, cycle and switch windows and desktops."""
+Linux session does, without its key bindings."""
 import ast
 import importlib
 import json
@@ -299,22 +299,17 @@ def test_the_session_starts_openbox_in_place_of_xfwm4(tmp_path, monkeypatch):
         openbox.window_manager(None)
 
 
-def test_openbox_keeps_only_the_key_bindings_that_close_cycle_and_switch(tmp_path, monkeypatch):
+def test_openbox_runs_without_its_key_bindings(tmp_path, monkeypatch):
     sys.modules.pop("app", None)
     openbox = load_class(ROOT / "envs" / "openbox" / "app.py", "Openbox", ComputerAppEnvironment)
     module = sys.modules[openbox.__module__]
     rc = tmp_path / "rc.xml"
     rc.write_text(RC_XML)
     monkeypatch.setattr(module, "RC", rc)
-    monkeypatch.setattr(module, "KEYS", ("C-A-Left", "A-F4"))
 
     openbox.key_bindings(None)
 
     kept = rc.read_text()
-    assert [line.strip() for line in kept.splitlines() if "keybind key" in line] == [
-        '<keybind key="C-A-Left">', '<keybind key="A-F4">']
-    assert "<chainQuitKey>C-g</chainQuitKey>" in kept and "kfmclient" not in kept and "scrot" not in kept
-    monkeypatch.setattr(module, "KEYS", ("C-A-Left", "W-d"))
-    rc.write_text(RC_XML)
+    assert "keybind" not in kept and "<chainQuitKey>C-g</chainQuitKey>" in kept and "</keyboard>" in kept
     with pytest.raises(RuntimeError):
         openbox.key_bindings(None)

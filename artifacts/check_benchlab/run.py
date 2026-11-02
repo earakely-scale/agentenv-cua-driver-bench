@@ -4,8 +4,9 @@ having written its state and its ``app_start`` for that mode and seed, which its
 it does the task as an agent does, through the computer's driver over its MCP endpoint, element by element, with the
 values trycua's files derive from the seed, the pointer only where the task needs one, for the grade to score with
 their evaluator; and with ``background``, its interruption brought up by background actions alone, as an agent would in
-trycua's background condition, while the user's window keeps the focus and stays active and in front throughout, as
-under trycua's window manager. ``args``: ``mode``, ``seed``, ``solve`` and ``background``."""
+trycua's background condition, while the user's window keeps the focus and stays active throughout, as under trycua's
+window manager, which still stacks the dialog over it (``user_window_on_top``, reported). ``args``: ``mode``, ``seed``,
+``solve`` and ``background``."""
 import base64
 import json
 import re
@@ -46,7 +47,7 @@ def run(input):
         samples = [line for line in lines if line["ev"] == "s"]
         report["user_kept_focus"] = bool(samples) and not any(line["ev"] in LOST for line in lines) and all(
             sample["key"] and sample["active"] for sample in samples)
-        report["user_window_on_top"] = bool(samples) and not any(sample["above_n"] for sample in samples)
+        report["user_window_on_top"] = "yes" if samples and not any(s["above_n"] for s in samples) else "no"
         report["user_samples"] = {"samples": len(samples), "not_key": sum(not s["key"] for s in samples),
                                   "not_active": sum(not s["active"] for s in samples),
                                   "under_another": sum(bool(s["above_n"]) for s in samples),

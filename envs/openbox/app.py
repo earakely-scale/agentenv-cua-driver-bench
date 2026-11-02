@@ -4,10 +4,10 @@ starts xfwm4, which gives every modal dialog the focus as it maps, even one an a
 where openbox leaves the focus where it was; so the session's window manager becomes openbox.
 
 Two things differ from their session, each because the computer otherwise fails its own conformance probe at build
-(P6, a chord stops selecting in the probe's fixture): openbox keeps the default key bindings an agent would reach for,
-those that close, cycle and switch windows and desktops (``KEYS``), not all 26, since rebinding them all as the
-driver's typing remaps a key holds the keyboard long enough to drop the next chord; and picom doesn't run, since with
-it the chord drops too, while without it the driver captures a window behind another the same."""
+(P6, a chord stops selecting in the probe's fixture): openbox runs without key bindings, since each time the driver's
+typing remaps a key openbox binds them all again, which drops the chord that follows, with as few as 10 of its 26
+under a task's load; and picom doesn't run, since with it the chord drops too, while without it the driver captures a
+window behind another the same."""
 import re
 from pathlib import Path
 
@@ -17,7 +17,6 @@ SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm
 SESSION = Path("/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml")
 RC = Path("/etc/xdg/openbox/rc.xml")
 XFWM4 = '<value type="string" value="xfwm4"/>'
-KEYS = ("A-F4", "A-Escape", "A-space", "A-Tab", "A-S-Tab", "C-A-Left", "C-A-Right", "C-A-Up", "C-A-Down", "C-A-Tab")
 
 
 @computer_app(supports=SUPPORTS)
@@ -33,11 +32,9 @@ class Openbox(ComputerAppEnvironment):
 
     @install_step(scope="system", os="linux")
     def key_bindings(self) -> None:
-        """openbox's default configuration with only the key bindings ``KEYS`` names."""
-        rc = RC.read_text(encoding="utf-8")
-        binds = re.findall(r'<keybind key="([^"]+)">.*?</keybind>', rc, re.S)
-        if set(KEYS) - set(binds):
-            raise RuntimeError(f"{RC} doesn't bind {sorted(set(KEYS) - set(binds))}")
-        RC.write_text(re.sub(r'[ \t]*<keybind key="([^"]+)">.*?</keybind>\n?',
-                             lambda bind: bind.group(0) if bind.group(1) in KEYS else "", rc, flags=re.S),
-                      encoding="utf-8")
+        """openbox's default configuration without its key bindings."""
+        rc, count = re.subn(r'[ \t]*<keybind key="[^"]+">.*?</keybind>\n?', "", RC.read_text(encoding="utf-8"),
+                            flags=re.S)
+        if not count:
+            raise RuntimeError(f"{RC} binds no keys")
+        RC.write_text(rc, encoding="utf-8")

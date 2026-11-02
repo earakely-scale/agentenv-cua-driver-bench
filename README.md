@@ -103,14 +103,18 @@ start openbox in its place. Measured with the sentinel, a dialog brought up by a
 | xfwm4, `prevent_focus_stealing` on | takes the focus, 3 of 3 | 0 of 3 | takes the focus, 3 of 3 |
 | openbox | 0 of 3 | 0 of 3 | takes the focus, 3 of 3 |
 
+openbox still stacks a background app's new dialog, with the window it belongs to, over the user's window, so in the
+background condition IR-01, IR-03 and IR-04 keep the user's focus and activation but still break `window_raised`: on
+macOS a background app's sheet stays behind the active app. `tasks/benchlab-background-ir-0*.json` check the focus and
+report the stacking.
+
 Two things differ from trycua's session, each because without the change the computer fails its own conformance probe
 at build (P6, a chord stops selecting in the probe's fixture, every time):
 
-- openbox keeps 10 of its 26 default key bindings, those that close, cycle and switch windows and desktops (Alt+F4,
-  Alt+Escape, Alt+Space, Alt+Tab, Alt+Shift+Tab, Ctrl+Alt+arrows, Ctrl+Alt+Tab), as xfwm4's shortcuts did. Each time
-  the driver types a character the keyboard map lacks, it remaps a key, and openbox binds every key binding again;
-  with all 26 that takes long enough to drop the chord that follows. The ones left out launch programs this computer
-  doesn't have (Super+E, Print) or move windows between desktops (Shift+Alt+arrows, Super+F1..F4, Super+Shift+arrows).
+- openbox runs without key bindings (its defaults close, cycle and switch windows with Alt+F4, Alt+Tab, Ctrl+Alt+arrows
+  and the like, and launch programs this computer doesn't have). Each time the driver types a character the keyboard
+  map lacks, it remaps a key, and openbox binds all its keys again, long enough to drop the chord that follows; with 10
+  of the 26 it still does under a task's load, and with none it never does.
 - picom doesn't run. With it the chord drops too, and without it the driver captures a window that's behind another
   the same, so nothing the bench measures changes.
 

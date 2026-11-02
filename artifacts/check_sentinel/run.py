@@ -137,7 +137,7 @@ def _macro_editor():
         time.sleep(1)
     editor = _window(lambda wm_class, title: title.endswith("LibreOffice Basic"))
     time.sleep(SETTLE_S)
-    _sh("xdotool", "windowactivate", "--sync", str(editor), "key", "--clearmodifiers", "alt+F4")
+    _sh("wmctrl", "-i", "-c", hex(editor))
 
 
 def _devtools(window):
