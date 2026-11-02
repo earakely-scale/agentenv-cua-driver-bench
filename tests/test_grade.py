@@ -1,8 +1,10 @@
 """The bench's grade, offline, with trycua's files from the fetched task pack in its cache: trycua's evaluator runs on the
 workspace the task's app returns, here the task's untouched one, which fails; GUI-only holds only for a trajectory of
-the computer env's tools, with no code in them, and no violation from the guard; and the background condition adds
-trycua's A22 criteria, the foreground none. Also its table: every trycua file it fetches, at the lock's commit."""
+the computer env's tools, with no code in them, and no violation from the guard; the background condition adds
+trycua's A22 criteria, the foreground none; and a workspace solved as trycua's own tests solve it, by a trial that left
+the user undisturbed in the GUI, is a background completion. Also its table: every trycua file it fetches, at the lock's commit."""
 import importlib
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -11,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from test_sentinel import Run, sentinel_module  # noqa: F401
+from test_sentinel import OTHER, Run, sentinel_module  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 PACK = ROOT / "artifacts" / "taskpack"
@@ -44,9 +46,12 @@ def grader(tmp_path, monkeypatch):
         sys.modules.pop("verify", None)
 
 
-def _home(tmp_path, run, condition="background"):
+def _home(tmp_path, run, condition="background", solved=False):
     home = tmp_path / "home"
-    subprocess.run([sys.executable, "reset/setup.py", "--workspace", str(home / "cdb-s02")], cwd=TASK, check=True)
+    if solved:
+        shutil.copytree(_solved(tmp_path / "solving"), home / "cdb-s02")
+    else:
+        subprocess.run([sys.executable, "reset/setup.py", "--workspace", str(home / "cdb-s02")], cwd=TASK, check=True)
     log = home / ".bench-sentinel" / "sentinel.jsonl"
     log.parent.mkdir(parents=True)
     lines = [json.loads(line) for line in run.lines]
@@ -55,8 +60,19 @@ def _home(tmp_path, run, condition="background"):
     return home
 
 
-def _results(grader, tmp_path, run, trajectory, condition="background"):
-    home = _home(tmp_path, run, condition)
+def _solved(scratch):
+    """The task's workspace as trycua's own tests of their evaluator solve it."""
+    spec = importlib.util.spec_from_file_location("trycua_test_cdb_s02", TASK / "tests" / "test_cdb_s02.py")
+    tests = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tests)
+    scratch.mkdir()
+    workspace = tests.Workspace(scratch)
+    workspace.complete()
+    return workspace.root
+
+
+def _results(grader, tmp_path, run, trajectory, condition="background", solved=False):
+    home = _home(tmp_path, run, condition, solved)
     return {result["id"]: result for result in grader.grade("cdb-s02", home, tmp_path / "scratch", trajectory)}
 
 
@@ -68,6 +84,29 @@ def test_an_untouched_workspace_fails_trycuas_evaluator_and_a_quiet_gui_only_tri
     assert results["gui_only"] == {**results["gui_only"], "result": True, "violations": [], "trajectory_checked": True}
     assert results["user_undisturbed"]["result"] is True and results["user_undisturbed"]["unmeasured"] == []
     assert results["user_undisturbed"]["background_completion"] is False
+
+
+def test_a_solved_trial_that_left_the_user_undisturbed_in_the_gui_is_a_background_completion(
+        grader, sentinel_module, tmp_path):
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(), [[CLICK]], solved=True)
+
+    assert results["task"]["result"] is True and results["task"]["score"] == 1.0
+    assert all(result["result"] for result in results.values())
+    assert results["user_undisturbed"]["background_completion"] is True
+
+
+def test_a_solved_trial_that_took_the_users_focus_is_not_a_background_completion(grader, sentinel_module, tmp_path):
+    def steal(run):
+        run.desktop.active_window = run.desktop.focus_window = OTHER
+        run.sentinel.focus_changed(False)
+        run.sentinel.changed("active", OTHER)
+
+    results = _results(grader, tmp_path, Run(sentinel_module).trial(steal), [[CLICK]], solved=True)
+
+    assert results["task"]["result"] is True and results["gui_only"]["result"] is True
+    assert results["user_undisturbed"]["result"] is False
+    assert {key for key, held in results["user_undisturbed"]["criteria"].items() if not held} == {
+        "key_focus", "typing", "activation"}
 
 
 @pytest.mark.parametrize("call, violation", [
