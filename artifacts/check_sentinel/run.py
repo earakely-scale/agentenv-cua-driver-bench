@@ -214,11 +214,16 @@ def _title(window):
 
 
 def _frame(window):
-    """The window's outer frame, its decorations included: x, y, width and height."""
-    shell = dict(line.split("=", 1) for line in _sh("xdotool", "getwindowgeometry", "--shell", str(window)).split())
-    left, right, top, bottom = _numbers(_sh("xprop", "-id", hex(window), "_NET_FRAME_EXTENTS")) or [0, 0, 0, 0]
-    return (int(shell["X"]) - left, int(shell["Y"]) - top, int(shell["WIDTH"]) + left + right,
-            int(shell["HEIGHT"]) + top + bottom)
+    """The window's outer frame, the window manager's with its decorations: x, y, width and height."""
+    return tuple(int(number) for number in subprocess.run([str(APP / "venv" / "bin" / "python"), "-c", f"""
+from Xlib import display
+x = display.Display()
+node = x.create_resource_object("window", {window})
+while (parent := node.query_tree().parent).id != x.screen().root.id:
+    node = parent
+geometry = node.get_geometry()
+print(geometry.x, geometry.y, geometry.width + 2 * geometry.border_width, geometry.height + 2 * geometry.border_width)
+"""], capture_output=True, text=True, check=True, timeout=30).stdout.split())
 
 
 def _witness():

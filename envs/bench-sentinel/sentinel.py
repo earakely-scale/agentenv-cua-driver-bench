@@ -109,9 +109,15 @@ class Desktop:
     def window_desktop(self, window: int) -> int | None:
         return (self._prop(window, "_NET_WM_DESKTOP") or [None])[0]
 
-    def frame_extents(self, window: int) -> list[int]:
-        """The window manager's decorations around ``window``: left, right, top and bottom."""
-        return (self._prop(window, "_NET_FRAME_EXTENTS") or [0, 0, 0, 0])[:4]
+    def outer(self, window: int) -> tuple[int, int, int, int]:
+        """The window's outer frame, x, y, width and height: its ancestor that's a child of the root, the window
+        manager's frame around it with its decorations."""
+        node = self.x.create_resource_object("window", window)
+        while (parent := node.query_tree().parent).id != self.root.id:
+            node = parent
+        geometry = node.get_geometry()
+        border = 2 * geometry.border_width
+        return geometry.x, geometry.y, geometry.width + border, geometry.height + border
 
     def workarea(self) -> list[int] | None:
         """The first desktop's area that docks and panels leave, x, y, width and height."""
@@ -486,10 +492,11 @@ def _await_managed(desktop: Desktop, timeout_s: float = 30.0) -> None:
 
 def _fit_frame(root: tk.Tk, desktop: Desktop, frame: tuple[int, int, int, int]) -> None:
     """Size the window so that its outer frame, the window manager's decorations included, is ``frame``, as macOS's
-    frame is the outer one."""
-    left, right, top, bottom = desktop.frame_extents(desktop.main())
+    frame is the outer one; the window manager already puts that frame at its place."""
     x, y, width, height = frame
-    root.geometry(f"{width - left - right}x{height - top - bottom}+{x}+{y}")
+    _, _, outer_width, outer_height = desktop.outer(desktop.main())
+    root.geometry(f"{width - (outer_width - root.winfo_width())}x{height - (outer_height - root.winfo_height())}"
+                  f"+{x}+{y}")
     root.update()
 
 
