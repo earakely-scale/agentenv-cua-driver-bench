@@ -1,8 +1,8 @@
 """The bench task apps, read as a computer reads them at put: each declares the task's files at the lock's commit, its
 runtimes, packages, workspace and launch; the files every app shares are the same in each; and the launcher's commands
 and lock cleanup. BenchLab's app declares trycua's two files at the lock's commit, its data and launch and their modes,
-and starts BenchLab as their runner does. The openbox app makes the session start openbox in place of xfwm4 and runs
-picom, as trycua's Linux session does."""
+and starts BenchLab as their runner does. The openbox app makes the session start openbox in place of xfwm4, as trycua's
+Linux session does."""
 import ast
 import importlib
 import json
@@ -262,7 +262,7 @@ SESSION_XML = """<channel name="xfce4-session" version="1.0">
 """
 
 
-def test_the_session_starts_openbox_in_place_of_xfwm4_and_picom_as_trycua_runs_it(tmp_path, monkeypatch):
+def test_the_session_starts_openbox_in_place_of_xfwm4(tmp_path, monkeypatch):
     sys.modules.pop("app", None)
     openbox = load_class(ROOT / "envs" / "openbox" / "app.py", "Openbox", ComputerAppEnvironment)
     module = sys.modules[openbox.__module__]
@@ -274,8 +274,6 @@ def test_the_session_starts_openbox_in_place_of_xfwm4_and_picom_as_trycua_runs_i
     openbox.window_manager(None)
 
     assert session.read_text() == SESSION_XML.replace('value="xfwm4"', 'value="openbox"')
-    assert {"openbox", "picom"} <= set(declared.install["packages"]["apt"])
-    assert [(s["name"], s["command"].split()[-5:]) for s in declared.install["services"]] == [
-        ("picom", ["picom", "--backend", "xrender", "--config", "/dev/null"])]
+    assert declared.install["packages"]["apt"] == ["openbox"]
     with pytest.raises(RuntimeError):
         openbox.window_manager(None)

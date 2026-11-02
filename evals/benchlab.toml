@@ -9,4 +9,7 @@ tasks = [
   "benchlab-solve-ir-01",
   "benchlab-solve-mb-10",
   "benchlab-solve-mb-11",
+  "benchlab-background-ir-01",
+  "benchlab-background-ir-03",
+  "benchlab-background-ir-04",
 ]

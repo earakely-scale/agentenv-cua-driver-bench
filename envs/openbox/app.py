@@ -1,21 +1,20 @@
 """The window manager trycua's Linux bench runs in, as a computer app on every bench computer: their session starts
-openbox, with its default configuration, and picom (``macos_bench/launch/linux_session.py``). The base computer's
-XFCE session starts xfwm4, which gives every modal dialog the focus as it maps, even one an app maps without focus in
-the background, where openbox leaves the focus where it was; so the session's window manager becomes openbox, and picom
-runs as trycua runs it."""
+openbox, with its default configuration (``macos_bench/launch/linux_session.py``). The base computer's XFCE session
+starts xfwm4, which gives every modal dialog the focus as it maps, even one an app maps without it in the background,
+where openbox leaves the focus where it was; so the session's window manager becomes openbox. Their session also runs
+picom, which this computer doesn't: with it, the computer fails its own conformance probe at build (a chord stops
+selecting in the probe's fixture), and without it the driver captures a window that's behind another the same."""
 from pathlib import Path
 
-from agentenv_protocol.computer import (ComputerAppEnvironment, Packages, Service, computer_app, install_step,
-                                        linux)
+from agentenv_protocol.computer import ComputerAppEnvironment, Packages, computer_app, install_step, linux
 
 SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm64"]}]
 SESSION = Path("/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml")
 XFWM4 = '<value type="string" value="xfwm4"/>'
-PICOM = "/usr/local/bin/start-desktop with-x picom --backend xrender --config /dev/null"
 
 
 @computer_app(supports=SUPPORTS)
-@linux(packages=Packages(apt=["openbox", "picom"]), services=[Service(name="picom", command=PICOM)])
+@linux(packages=Packages(apt=["openbox"]))
 class Openbox(ComputerAppEnvironment):
     @install_step(scope="system", os="linux")
     def window_manager(self) -> None:
