@@ -2,7 +2,8 @@
 # publish.sh: rebuild the dataset's tables, card, figures, hero and web videos, and the replay Space, from every trial
 # the dataset holds, and upload them. Run it in the bench's checkout with HF_TOKEN set (tools/fleet/hfjob.py does), on
 # a machine with ffmpeg; it needs some GB of disk for the recordings. HF_REPO picks the dataset and Space (default
-# earakely-scale/CuaDriverBench-AgentEnv), WORK where it works (default ~/publish), JOBS its parallel video encodes.
+# earakely-scale/CuaDriverBench-AgentEnv), WORK where it works (default ~/publish), JOBS its parallel video encodes;
+# DRY_RUN=1 builds everything under WORK and uploads nothing.
 set -euo pipefail
 bench=${BENCH:-$(cd "$(dirname "$0")/../.." && pwd)}
 work=${WORK:-$HOME/publish}
@@ -19,6 +20,7 @@ PY
 "$python" "$bench/tools/dataset/tables.py" "$bench" "$work/dataset"
 "$python" "$bench/tools/space/build.py" "$work/dataset" "$work/out" --jobs "${JOBS:-8}"
 "$python" "$bench/tools/dataset/card.py" "$work/out" "$work/dataset"
+[ -n "${DRY_RUN:-}" ] && { echo "built in $work; nothing uploaded"; exit 0; }
 "$python" - "$work/dataset" "$work/out/space" <<'PY'
 import os, sys
 from huggingface_hub import HfApi
