@@ -5,8 +5,7 @@ their scan of the agent's tool calls after it. Each of trycua's files is fetched
 against its sha256 (``TRYCUA``, written by ``python tools/taskpack.py grader``), and kept in a cache by its sha256.
 
 All of its results must hold: ``task``, their evaluator passed; ``gui_only``, the guard logged no violation and the
-agent called no tool but the computer env's and the skill and tool search ones claude-code needs, with no code in an
-input; and in the background condition ``user_undisturbed``, all eight A22 criteria measured and held. Together they are
+agent called no tool but the computer env's and claude-code's skill tool, with no code in an input; and in the background condition ``user_undisturbed``, all eight A22 criteria measured and held. Together they are
 trycua's background completion, and in the foreground their GUI-only pass. A trial whose agent's trajectory the verifier
 isn't given, or holds no events, isn't GUI-only, since it can't be checked."""
 import asyncio
@@ -25,8 +24,8 @@ from agentenv_protocol import client
 SENTINEL = "bench-sentinel"
 LOG = Path(".bench-sentinel/sentinel.jsonl")
 DATA_OBJECTS = "urn:agentenv:data-objects/v1"
-#: The built-in tools besides the computer env's that a GUI-only claude-code keeps: its skills and its tool search.
-ALLOWED_BUILTINS = ("Skill", "ToolSearch")
+#: The built-in tools besides the computer env's that a GUI-only claude-code keeps: its skills.
+ALLOWED_BUILTINS = ("Skill",)
 CACHE = Path.home() / ".cache" / "agentenv-cua-driver-bench"
 DATA_TIMEOUT_S = 300
 

@@ -2,3 +2,4 @@
 /.taskpack-*
 __pycache__/
 .pytest_cache/
+/tasks/cdb-g0*-*.json

@@ -73,8 +73,9 @@ def test_an_untouched_workspace_fails_trycuas_evaluator_and_a_quiet_gui_only_tri
 @pytest.mark.parametrize("call, violation", [
     (_tool("Bash", command="ls"), "builtin:Bash"),
     (_tool("Read", file_path="/etc/passwd"), "builtin:Read"),
+    (_tool("ToolSearch", query="terminal"), "builtin:ToolSearch"),
     (_tool("mcp__desktop-s02__type_text", text="bash -c 'cat ~/cdb-s02/x'"), "mcp__desktop-s02__type_text:bash -c"),
-], ids=["a forbidden built-in", "any other built-in", "code in a tool input"])
+], ids=["a forbidden built-in", "any other built-in", "tool search", "code in a tool input"])
 def test_a_tool_call_out_of_the_gui_fails_gui_only(grader, sentinel_module, tmp_path, call, violation):
     trajectory = [{"format": "claude-code-stream-json/1", "events": [CLICK, call]}]
 
@@ -83,8 +84,8 @@ def test_a_tool_call_out_of_the_gui_fails_gui_only(grader, sentinel_module, tmp_
     assert gui_only["result"] is False and violation in gui_only["violations"]
 
 
-def test_skills_and_tool_search_are_gui_only(grader, sentinel_module, tmp_path):
-    trajectory = [[_tool("Skill", skill="computer"), _tool("ToolSearch", query="click"), CLICK]]
+def test_skills_are_gui_only(grader, sentinel_module, tmp_path):
+    trajectory = [[_tool("Skill", skill="computer"), CLICK]]
 
     assert _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]["result"] is True
 
