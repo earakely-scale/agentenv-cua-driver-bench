@@ -22,10 +22,10 @@ CACHE = Path.home() / ".cache" / "agentenv-cua-driver-bench"
 _COMMAND = re.compile(r"[;|&$`<>]|^[/.~]")
 
 TRYCUA = {
- "commit": "6c0a8c3bb2d32580c3231592f60739c33edc567a",
+ "commit": "22a67eacd15dc71811e330ed88951dd615bb395d",
  "bench_v2.py": {
-  "url": "https://raw.githubusercontent.com/trycua/cua/6c0a8c3bb2d32580c3231592f60739c33edc567a/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
-  "sha256": "c3f73c0360dd4369c5e21458e23c0098f36a27b21d948e8c3bd25aabe6223a49"
+  "url": "https://raw.githubusercontent.com/trycua/cua/22a67eacd15dc71811e330ed88951dd615bb395d/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
+  "sha256": "a0127815b9428dbc68570069ab16e2cb83905c301c5b87a852df98e4099cc0d3"
  }
 }
 

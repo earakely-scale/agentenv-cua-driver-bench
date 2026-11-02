@@ -1,9 +1,9 @@
 """The trials of the bench's GUI-only tasks, each in both of trycua's conditions: prompted as trycua's runner prompts
-them, with the task's brief, its workspace and, in the background, their background brief, and with their system
-prompt for a Linux desktop, all checked against the fetched task pack; with the sentinel in that condition,
-claude-code with no built-in tools but Skill and Read, the sentinel armed just around the prompt within the task's time and
-turns; and its grade, whatever became of the agent: in a container of its own with no network, on the trial's snapshot,
-and the trajectory's half outside."""
+them, with the task's brief, its workspace and, in the background, their background brief, and with their system prompt
+for a Linux desktop, a browser task's allowing its localhost site, all checked against the fetched task pack; with the
+sentinel in that condition, claude-code with no built-in tools but Skill and Read, the sentinel armed just around the
+prompt within the task's time and turns; and its grade, whatever became of the agent: in a container of its own with
+no network, on the trial's snapshot, and the trajectory's half outside."""
 import ast
 import importlib.util
 import json
@@ -39,13 +39,16 @@ def test_each_trial_is_prompted_as_trycuas_runner_prompts_it(trycua, probe, cond
         "configured `cua` MCP server", "configured computer-use MCP server").strip()
     expected = trycua.brief_for(f"{brief}\n\nYour workspace directory is `/home/user/{task}`.", condition)
     runner = ast.parse((PACK / "runner" / "claude_arms.py").read_text())
-    [system] = [ast.literal_eval(node.value) for node in runner.body if isinstance(node, ast.Assign)
-                and any(getattr(target, "id", None) == "SYSTEM_PROMPT" for target in node.targets)]
+    [macos] = [ast.literal_eval(node.value) for node in runner.body if isinstance(node, ast.Assign)
+               and any(getattr(target, "id", None) == "MACOS_SYSTEM_PROMPT" for target in node.targets)]
     limits = json.loads((PACK / "probes" / probe.upper() / "task.json").read_text())
+    system = macos.replace("a macOS desktop", "a Linux desktop")
+    if limits.get("browser"):
+        system = system.replace("Do not use the network.", "Do not use the internet; the task's localhost site is allowed.")
     trial = _trial(probe, condition)
 
     assert trial["task"]["prompt"] == expected
-    assert trial["agent"]["system_prompt"] == system.replace("a macOS desktop", "a Linux desktop")
+    assert trial["agent"]["system_prompt"] == system
     assert (trial["task"]["timeout_seconds"], trial["task"]["max_turns"]) == (limits["timeout_s"], limits["max_turns"])
 
 

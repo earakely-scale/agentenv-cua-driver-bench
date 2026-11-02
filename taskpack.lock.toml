@@ -2,8 +2,8 @@
 # at this commit of trycua's repo, under its "to", and sha256 over their MANIFEST.sha256. Repin with
 # python tools/taskpack.py pin <commit>.
 repo = "trycua/cua"
-commit = "6c0a8c3bb2d32580c3231592f60739c33edc567a"
-sha256 = "6ba06e38446b73eb34bfb19d3802893b5dd19865cf5bf08a9a4749ba01ca7c02"
+commit = "22a67eacd15dc71811e330ed88951dd615bb395d"
+sha256 = "3e3474d20e0210b973d05fde7041cad1ef3ad6d12ddaba36fc87f9e1e57570d8"
 
 [[include]]
 from = "libs/cua-driver-bench/LICENSE"
