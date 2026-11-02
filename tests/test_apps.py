@@ -1,7 +1,8 @@
 """The bench task apps, read as a computer reads them at put: each declares the task's files at the lock's commit, its
 runtimes, packages, workspace and launch; the files every app shares are the same in each; and the launcher's commands
 and lock cleanup. BenchLab's app declares trycua's two files at the lock's commit, its data and launch and their modes,
-and starts BenchLab as their runner does."""
+and starts BenchLab as their runner does. The openbox app makes the session start openbox in place of xfwm4 and runs
+picom, as trycua's Linux session does."""
 import ast
 import importlib
 import json
@@ -244,3 +245,37 @@ def test_benchlab_starts_as_trycuas_runner_starts_it_with_a_throwaway_home(lab, 
     assert started["argv"] == ["/usr/bin/python3", str(lab.LAB), "--mode", "irmodal", "--seed", "517139",
                                "--state", str(data / "state.json"), "--events", str(data / "events.jsonl")]
     assert data.is_dir() and started["home"] != str(tmp_path)
+
+
+SESSION_XML = """<channel name="xfce4-session" version="1.0">
+  <property name="sessions" type="empty">
+    <property name="Failsafe" type="empty">
+      <property name="Client0_Command" type="array">
+        <value type="string" value="xfwm4"/>
+      </property>
+      <property name="Client1_Command" type="array">
+        <value type="string" value="xfsettingsd"/>
+      </property>
+    </property>
+  </property>
+</channel>
+"""
+
+
+def test_the_session_starts_openbox_in_place_of_xfwm4_and_picom_as_trycua_runs_it(tmp_path, monkeypatch):
+    sys.modules.pop("app", None)
+    openbox = load_class(ROOT / "envs" / "openbox" / "app.py", "Openbox", ComputerAppEnvironment)
+    module = sys.modules[openbox.__module__]
+    session = tmp_path / "xfce4-session.xml"
+    session.write_text(SESSION_XML)
+    monkeypatch.setattr(module, "SESSION", session)
+    declared = openbox.declaration().os["linux"]
+
+    openbox.window_manager(None)
+
+    assert session.read_text() == SESSION_XML.replace('value="xfwm4"', 'value="openbox"')
+    assert {"openbox", "picom"} <= set(declared.install["packages"]["apt"])
+    assert [(s["name"], s["command"].split()[-5:]) for s in declared.install["services"]] == [
+        ("picom", ["picom", "--backend", "xrender", "--config", "/dev/null"])]
+    with pytest.raises(RuntimeError):
+        openbox.window_manager(None)

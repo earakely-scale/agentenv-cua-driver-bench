@@ -302,7 +302,8 @@ def test_the_app_launches_the_sentinel_at_boot_and_keeps_its_log_as_data(sentine
         app.BenchSentinel.Settings(condition="sideways")
 
 
-def test_each_task_computer_has_the_sentinel():
+def test_each_task_computer_has_the_sentinel_and_every_computer_trycuas_window_manager():
     for task, app in (("s02", "cdb-s02"), ("s03", "cdb-s03"), ("s04", "cdb-s04"), ("benchlab", "benchlab")):
         env = tomllib.loads((ROOT / "envs" / f"desktop-{task}" / "env.toml").read_text())
-        assert env["apps"] == [app, "bench-sentinel"]
+        assert env["apps"] == ["openbox", app, "bench-sentinel"]
+    assert tomllib.loads((ROOT / "envs" / "desktop" / "env.toml").read_text())["apps"] == ["openbox"]
