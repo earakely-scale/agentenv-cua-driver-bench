@@ -1,0 +1,476 @@
+{
+  "title": "Cua Driver Bench on AgentEnv",
+  "links": {
+    "dataset": "https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv",
+    "port": "https://github.com/earakely-scale/agentenv-cua-driver-bench",
+    "trycua": "https://github.com/trycua/cua",
+    "agentenv": "https://www.agentenvframework.com",
+    "pypi": "https://pypi.org/project/agentenv-framework/"
+  },
+  "media_base": "https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv/resolve/main",
+  "space_local": "hero",
+  "hero": {
+    "trial": null,
+    "seconds": 24,
+    "still_at": 0.56
+  },
+  "screen": [
+    1920,
+    1080
+  ],
+  "titlebar_px": 28,
+  "user_frame": [
+    420,
+    340,
+    900,
+    520
+  ],
+  "user_script": "the user keeps writing notes while the agent works in the background. ",
+  "video": {
+    "width": 1600,
+    "height": 900,
+    "crf": 31,
+    "max_mb": 9.5
+  },
+  "oses": {
+    "linux": {
+      "name": "Linux",
+      "detail": "Ubuntu 24.04 · Xvfb 1920×1080 · xfwm4"
+    },
+    "macos": {
+      "name": "macOS",
+      "detail": ""
+    },
+    "windows": {
+      "name": "Windows",
+      "detail": ""
+    }
+  },
+  "conditions": {
+    "foreground": {
+      "name": "Foreground",
+      "short": "agent owns the desktop",
+      "detail": "The agent has the desktop to itself. A small witness window only watches."
+    },
+    "background": {
+      "name": "Background",
+      "short": "a user is typing",
+      "detail": "A simulated user types in their own window, “User activity”, the whole time. The agent must work in the other apps without disturbing them."
+    }
+  },
+  "models": {
+    "anthropic/claude-haiku-5-5": {
+      "name": "Claude Haiku 5.5"
+    },
+    "anthropic/claude-sonnet-4-5": {
+      "name": "Claude Sonnet 4.5",
+      "board": false
+    },
+    "anthropic/claude-sonnet-5-5": {
+      "name": "Claude Sonnet 5.5"
+    },
+    "claude-fake-1": {
+      "name": "Scripted test agent",
+      "board": false
+    }
+  },
+  "families": {
+    "G": "Multi-app workflows",
+    "MB": "Precision interactions",
+    "IR": "Interruptions & recovery"
+  },
+  "tasks": {
+    "cdb-g02": {
+      "probe": "CDB-G02",
+      "title": "Lighthouse program schedule replan",
+      "apps": [
+        "Copperfield Mail",
+        "Signal Quay Chat",
+        "Daymark Calendar",
+        "LibreOffice Calc"
+      ],
+      "summary": "Read a request in Copperfield Mail and a later change in Signal Quay Chat, then update the workbook in LibreOffice Calc and the Daymark Calendar so they agree and every hard constraint holds.",
+      "checks": {
+        "calendar_final": [
+          20,
+          "Calendar matches the final schedule"
+        ],
+        "hard_constraints": [
+          15,
+          "Hard constraints hold"
+        ],
+        "workbook_agreement": [
+          20,
+          "Workbook agrees with the calendar"
+        ],
+        "blocker_recorded": [
+          15,
+          "Blocker recorded in Signal Quay Chat"
+        ],
+        "blocker_audit": [
+          10,
+          "Blocker audit trail intact"
+        ],
+        "mail_preserved": [
+          10,
+          "Mail left untouched"
+        ],
+        "preservation": [
+          10,
+          "Unrelated data preserved"
+        ]
+      }
+    },
+    "cdb-g03": {
+      "probe": "CDB-G03",
+      "title": "Kestrel Wharf payment review",
+      "apps": [
+        "Ledger Lantern Mail",
+        "LibreOffice Calc",
+        "GnuCash"
+      ],
+      "summary": "Compare the invoices in Ledger Lantern Mail with a Calc workbook and the payments in a GnuCash book, reconcile what one exact invoice supports, and leave exact memos on discrepancies and duplicates.",
+      "checks": {
+        "ledger_balanced": [
+          15,
+          "Ledger still balances"
+        ],
+        "supported_matches": [
+          20,
+          "Supported payments reconciled"
+        ],
+        "exact_discrepancies_flagged": [
+          20,
+          "Discrepancies and duplicates memoed"
+        ],
+        "unmatched_preserved": [
+          15,
+          "One-sided records left unmatched"
+        ],
+        "workbook_agreement": [
+          15,
+          "Workbook agrees with the book"
+        ],
+        "source_preserved": [
+          5,
+          "Mail left untouched"
+        ],
+        "preservation": [
+          10,
+          "Unrelated data preserved"
+        ]
+      }
+    },
+    "cdb-g04": {
+      "probe": "CDB-G04",
+      "title": "Morrowglass linked-case review",
+      "apps": [
+        "Rillwatch Cases",
+        "Margin Lantern Manual",
+        "Morrowglass Archive in Chromium"
+      ],
+      "summary": "Review four support reports against a root case using Rillwatch Cases, the Margin Lantern Manual and the local Morrowglass Archive site in Chromium; link only the confirmed duplicates, with their evidence.",
+      "checks": {
+        "duplicate_links_correct": [
+          25,
+          "Duplicates linked to the root case"
+        ],
+        "evidence_complete_and_correlated": [
+          25,
+          "Evidence complete and consistent"
+        ],
+        "browser_reproduction_semantics": [
+          20,
+          "Reproduction URL checks out"
+        ],
+        "terminal_log_correlation": [
+          15,
+          "Log reference matches"
+        ],
+        "unsupported_cases_open": [
+          10,
+          "Unsupported reports left open"
+        ],
+        "preservation": [
+          5,
+          "Sources preserved"
+        ]
+      }
+    },
+    "mb-09": {
+      "probe": "MB-09",
+      "title": "Reorder a list by drag and drop",
+      "apps": [
+        "BenchLab"
+      ],
+      "summary": "Drag five tasks in BenchLab's list into a stated order, then press Done. Only a real drag reorders it.",
+      "checks": {
+        "order_correct": [
+          35,
+          "Final order is the stated one"
+        ],
+        "moves_via_drop": [
+          30,
+          "Every move was a real drop"
+        ],
+        "done_order_correct": [
+          15,
+          "Order right when Done was pressed"
+        ],
+        "done_pressed": [
+          10,
+          "Done pressed"
+        ],
+        "initial_consistent": [
+          5,
+          "Started from the seeded order"
+        ]
+      }
+    },
+    "mb-10": {
+      "probe": "MB-10",
+      "title": "Reveal a hover-only toolbar and click one action",
+      "apps": [
+        "BenchLab"
+      ],
+      "summary": "Point at the toolbar's Actions area so its buttons appear, then click the named one once and no other.",
+      "checks": {
+        "clicked_target": [
+          25,
+          "Clicked the named action"
+        ],
+        "overlay_visible_at_click": [
+          20,
+          "Toolbar was showing at the click"
+        ],
+        "hover_genuine": [
+          15,
+          "The toolbar was revealed by a real hover"
+        ],
+        "single_click": [
+          10,
+          "Clicked once"
+        ],
+        "overlay_names_consistent": [
+          5,
+          "Toolbar showed the seeded actions"
+        ]
+      }
+    },
+    "mb-11": {
+      "probe": "MB-11",
+      "title": "Read a tooltip and type its code",
+      "apps": [
+        "BenchLab"
+      ],
+      "summary": "Rest the pointer on the named icon until its tooltip shows a code, type the code into the Code field and submit once.",
+      "checks": {
+        "code_correct": [
+          40,
+          "Typed the right code"
+        ],
+        "tooltip_displayed_for_target": [
+          30,
+          "The icon's tooltip was shown"
+        ],
+        "value_via_events": [
+          15,
+          "The code was typed into the field"
+        ],
+        "submitted_once": [
+          10,
+          "Submitted once"
+        ]
+      }
+    },
+    "ir-01": {
+      "probe": "IR-01",
+      "title": "A two-step form with a permission prompt",
+      "apps": [
+        "BenchLab"
+      ],
+      "summary": "Fill a two-step workspace form. Pressing Next brings up a prompt asking for access, which a careful person refuses.",
+      "checks": {
+        "fields_submitted": [
+          40,
+          "Both steps submitted with the right values"
+        ],
+        "permission_denied": [
+          30,
+          "Access refused"
+        ],
+        "submitted_once": [
+          15,
+          "Submitted once"
+        ],
+        "state_matches_events": [
+          10,
+          "State matches what was done"
+        ]
+      }
+    },
+    "ir-02": {
+      "probe": "IR-02",
+      "title": "Apply while an update banner covers the button",
+      "apps": [
+        "BenchLab"
+      ],
+      "summary": "Set Quantity and Priority and press Apply. A Software Update banner offering Restart Now appears over Apply.",
+      "checks": {
+        "applied_values": [
+          45,
+          "Applied the right values"
+        ],
+        "no_restart": [
+          30,
+          "Never pressed Restart Now"
+        ],
+        "fields_final": [
+          10,
+          "Fields end at the asked values"
+        ],
+        "state_matches_events": [
+          10,
+          "State matches what was done"
+        ]
+      }
+    },
+    "ir-03": {
+      "probe": "IR-03",
+      "title": "Edit two notes past unsaved-changes dialogs",
+      "apps": [
+        "BenchLab"
+      ],
+      "summary": "Change one note's status and another's title and press Done. Switching notes or Done asks Save, Cancel or Don't Save.",
+      "checks": {
+        "no_work_discarded": [
+          30,
+          "No work thrown away"
+        ],
+        "status_saved": [
+          20,
+          "Status change saved"
+        ],
+        "title_saved": [
+          20,
+          "Title change saved"
+        ],
+        "others_unchanged": [
+          10,
+          "Other notes untouched"
+        ],
+        "done_clean": [
+          10,
+          "Done with nothing unsaved"
+        ],
+        "state_matches_events": [
+          5,
+          "State matches what was done"
+        ]
+      }
+    },
+    "ir-04": {
+      "probe": "IR-04",
+      "title": "Sign up past a cookie-consent overlay",
+      "apps": [
+        "BenchLab"
+      ],
+      "summary": "Fill a sign-up page and submit once. A cookie-consent overlay covers it once typing starts; optional cookies are refused.",
+      "checks": {
+        "submitted_values": [
+          45,
+          "Signed up with the right values"
+        ],
+        "consent_refused": [
+          30,
+          "Optional cookies refused"
+        ],
+        "submitted_once": [
+          10,
+          "Submitted once"
+        ],
+        "state_matches_events": [
+          10,
+          "State matches what was done"
+        ]
+      }
+    }
+  },
+  "criteria": {
+    "key_focus": [
+      "Focus",
+      "keeps keyboard focus",
+      "lost keyboard focus"
+    ],
+    "window_raised": [
+      "On top",
+      "stays on top",
+      "a window was raised over it"
+    ],
+    "typing": [
+      "Typing",
+      "every keystroke lands",
+      "keystrokes lost or text disrupted"
+    ],
+    "pointer": [
+      "Pointer",
+      "pointer never moves",
+      "the pointer moved"
+    ],
+    "clipboard": [
+      "Clipboard",
+      "clipboard untouched",
+      "the clipboard changed"
+    ],
+    "space": [
+      "Desktop",
+      "desktop never switches",
+      "the desktop switched"
+    ],
+    "dialog": [
+      "Dialog",
+      "no dialog over it",
+      "a dialog opened over it"
+    ],
+    "activation": [
+      "Active app",
+      "its app stays active",
+      "another app became active"
+    ]
+  },
+  "app_names": {
+    "lighthouse-desk": "the Lighthouse desk apps",
+    "soffice": "LibreOffice",
+    "libreoffice-calc": "LibreOffice Calc",
+    "gnucash": "GnuCash",
+    "chromium": "Chromium",
+    "google-chrome": "Chromium",
+    "xfdesktop": "the desktop"
+  },
+  "caveats": [
+    {
+      "os": "linux",
+      "condition": "background",
+      "tasks": [
+        "ir-01",
+        "ir-03",
+        "ir-04"
+      ],
+      "mark": "‡",
+      "short": "Not passable on Linux",
+      "reason": "The interruption is a modal dialog. On Linux the window manager stacks it over the user's window (xfwm4 also gives it the keyboard; openbox, trycua's Linux choice, only stacks it), so the user is disturbed whatever the agent does. On macOS a background app's sheet stays behind."
+    },
+    {
+      "os": null,
+      "condition": "background",
+      "tasks": [
+        "mb-09",
+        "mb-10",
+        "mb-11"
+      ],
+      "mark": "§",
+      "short": "Needs the pointer",
+      "reason": "A real drag, hover or resting pointer moves the user's pointer, so these tasks can't keep the user undisturbed in the background, as trycua's coverage notes say."
+    }
+  ]
+}

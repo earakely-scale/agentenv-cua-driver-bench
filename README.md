@@ -33,7 +33,10 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 | `tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` | The BenchLab tasks, five runs each, each run with its seed, in both conditions, with a model (below). |
 | `evals/bench-v2.toml`, `evals/bench-v2-trials.txt` | All of Bench v2: each of its task files once, and its 100 trials in trycua's schedule (below). |
 | `evals/foreground.toml`, `evals/background.toml` | Bench v2's task files in one condition each. |
-| `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, and of the grade, offline. |
+| `tools/fleet/` | Runs the trials on a fleet of EC2 VMs, each trial exported and uploaded to the dataset as it finishes (below). |
+| `tools/dataset/` | The dataset's exporter, tables, card and licences, and `publish.sh`, which rebuilds and uploads them (below). |
+| `tools/space/` | The replay Space, the card's hero GIF and figures, and each trial's web video, from a folder of trials (below). |
+| `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, of the grade, of the fleet's plan and gates, and of the dataset's pricing, timelines and tables, offline. |
 
 ## Run it
 
@@ -172,6 +175,78 @@ agent-env run . --task cdb-g02-background
 agent-env run . --task ir-01-r1-background
 ```
 
+## Run at scale and publish
+
+The published runs are on Hugging Face: the dataset
+[earakely-scale/CuaDriverBench-AgentEnv](https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv),
+every trial's recording, trajectory, sentinel log, grade and final files with the `trials`, `calls` and `tasks`
+tables, and the replay Space of the same name. `tools/` makes them.
+
+**Configure.** `tools/fleet/fleet.env` (git-ignored; copy `fleet.env.example`), or the same names in the environment:
+
+- `FLEET_REGION`, `FLEET_SUBNET`, `FLEET_SECURITY_GROUPS`: where the workers start; AWS credentials come as the AWS
+  CLI and boto3 find them (`AWS_PROFILE`).
+- `FLEET_INSTANCE_PROFILE`: an instance profile whose role lets SSM manage the VM. Every command reaches the
+  workers through SSM, so they need no inbound port.
+- `FLEET_MODEL_BASE_URL`: the OpenAI-compatible endpoint the agents call, a LiteLLM proxy for instance. Its key goes in
+  `FLEET_MODEL_KEY`, in the shell only.
+- Optional: `FLEET_NAME` and `FLEET_TAGS` (the VMs' tags), `FLEET_MAX_HOURS` (a worker shuts itself down, and is
+  terminated, after that many hours; 12), `FLEET_FRAMEWORK` (the framework the workers install), `FLEET_BENCH_REPO`
+  (the bench they clone), `HF_REPO` (the dataset and Space; `earakely-scale/CuaDriverBench-AgentEnv`).
+
+The Hugging Face token is huggingface_hub's login (`hf auth login`).
+
+**Run.** pip install `boto3 huggingface_hub` where you drive the fleet; nothing heavy runs there.
+
+```bash
+python tools/fleet/plan.py evals/bench-v2-trials.txt plan 10   # 100 trials, 10 workers, each on one computer
+tools/fleet/launch.sh 10 c6i.2xlarge > instances.txt           # the workers set themselves up in a few minutes
+tar czf taskpack.tgz -C artifacts taskpack                     # the task pack, fetched once here
+export FLEET_MODEL_KEY=...
+python tools/fleet/start.py <instance> haiku-5-5-2026-11-02 anthropic/claude-haiku-5-5 plan/worker-01.txt \
+    --taskpack taskpack.tgz                                    # once per worker, each with its own plan file
+python tools/fleet/watch.py instances.txt                      # each worker's trials, until they're done
+```
+
+- `start.py` hands the worker its trials and, encrypted to a key the VM makes for the job, the model key and the
+  Hugging Face token. The worker decrypts them into its own environment and deletes them.
+- `--taskpack` ships the task pack you fetched. Ten VMs behind one address run out of GitHub's API calls fetching it
+  themselves.
+- `tools/fleet/worker.py` runs on the VM. It runs each trial with `agent-env run . --task`, with trycua's retry
+  gates: a rate limit retried after a backoff, an API 5xx or overload up to three times, a broken setup once, and
+  everything else counted. Then `tools/dataset/export.py` exports the trial, and the worker uploads it to
+  `runs/linux/<run>/<task>-r<run>-<condition>/`, replacing what was there.
+- A worker restarted with `start.py` resumes from its progress; `--fresh` starts it over.
+- Terminate the workers when `watch.py` says they're done; each trial is on the dataset by then.
+
+**Publish.** Then rebuild the tables, figures, hero, web videos, card and Space from every trial the dataset holds,
+on one of the workers, which has ffmpeg and room for the recordings:
+
+```bash
+python tools/fleet/hfjob.py <instance> tools/dataset/publish.sh --pull --wait
+```
+
+`publish.sh` downloads the runs (not their trajectories), then writes:
+- the tables (`tools/dataset/tables.py`);
+- the Space, the figures, the hero and the web videos (`tools/space/build.py`);
+- the card (`tools/dataset/card.py`);
+- and uploads them all.
+
+The card is `tools/dataset/card/README.md` with its slots filled: the latest run's summary (`card/summary.md`, written
+by hand for each run), the hero and its caption, the figures, the results, and `card/body.md`.
+
+**Another model or OS.** A new run is a new run id, so its trials go beside the others under `runs/<os>/<run>/`, and
+`publish.sh` puts them on the board.
+
+- Give the model's name and price to `tools/space/config.json` (`models`) and to `tools/dataset/export.py`
+  (`PRICES`, or `TIERED` for a price that depends on the prompt's size).
+- Write the run's `summary.md`.
+- A new OS adds its name to `config.json` (`oses`), and any cells that can't pass there to `caveats`.
+
+`tools/space/checks/` holds the headless screenshots used to check the Space in light and dark, at desktop and phone
+widths (`npm install`, then `node shoot.mjs jobs.json`), and a static server that serves byte ranges, so videos seek
+locally as they do on Hugging Face (`python serve.py <built space> 8000`).
+
 ## The task pack
 
 The task pack and the bench's GUI-only task variants are trycua's, under their licence (FSL-1.1-MIT), which travels
@@ -190,7 +265,7 @@ The tool uses GitHub's API, which allows few calls without a token; set `GITHUB_
 ## Tests
 
 ```bash
-pip install pytest python-xlib==0.33 'agentenv-framework-protocol>=0.1.421'
+pip install pytest python-xlib==0.33 'agentenv-framework-protocol>=0.1.421' -r tools/dataset/requirements.txt
 python tools/taskpack.py            # the sentinel's and the grade's tests score with trycua's files
 python -m pytest tests artifacts/taskpack/scoring/tests
 ```
@@ -200,4 +275,6 @@ The sentinel's tests need tkinter.
 ## Licence
 
 This repo's own files are under the Apache License 2.0 (`LICENSE`). trycua's files, fetched into
-`artifacts/taskpack/`, stay under theirs, as do the briefs and system prompt the trials quote.
+`artifacts/taskpack/`, stay under theirs, as do the briefs and system prompt the trials quote. The Space's fonts, Inter
+and JetBrains Mono (`tools/space/fonts/`), are under the SIL Open Font License, which travels with them.
+`tools/dataset/LICENSE.md` and `licenses/` are the published dataset's licence files.
