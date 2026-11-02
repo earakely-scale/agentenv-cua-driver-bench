@@ -3,7 +3,11 @@ window in the app's mode, titled ``BenchLab — <mode>``, its outer frame at the
 having written its state and its ``app_start`` for that mode and seed, which its data plane returns; and with ``solve``,
 it does the task as an agent does, through the computer's driver over its MCP endpoint, element by element, with the
 values trycua's files derive from the seed, the pointer only where the task needs one, for the grade to score with
-their evaluator. ``args``: ``mode``, ``seed`` and ``solve``."""
+their evaluator; and with ``background``, its interruption brought up and answered by background actions alone, as an
+agent would in trycua's background condition, and what the user's window went through, reported: under this computer's
+xfwm4 the modal dialog takes the keyboard and comes to the front, so ``user_kept_focus`` and ``user_window_on_top``
+are "no" (openbox, trycua's Linux window manager, leaves the keyboard but still stacks it on top). ``args``: ``mode``,
+``seed``, ``solve`` and ``background``."""
 import base64
 import json
 import re
@@ -17,6 +21,8 @@ sys.path.insert(0, str(Path.home() / "bench" / "probes" / "_common"))
 import benchlab_common as C  # noqa: E402
 
 DATA = Path.home() / ".benchlab"
+SENTINEL_LOG = Path.home() / ".bench-sentinel" / "sentinel.jsonl"
+LOST = {"didResignKey", "didResignActive"}
 DATA_OBJECTS = "urn:agentenv:data-objects/v1"
 FRAME_AT = (60, 80)
 WAIT_S = 30.0
@@ -35,6 +41,18 @@ def run(input):
               "started_ok": events[0]["type"] == "app_start" and events[0]["details"] == {
                   "mode": args["mode"], "seed": args["seed"]},
               "exported_ok": {".benchlab/state.json", ".benchlab/events.jsonl"} <= _exported(env)}
+    if args.get("background"):
+        mark = len(SENTINEL_LOG.read_text().splitlines())
+        report["interrupted"] = INTERRUPTIONS[args["mode"]](driver, lab, getattr(C, f"derive_{args['mode']}")(args["seed"]))
+        lines = [json.loads(line) for line in SENTINEL_LOG.read_text().splitlines()[mark:] if line.strip()]
+        samples = [line for line in lines if line["ev"] == "s"]
+        report["user_kept_focus"] = "yes" if samples and not any(line["ev"] in LOST for line in lines) and all(
+            sample["key"] and sample["active"] for sample in samples) else "no"
+        report["user_window_on_top"] = "yes" if samples and not any(s["above_n"] for s in samples) else "no"
+        report["user_samples"] = {"samples": len(samples), "not_key": sum(not s["key"] for s in samples),
+                                  "not_active": sum(not s["active"] for s in samples),
+                                  "under_another": sum(bool(s["above_n"]) for s in samples),
+                                  "lost": sorted({line["ev"] for line in lines if line["ev"] in LOST})}
     if args.get("solve"):
         driver.call("bring_to_front", pid=lab["pid"], window_id=lab["window_id"])
         report["solved"] = SOLVERS[args["mode"]](driver, lab, getattr(C, f"derive_{args['mode']}")(args["seed"]))
@@ -78,6 +96,39 @@ def _hover(driver, lab, values):
 
 
 SOLVERS = {"irmodal": _irmodal, "tooltip": _tooltip, "hover": _hover}
+
+
+def _permission_prompt(driver, lab, values):
+    """IR-01's prompt: the first step filled and Next pressed, then Don't Allow, all in the background."""
+    driver.act("set_value", lab, "Name", value=values["name"], delivery_mode="background")
+    driver.act("click", lab, "Next", delivery_mode="background")
+    return _answered(driver, lab, "Allow BenchLab", "Don’t Allow")
+
+
+def _unsaved_prompt(driver, lab, values):
+    """IR-03's prompt: the open note's title edited and another note chosen, then Cancel, all in the background."""
+    driver.act("set_value", lab, "Title", value=values["titles"][0] + " (edited)", delivery_mode="background")
+    driver.act("click", lab, values["titles"][1], delivery_mode="background")
+    return _answered(driver, lab, "Save changes", "Cancel")
+
+
+def _consent_prompt(driver, lab, values):
+    """IR-04's overlay: the form's email edited, then the optional cookies rejected, all in the background."""
+    driver.act("set_value", lab, "Email", value="user@example.com", delivery_mode="background")
+    return _answered(driver, lab, "Cookie preferences", "Reject optional")
+
+
+def _answered(driver, lab, title, answer):
+    """The dialog titled ``title`` of BenchLab's process answered with ``answer`` in the background, a moment after it
+    showed; its title."""
+    dialog = driver.window(lambda window: window["pid"] == lab["pid"] and window["title"].startswith(title))
+    time.sleep(1.0)
+    driver.act("click", dialog, answer, delivery_mode="background")
+    time.sleep(1.0)
+    return dialog["title"]
+
+
+INTERRUPTIONS = {"irmodal": _permission_prompt, "irunsaved": _unsaved_prompt, "irconsent": _consent_prompt}
 
 
 def _rest(window, x, y, done):

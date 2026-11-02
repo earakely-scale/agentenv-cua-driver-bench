@@ -82,7 +82,27 @@ mode per task. `envs/benchlab` is their Linux port of it, a GTK app, as a comput
 - Its data is `~/.benchlab`, the state and events BenchLab writes, which trycua's evaluator for the task grades.
 - `artifacts/check_benchlab` checks it in its computer: the window in its mode, placed, its state and `app_start` for
   that mode and seed, its data plane; and with `solve`, does the task as an agent does, through the driver over its MCP
-  endpoint, element by element, with the values trycua's files derive from the seed.
+  endpoint, element by element, with the values trycua's files derive from the seed; and with `background`
+  (`tasks/benchlab-background-ir-0{1,3,4}.json`), brings up and answers IR-01's, IR-03's and IR-04's interruption by
+  background actions alone, and reports what the user's window went through.
+
+### A background app's modal dialog on Linux
+
+IR-01, IR-03 and IR-04 interrupt with a modal dialog, and on Linux the window manager puts a new modal dialog over the
+user's window whatever the agent does, so in the background condition those three tasks can't keep the user
+undisturbed. On macOS, where trycua's bench comes from, a background app's sheet stays behind the active window. This
+computer's window manager, xfwm4, also gives the dialog the keyboard. Openbox, which trycua's own Linux session runs,
+leaves the keyboard with the user's window but still stacks the dialog over it. Measured with no model, each dialog
+opened by a background click while the user's window held the keyboard:
+
+| Window manager | Modal dialog | Non-modal dialog |
+|---|---|---|
+| xfwm4, as shipped, or with `focus_new` off, or with focus-stealing prevention on | takes the keyboard and comes to the front (3 of 3 each) | neither (0 of 3) |
+| openbox | comes to the front: IR-01's, IR-03's and IR-04's dialogs over the user's window in 63 of 66, 64 of 66 and 46 of 52 samples | neither (0 of 3) |
+
+The bench stays on xfwm4: openbox wouldn't let those tasks pass either, and it made the computers' conformance probe
+fail at random (P6, a chord that selects all, then Backspace). IR-02's banner is drawn inside BenchLab's window, so it
+can pass. The `background` checks report `user_kept_focus` and `user_window_on_top`, both "no" here.
 
 ## The sentinel and the GUI-only guard
 
