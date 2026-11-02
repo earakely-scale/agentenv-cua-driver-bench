@@ -20,7 +20,7 @@ PACK = ROOT / "artifacts" / "taskpack"
 TASK = PACK / "taskpack" / "tasks" / "shared" / "cdb-s02"
 
 
-def _tool(name, **tool_input):
+def _tool(name, /, **tool_input):
     return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": tool_input}]}}
 
 
