@@ -96,8 +96,10 @@ def test_a_violation_the_guard_logged_fails_gui_only(grader, sentinel_module, tm
     assert _results(grader, tmp_path, run, [[CLICK]])["gui_only"]["violations"] == ["process:xterm"]
 
 
-def test_without_the_agents_trajectory_a_trial_isnt_gui_only(grader, sentinel_module, tmp_path):
-    gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), None)["gui_only"]
+@pytest.mark.parametrize("trajectory", [None, [None], [{"format": "claude-code-stream-json/1", "events": []}]],
+                         ids=["none", "none for its turn", "no events"])
+def test_without_the_agents_tool_calls_a_trial_isnt_gui_only(grader, sentinel_module, tmp_path, trajectory):
+    gui_only = _results(grader, tmp_path, Run(sentinel_module).trial(), trajectory)["gui_only"]
 
     assert gui_only["result"] is False and gui_only["trajectory_checked"] is False
 

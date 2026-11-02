@@ -8,7 +8,7 @@ All of its results must hold: ``task``, their evaluator passed; ``gui_only``, th
 agent called no tool but the computer env's and the skill and tool search ones claude-code needs, with no code in an
 input; and in the background condition ``user_undisturbed``, all eight A22 criteria measured and held. Together they are
 trycua's background completion, and in the foreground their GUI-only pass. A trial whose agent's trajectory the verifier
-isn't given isn't GUI-only, since it can't be checked."""
+isn't given, or holds no events, isn't GUI-only, since it can't be checked."""
 import asyncio
 import base64
 import hashlib
@@ -213,9 +213,10 @@ def grade(task, home, scratch, trajectory):
     window = [line for line in lines if line["armed"] or line["ev"] == "disarmed"]
     armed = next((line for line in window if line["ev"] == "armed"), {})
     live = sorted({line["detail"] for line in window if line["ev"] == "gui_only_violation"})
-    scanned, mentions = _scan(v2, trajectory)
+    events = _events(trajectory)
+    scanned, mentions = _scan(v2, events or [])
     violations = sorted({*live, *scanned})
-    gui_only = trajectory is not None and not violations
+    gui_only = bool(events) and not violations
     passed = bool(evaluation.get("passed")) and gui_only
     multiplayer = v2.multiplayer_score(summary, bool(summary["available"] and armed.get("active") and armed.get("key")),
                                        passed, condition)
@@ -223,7 +224,7 @@ def grade(task, home, scratch, trajectory):
         {"id": "task", "result": evaluation.get("passed") is True, "score": evaluation.get("score"),
          "description": f"trycua's evaluator for {task}",
          "checks": {name: check.get("passed") for name, check in (evaluation.get("detail") or {}).get("checks", {}).items()}},
-        {"id": "gui_only", "result": gui_only, "violations": violations, "trajectory_checked": trajectory is not None,
+        {"id": "gui_only", "result": gui_only, "violations": violations, "trajectory_checked": bool(events),
          "transient": sorted({line["detail"] for line in window if line["ev"] == "gui_only_transient"}),
          "mentions": mentions, "description": "no way out of the GUI, live or in the agent's tool calls"},
     ]
@@ -260,13 +261,17 @@ def _scoring(scratch):
     return modules
 
 
-def _scan(v2, trajectory):
+def _events(trajectory):
+    """The agent's events, each turn's as its document holds them, or None without any: a trajectory with no events
+    can't show the agent kept to the GUI."""
+    events = [event for document in trajectory or [] if document
+              for event in (document if isinstance(document, list) else document.get("events") or [])]
+    return events or None
+
+
+def _scan(v2, events):
     """trycua's scan of the agent's tool calls, a forbidden built-in or code in a tool input, and any built-in the
     computer env's tools don't stand in for: the violations and the side doors merely named."""
-    if trajectory is None:
-        return [], []
-    events = [event for document in trajectory if document
-              for event in (document if isinstance(document, list) else document.get("events") or [])]
     hard, soft = v2.scan_events(events)
     outside = {f"builtin:{name}" for event in events for name, _ in v2.tool_uses(event)
                if not name.startswith("mcp__") and name not in ALLOWED_BUILTINS}
