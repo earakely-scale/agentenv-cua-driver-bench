@@ -6,7 +6,7 @@ that finished trial without running it.
 trycua's gates: a trial cut short by a rate limit is retried after a backoff; an API 5xx or overload up to 3 times,
 then the trial is excluded; a harness or setup failure once, then excluded. Everything else (timeout, max turns, a
 wrong end state, a GUI-only violation) is a failed trial and counts. Progress goes to ~/fleet/progress.jsonl, which a
-restart resumes from."""
+restart resumes from. A file ~/fleet/stop stops the worker before its next trial, the one running left to finish."""
 import json
 import os
 import sqlite3
@@ -42,8 +42,11 @@ def main():
         if _progress().exists() else set()
     for line in specs.read_text().split():
         stem, name, index, *finished = line.split("|")
-        if name not in done:
-            _trial(api, run, stem, name, int(index), finished[0] if finished else None)
+        if name in done:
+            continue
+        if (FLEET / "stop").exists():
+            return
+        _trial(api, run, stem, name, int(index), finished[0] if finished else None)
 
 
 def _trial(api, run, stem, name, index, finished):

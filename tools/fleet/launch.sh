@@ -1,9 +1,9 @@
 #!/bin/bash
 # launch.sh N TYPE: N worker VMs of instance type TYPE, set up by user-data.sh; prints their instance ids. Its
-# settings come from the environment or tools/fleet/fleet.env (see fleet.env.example).
+# settings come from the environment, else tools/fleet/fleet.env (see fleet.env.example).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-[ -f "$here/fleet.env" ] && { set -a; . "$here/fleet.env"; set +a; }
+[ -f "$here/fleet.env" ] && { given=$(export -p); set -a; . "$here/fleet.env"; set +a; eval "$given"; }
 : "${FLEET_REGION:?}" "${FLEET_SUBNET:?}" "${FLEET_SECURITY_GROUPS:?}" "${FLEET_INSTANCE_PROFILE:?}"
 ami=$(aws ssm get-parameter --region "$FLEET_REGION" --query Parameter.Value --output text \
   --name /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id)

@@ -37,6 +37,7 @@ def main():
     print(ssm(args.instance, f"""set -e
 umask 077
 {"rm -rf ~/fleet/progress.jsonl ~/fleet/out ~/fleet/logs" if args.fresh else ""}
+rm -f ~/fleet/stop
 mkdir -p ~/fleet/logs ~/fleet/out
 echo '{base64.b64encode(args.specs.read_bytes()).decode()}' | base64 -d > ~/fleet/specs.txt
 printf %s '{key}' > {KEYS}/model.enc

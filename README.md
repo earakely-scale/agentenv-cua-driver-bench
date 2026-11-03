@@ -217,6 +217,8 @@ python tools/fleet/watch.py instances.txt                      # each worker's t
   everything else counted. Then `tools/dataset/export.py` exports the trial, and the worker uploads it to
   `runs/linux/<run>/<task>-r<run>-<condition>/`, replacing what was there.
 - A worker restarted with `start.py` resumes from its progress; `--fresh` starts it over.
+- A file `~/fleet/stop` on a worker stops it before its next trial and lets the one running finish, to stop a run
+  at a budget; `start.py` removes it.
 - Terminate the workers when `watch.py` says they're done; each trial is on the dataset by then.
 
 **Publish.** Then rebuild the tables, figures, hero, web videos, card and Space from every trial the dataset holds,
