@@ -100,7 +100,8 @@ def panel(svg, x0, y0, pw, ph, series, conds, theme, s, label=None):
         svg.text(x0, y0 + s["os"] * 0.8, label, s["os"], 700)
     plot_top, plot_bot = top + s["pad_top"], y0 + ph - s["xlab"]
     name_w = max([width(sr["name"], 600, s["name"]) for sr in series] + [60])
-    xs = [x0 + s["gut"] + i * (pw - s["gut"] - name_w - s["end_gap"] - s["gut2"]) / max(1, len(conds) - 1)
+    name_off = max(s["dot"] + s["end_gap"], width("100%", 700, s["val"]) / 2 + 6)
+    xs = [x0 + s["gut"] + i * (pw - s["gut"] - name_w - (name_off - s["dot"]) - s["gut2"]) / max(1, len(conds) - 1)
           for i in range(len(conds))]
     y = lambda v: plot_bot - v * (plot_bot - plot_top)
     grid_end = xs[-1] + s["dot"] + 3
@@ -112,8 +113,9 @@ def panel(svg, x0, y0, pw, ph, series, conds, theme, s, label=None):
     for i, c in enumerate(conds):
         svg.text(xs[i], plot_bot + s["cond"] + 14, c["name"], s["cond"], 600, "ink", "middle")
         svg.text(xs[i], plot_bot + s["cond"] + 14 + s["sub"] + 6, c["short"], s["sub"], 400, "ink3", "middle")
+    halo = f' stroke="{t["surface"]}" stroke-width="4" stroke-linejoin="round" paint-order="stroke"'
     labels = {i: [] for i in range(len(conds))}
-    ends = []
+    ends, deltas = [], []
     for sr in series:
         for i, ci in enumerate(sr.get("ci") or []):
             if ci and sr["values"][i] is not None:
@@ -122,38 +124,83 @@ def panel(svg, x0, y0, pw, ph, series, conds, theme, s, label=None):
                 svg.add(f'<path d="M{xs[i]:.1f},{lo:.1f}V{hi:.1f}M{xs[i] - cap:.1f},{lo:.1f}H{xs[i] + cap:.1f}'
                         f'M{xs[i] - cap:.1f},{hi:.1f}H{xs[i] + cap:.1f}" stroke="{sr["color"]}" stroke-opacity=".38" '
                         f'stroke-width="2" fill="none" stroke-linecap="round"/>')
+    drawn = []
     for sr in series:
         pts = [(xs[i], y(v), v) for i, v in enumerate(sr["values"]) if v is not None]
         if len(pts) >= 2:
             d = " ".join(f"{'M' if k == 0 else 'L'}{px:.1f},{py:.1f}" for k, (px, py, _) in enumerate(pts))
-            svg.add(f'<path d="{d}" fill="none" stroke="{sr["color"]}" stroke-width="{s["line"]}" '
-                    f'stroke-linecap="round" stroke-linejoin="round"/>')
+            over = any(all((a is None) == (b is None) and (a is None or abs(a - b) < 0.005)
+                           for a, b in zip(sr["values"], prev)) for prev in drawn)
+            dash = (f'stroke-linecap="butt" stroke-dasharray="{3 * s["line"]:.1f} {2.5 * s["line"]:.1f}"' if over
+                    else 'stroke-linecap="round"')
+            svg.add(f'<path d="{d}" fill="none" stroke="{sr["color"]}" stroke-width="{s["line"]}" {dash} '
+                    f'stroke-linejoin="round"/>')
+            drawn.append(sr["values"])
             if s.get("delta") and len(series) <= 3:
                 (ax, ay, av), (bx, by, bv) = pts[0], pts[-1]
                 dv = round(100 * (bv - av))
                 if dv:
-                    mx, my = (ax + bx) / 2, (ay + by) / 2
-                    svg.text(mx + 10, my - 12 if dv < 0 else my + 22, f"{'−' if dv < 0 else '+'}{abs(dv)} pts",
-                             s["sub"], 600, "ink3", "start")
+                    deltas.append({"x": (ax + bx) / 2, "y": (ay + by) / 2, "dv": dv})
         for i, v in enumerate(sr["values"]):
             if v is None:
                 continue
             svg.add(f'<circle cx="{xs[i]:.1f}" cy="{y(v):.1f}" r="{s["dot"]}" fill="{sr["color"]}" '
                     f'stroke="{t["surface"]}" stroke-width="{s["ring"]}"/>')
-            labels[i].append({"y": y(v) - s["dot"] - 11, "v": v, "x": xs[i]})
+            labels[i].append({"y": y(v), "v": v, "x": xs[i]})
         last = max((i for i, v in enumerate(sr["values"]) if v is not None), default=None)
         if last is not None:
             ends.append({"y": y(sr["values"][last]) + s["name"] * 0.36, "dot": y(sr["values"][last]),
                          "x": xs[last], "name": sr["name"]})
+    taken = []
     for i, items in labels.items():
-        for it in spread(items, s["val"] + 4):
-            svg.text(it["x"], max(it["y"], top + s["val"]), pct(it["v"]), s["val"], 700, "ink", "middle")
+        placed = sides(items, 1, plot_bot - s["dot"] - s["val"] - 8)
+        above = spread([{**it, "y": it["y"] - s["dot"] - 11} for it in placed if not it["below"]], s["val"] + 4)
+        below = spread([{**it, "y": it["y"] + s["dot"] + s["val"] * 0.72 + 7} for it in placed if it["below"]],
+                       s["val"] + 4)
+        for it in above + below:
+            ty = it["y"] if it["below"] else max(it["y"], top + s["val"])
+            svg.text(it["x"], ty, pct(it["v"]), s["val"], 700, "ink", "middle", halo)
+            taken.append(box(it["x"], ty, pct(it["v"]), 700, s["val"], "middle"))
+    notes = []
+    for d in sides(deltas, 2, plot_bot - 24, lambda d: d["dv"] > 0):
+        rising, below = d["dv"] > 0, d["below"]
+        text = f"{'−' if d['dv'] < 0 else '+'}{abs(d['dv'])} pts"
+        nx, ny, anchor = d["x"] + (10 if rising == below else -10), d["y"] + (22 if below else -12), \
+            "start" if rising == below else "end"
+        notes.append((nx, ny, text, anchor, box(nx, ny, text, 600, s["sub"], anchor)))
+    if not any(clash(b, other) for k, (*_, b) in enumerate(notes) for other in taken + [n[-1] for n in notes[:k]]):
+        for nx, ny, text, anchor, _ in notes:
+            svg.text(nx, ny, text, s["sub"], 600, "ink3", anchor, halo)
     for e in spread(ends, s["name"] + 6):
-        lx = e["x"] + s["dot"] + s["end_gap"]
+        lx = e["x"] + name_off
         if abs(e["y"] - s["name"] * 0.36 - e["dot"]) > 3:
             svg.add(f'<path d="M{e["x"] + s["dot"] + 3:.1f},{e["dot"]:.1f} L{lx - 4:.1f},{e["y"] - s["name"] * 0.36:.1f}" '
                     f'stroke="{t["ink3"]}" stroke-width="1" fill="none"/>')
         svg.text(lx, e["y"], e["name"], s["name"], 600, "ink", "start")
+
+
+def sides(items, same, floor, alone=lambda it: False):
+    """The labels at one place, top first, less any that repeats one within ``same`` px; the lowest of several goes
+    `below` its point when that is above ``floor``, so two close lines keep their labels apart; a lone one as
+    ``alone`` says."""
+    kept = []
+    for it in sorted(items, key=lambda it: it["y"]):
+        text = it["dv"] if "dv" in it else pct(it["v"])
+        if not any(k["text"] == text and abs(k["y"] - it["y"]) <= same for k in kept):
+            kept.append({**it, "text": text})
+    for k, it in enumerate(kept):
+        it["below"] = alone(it) if len(kept) == 1 else k == len(kept) - 1 and it["y"] <= floor
+    return kept
+
+
+def box(x, baseline, text, weight, size, anchor):
+    w = width(text, weight, size)
+    left = x - {"start": 0, "middle": w / 2, "end": w}[anchor]
+    return left - 3, baseline - 0.75 * size - 3, left + w + 3, baseline + 0.25 * size + 3
+
+
+def clash(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
 DESKTOP = {"title": 24, "subtitle": 14, "os": 15, "tick": 12, "cond": 14, "sub": 12, "val": 17, "name": 15,
