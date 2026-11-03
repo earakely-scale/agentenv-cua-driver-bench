@@ -111,7 +111,8 @@ runs/<os>/<run>/<trial>/
   brief names an "Actions" strip that their Linux BenchLab labels "Hover here to reveal actions".
 - MB-09 to MB-11 need a real drag, hover or resting pointer, which always moves the user's pointer, so in the
   background condition they can't keep the user undisturbed; trycua's own coverage notes say so.
-- Claude Code reports `num_turns` across a context compaction; `model_calls` counts the model's distinct messages.
+- Claude Code's `num_turns` counts tool round trips, across a context compaction too, so it passes 45 when the model
+  makes several calls in one message; the 45-turn limit holds on `model_calls`, the model's distinct messages.
 
 ## Licence and attribution
 

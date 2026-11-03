@@ -91,7 +91,7 @@ mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
 [model]
 base_url = "https://your-litellm-or-openai-compatible-proxy"
 api_key = "env:LITELLM_API_KEY"
-default = "anthropic/claude-sonnet-4-5"
+default = "anthropic/claude-sonnet-5-5"
 EOF
 agent-env run . --task cdb-g02-background      # one trial
 agent-env run . --eval bench-v2                # every task of Bench v2 once (76 task files)
