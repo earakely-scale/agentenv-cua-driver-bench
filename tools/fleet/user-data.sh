@@ -7,7 +7,7 @@ systemctl stop unattended-upgrades || true
 systemctl stop apt-daily.service apt-daily-upgrade.service apt-daily.timer apt-daily-upgrade.timer || true
 while fuser /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 3; done
 apt-get -o DPkg::Lock::Timeout=300 update
-apt-get -o DPkg::Lock::Timeout=300 install -y git curl jq psmisc unzip ffmpeg
+apt-get -o DPkg::Lock::Timeout=300 install -y git curl jq psmisc unzip ffmpeg python3-venv
 for attempt in 1 2 3 4 5; do
   while pgrep -x apt-get >/dev/null || pgrep -f unattended-upgrade >/dev/null || fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 3; done
   curl -fsSL https://get.docker.com | sh && command -v docker && break
