@@ -23,6 +23,18 @@ def discover(root):
     return sorted({p.parent for p in Path(root).rglob("trial.json")}, key=lambda p: p.name)
 
 
+def discover_missing(root):
+    """Each trial whose re-runs were spent, from the runs/OS/RUN/NAME/missing.json the fleet's worker uploads: its OS,
+    run, task and condition."""
+    out = []
+    for path in sorted(Path(root).glob("runs/*/*/*/missing.json")):
+        record = read_json(path)
+        condition = record["task_file"].rsplit("-", 1)[-1]
+        out.append({"os": record.get("os") or "linux", "run": path.parent.parent.name, "name": record["name"],
+                    "task": task_id({"task": record["task_file"]}, condition), "condition": condition})
+    return out
+
+
 def epoch(stamp):
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
 

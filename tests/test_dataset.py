@@ -137,6 +137,34 @@ def test_a_trial_re_run_for_harness_errors_says_so_and_one_whose_re_runs_were_sp
                                            "harness_errors": 3}
 
 
+def test_a_board_row_and_a_card_run_with_a_missing_trial_are_labelled_incomplete(tables, tmp_path):
+    space = ROOT / "tools" / "space" / "cdbviz"
+    catalog, trials = _module(space / "catalog.py"), _module(space / "trials.py")
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+    folder = tmp_path / "runs" / "macos" / "m-run" / "ir-02-r2-background"
+    folder.mkdir(parents=True)
+    (folder / "missing.json").write_text(json.dumps({
+        "name": folder.name, "task_file": "ir-02-r2-background", "run_index": 2, "os": "macos", "status": "missing",
+        "kind": "setup", "harness_errors": {"rate": 0, "server": 0, "setup": 3}, "instance": "i-2", "exit": 1}))
+    graded = {"os": "macos", "model": "m", "condition": "background", "task": "ir-02", "run": "m-run", "run_index": 1,
+              "uid": "u1", "passed": True, "grade": {"task": {"score": 1.0}}}
+
+    missing = trials.discover_missing(tmp_path)
+    rows = catalog.board([graded, {**graded, "model": "n", "run": "n-run", "uid": "u2"}], {}, missing)
+    table = catalog.results_md({"tasks": [{"id": "ir-02", "probe": "IR-02"}], "models": [], "board": rows,
+                                "oses": [{"id": "macos", "name": "macOS"}]})
+    (tmp_path / "results.md").write_text(table)
+    runs = card._results(tmp_path, tables.pd.DataFrame([{
+        "run": "m-run", "model": "m", "trial_id": "ir-02-r1-background", "passed": True, "task_score": 1.0,
+        "cost_usd": 0.5, "harness_version": "2.1", "gui_only": True, "user_undisturbed": True, "tool_calls": 9}]),
+        tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M"})
+
+    assert missing == [{"os": "macos", "run": "m-run", "name": folder.name, "task": "ir-02", "condition": "background"}]
+    assert {row["model"]: row["missing"] for row in rows} == {"m": 1, "n": 0}
+    assert "| m (incomplete: 1 missing) | background |" in table and "isn't ranked" in table
+    assert "| `m-run` | M | Claude Code 2.1 | 1 | **1, incomplete** | 1 | 1.00 | $0.50 |" in runs
+
+
 def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables):
     g02 = tables.task_row(ROOT, ROOT / "tasks" / "cdb-g02-background.json")
 

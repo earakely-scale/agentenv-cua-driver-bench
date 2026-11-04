@@ -250,13 +250,21 @@ function boardGrid(os, shown) {
         any = true;
         cell.append(cellBlock(runs, multi));
       }
-      if (!any) cell.append(h("div", { class: "empty-cell" }, "No trial."));
+      const lost = missingOf(os, task.id, c.id, shown);
+      if (!any && !lost) cell.append(h("div", { class: "empty-cell" }, "No trial."));
+      if (lost) cell.append(h("div", { class: "caveat" }, h("b", {}, "Incomplete"),
+        ` ${lost} trial${lost > 1 ? "s" : ""} missing: infrastructure cut ${lost > 1 ? "them" : "it"} short past the re-runs, so this isn't ranked.`));
       const cv = caveatOf(os, c.id, task.id);
       if (cv) cell.append(h("div", { class: "caveat" }, h("b", {}, cv.short), " ", cv.reason));
       grid.append(cell);
     }
   }
   return grid;
+}
+
+function missingOf(os, task, cond, models) {
+  const runs = new Set(CAT.trials.filter((t) => models.includes(t.model)).map((t) => t.run));
+  return (CAT.missing || []).filter((x) => x.os === os && x.task === task && x.condition === cond && runs.has(x.run)).length;
 }
 
 function rate(runs, f) {

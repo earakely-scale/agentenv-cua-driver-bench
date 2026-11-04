@@ -26,6 +26,7 @@ def main():
     out, dataset = Path(sys.argv[1]), Path(sys.argv[2])
     catalog = json.loads((out / "space" / "data" / "catalog.json").read_text())
     trials = pd.read_parquet(dataset / "results" / "trials.parquet")
+    missing = pd.read_parquet(dataset / "results" / "missing.parquet")
     (dataset / "assets" / "figures").mkdir(parents=True, exist_ok=True)
     for path in (out / "assets").iterdir():
         shutil.copy(path, dataset / "assets" / ("figures" if path.suffix == ".svg" else "") / path.name)
@@ -34,7 +35,7 @@ def main():
     text = (HERE / "card" / "README.md").read_text()
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
-    text = text.replace("{{RESULTS}}", _results(out, trials, {m["id"]: m["name"] for m in catalog["models"]}))
+    text = text.replace("{{RESULTS}}", _results(out, trials, missing, {m["id"]: m["name"] for m in catalog["models"]}))
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
     (dataset / "README.md").write_text(text)
 
@@ -60,14 +61,15 @@ def _hero(catalog, trials):
             f"with every other trial.</sub>")
 
 
-def _results(out, trials, names):
+def _results(out, trials, missing, names):
     figures = "\n\n".join(_picture(name, alt) for name, alt in FIGURES.items())
     runs = trials.groupby(["run", "model"], sort=False).agg(
         trials=("trial_id", "count"), passed=("passed", "sum"), task_score=("task_score", "mean"),
         cost=("cost_usd", "sum"), harness=("harness_version", "first")).reset_index()
+    lost = missing.groupby("run").size()
     run_rows = "\n".join(
-        f"| `{r.run}` | {names.get(r.model, r.model)} | Claude Code {r.harness} | {r.trials} | {int(r.passed)} | "
-        f"{r.task_score:.2f} | ${r.cost:.2f} |" for r in runs.itertuples())
+        f"| `{r.run}` | {names.get(r.model, r.model)} | Claude Code {r.harness} | {r.trials} | "
+        f"{_lost(lost.get(r.run, 0))} | {int(r.passed)} | {r.task_score:.2f} | ${r.cost:.2f} |" for r in runs.itertuples())
     per_trial = "\n".join(
         f"| {t.trial_id} | {t.model.rsplit('/', 1)[-1]} | {t.task_score:.2f} | {_mark(t.gui_only)} | "
         f"{_mark(t.user_undisturbed)} | {_mark(t.passed)} | {int(t.tool_calls)} | "
@@ -76,12 +78,13 @@ def _results(out, trials, names):
 
 {(out / "results.md").read_text().strip()}
 
-| Run | Model | Harness | Trials | Passed | Mean task score | Cost |
-|---|---|---|---:|---:|---:|---:|
+| Run | Model | Harness | Trials | Missing | Passed | Mean task score | Cost |
+|---|---|---|---:|---:|---:|---:|---:|
 {run_rows}
 
 Cost is at list price from the tokens each trial's trajectory reports (Claude Code's own figure is in
-`cost_usd_reported`).
+`cost_usd_reported`). A run with missing trials, which infrastructure cut short past their re-runs
+(`results/missing.parquet`), is incomplete and isn't ranked.
 
 <details><summary>Every trial</summary>
 
@@ -90,6 +93,10 @@ Cost is at list price from the tokens each trial's trajectory reports (Claude Co
 {per_trial}
 
 </details>"""
+
+
+def _lost(count):
+    return f"**{count}, incomplete**" if count else "0"
 
 
 def _picture(name, alt):

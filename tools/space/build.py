@@ -100,7 +100,7 @@ def main():
         files[m["uid"]] = entry
         print(f"{m['uid']}: {len(t['web']['calls'])} calls, user lane {'yes' if t['web']['user'] else 'no'}, "
               f"web.mp4 {entry.get('video_mb', '–')} MB{', Space copy' if keep_local else ''}")
-    cat = catalog.build(metas, cfg, hero_uid, files)
+    cat = catalog.build(metas, cfg, hero_uid, files, trials.discover_missing(args.data))
     keep = {m["uid"] for m in metas}
     for stale in (data / "trials").iterdir():
         if stale.is_dir() and stale.name not in keep:

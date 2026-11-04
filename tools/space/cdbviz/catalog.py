@@ -24,7 +24,9 @@ def run_order(m):
     return (m["run_index"] if m.get("run_index") is not None else 10**6, m.get("started_at") or "", m["uid"])
 
 
-def board(metas, cfg):
+def board(metas, cfg, missing=()):
+    """A row per OS, model and condition; ``missing`` counts toward the row of the model whose runs they're of, and
+    a row with any is incomplete."""
     cells = defaultdict(list)
     for m in metas:
         if on_board(m["model"], cfg):
@@ -40,7 +42,9 @@ def board(metas, cfg):
             per[task] = {"score": mean([(m["grade"]["task"] or {}).get("score") for m in tms]),
                          "pass": mean([1.0 if m["passed"] else 0.0 for m in tms]),
                          "passed": sum(m["passed"] for m in tms), "n": len(tms), "trials": [m["uid"] for m in tms]}
+        runs = {m["run"] for m in ms}
         rows.append({"os": os_, "model": model, "condition": cond, "n_tasks": len(per), "n_trials": len(ms),
+                     "missing": sum(x["os"] == os_ and x["condition"] == cond and x["run"] in runs for x in missing),
                      "passed": sum(m["passed"] for m in ms),
                      "task_score": mean([p["score"] for p in per.values()]),
                      "full_pass": mean([p["pass"] for p in per.values()]), "tasks": per})
@@ -72,7 +76,7 @@ def keys(metas):
     return out
 
 
-def build(metas, cfg, hero, files):
+def build(metas, cfg, hero, files, missing=()):
     oses = ordered({m["os"] for m in metas}, list(cfg.get("oses") or {}))
     tasks = ordered({m["task"] for m in metas}, list(cfg.get("tasks") or {}))
     fams = list(cfg.get("families") or {})
@@ -99,7 +103,8 @@ def build(metas, cfg, hero, files):
         "criteria": [{"id": k, "short": v[0], "held": v[1], "broken": v[2]} for k, v in (cfg.get("criteria") or {}).items()],
         "trials": [{**m, "key": ks[m["uid"]][0], "nth": ks[m["uid"]][1], "of": ks[m["uid"]][2], **files[m["uid"]]}
                    for m in trials],
-        "board": board(metas, cfg),
+        "board": board(metas, cfg, missing),
+        "missing": list(missing),
         "caveats": cfg.get("caveats") or [],
         "figures": ["task-score", "full-pass"],
     }
@@ -126,13 +131,17 @@ def results_md(cat):
             if cv and cv not in used:
                 used.append(cv)
             cells.append("–" if not p else f"{pct(p['score'])} · {p['passed']}/{p['n']}{cv['mark'] if cv else ''}")
-        lines.append(f"| {osn.get(r['os'], r['os'])} | {names.get(r['model'], r['model'])} | {r['condition']} | "
+        lost = f" (incomplete: {r['missing']} missing)" if r.get("missing") else ""
+        lines.append(f"| {osn.get(r['os'], r['os'])} | {names.get(r['model'], r['model'])}{lost} | {r['condition']} | "
                      f"{pct(r['task_score'])} | {pct(r['full_pass'])} ({r['passed']}/{r['n_trials']}) | "
                      + " | ".join(cells) + " |")
     lines += ["", "Task score: trycua's evaluator (weighted checks), mean over runs, then over tasks. Full pass: every "
               "half of the grade held (the task, GUI only, the sentinel's log, and in the background the user "
               "undisturbed), as the share of runs per task averaged over tasks, with the count of passing trials. "
               "Each task cell: mean task score · passing runs / runs."]
+    if any(r.get("missing") for r in cat["board"]):
+        lines += ["", "Incomplete: some of the row's trials are missing, cut short by infrastructure (a rate limit, an API "
+                  "error, a failed setup or health check) past their re-runs, so the row isn't ranked."]
     lines += [f"{cv['mark']} {cv['short']}: {cv['reason']}" for cv in used]
     return "\n".join(lines) + "\n"
 
