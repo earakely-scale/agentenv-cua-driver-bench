@@ -1,5 +1,6 @@
-"""start.py INSTANCE RUN MODEL SPECS [--taskpack TGZ] [--keep] [--fresh]: start the fleet worker on INSTANCE for the
-trials SPECS lists (a file plan.py wrote), on the bench's main, as the systemd unit `fleet`.
+"""start.py INSTANCE RUN MODEL SPECS [--os OS] [--taskpack TGZ] [--keep] [--fresh]: start the fleet worker on INSTANCE
+for the trials SPECS lists (a file plan.py wrote), on the bench's main, as the systemd unit `fleet`; its trials and
+manifest go under runs/OS/RUN (OS linux by default).
 
 The model key (`FLEET_MODEL_KEY`) and the Hugging Face token (huggingface_hub's login) are encrypted to a key the VM
 makes for this job; the job decrypts them into its own environment and deletes the files. `--taskpack` ships a task
@@ -23,6 +24,7 @@ def main():
     parser.add_argument("run")
     parser.add_argument("model")
     parser.add_argument("specs", type=Path)
+    parser.add_argument("--os", default="linux")
     parser.add_argument("--taskpack", type=Path)
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--fresh", action="store_true")
@@ -53,6 +55,7 @@ cat > ~/fleet/job.sh <<'JOB'
 export LITELLM_API_KEY="$(dec "$(cat {KEYS}/model.enc)")" HF_TOKEN="$(dec "$(cat {KEYS}/hf.enc)")"
 rm -f {KEYS}/key.pem {KEYS}/model.enc {KEYS}/hf.enc
 export AGENT_ENV_CONFIG=$HOME/fleet/config.toml VENV={venv} BENCH={bench} HF_REPO={setting("HF_REPO", "")}
+export RUN_OS={args.os} RUN_MODEL={args.model}
 cd {bench} && {pull}{unpack}{venv}/bin/python tools/taskpack.py >/dev/null
 {venv}/bin/python tools/fleet/worker.py {args.run} ~/fleet/specs.txt
 JOB

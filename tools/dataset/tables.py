@@ -1,7 +1,8 @@
 """tables.py BENCH DATASET: the dataset's tables from its runs/ folders and the bench's committed trial tasks.
 
-tasks/tasks.parquet (one row per trial task), results/trials.parquet (one row per trial), results/calls.parquet (one
-row per tool call)."""
+tasks/tasks.parquet (one row per trial task), results/trials.parquet (one row per graded trial, with the harness errors
+it was re-run for), results/calls.parquet (one row per tool call), and results/missing.parquet (one row per trial
+whose re-runs were spent, so the run it belongs to is incomplete)."""
 import json
 import re
 import sys
@@ -26,9 +27,11 @@ def main():
         row, trial_calls = trial_row(dataset, folder, titles)
         rows.append(row)
         calls.extend(trial_calls)
+    missing = [missing_row(folder) for folder in sorted(p.parent for p in dataset.glob("runs/*/*/*/missing.json"))]
     pd.DataFrame(rows).to_parquet(dataset / "results" / "trials.parquet", index=False)
     pd.DataFrame(calls).to_parquet(dataset / "results" / "calls.parquet", index=False)
-    print(len(rows), "trials,", len(calls), "calls")
+    pd.DataFrame(missing, columns=MISSING).to_parquet(dataset / "results" / "missing.parquet", index=False)
+    print(len(rows), "trials,", len(calls), "calls,", len(missing), "missing")
 
 
 def task_row(bench, path):
@@ -101,6 +104,7 @@ def trial_row(dataset, folder, titles):
         "duration_s": facts.get("duration_s"),
         "agent_window_s": (timeline["disarmed_at"] - timeline["armed_at"])
         if timeline.get("disarmed_at") is not None else None,
+        "harness_errors": _harness_errors(folder),
         "started_at": facts["started_at"],
         "recording": f"{rel}/recording.mp4",
         "trajectory": f"{rel}/trajectory.json",
@@ -112,6 +116,23 @@ def trial_row(dataset, folder, titles):
               "tool": c["tool"], "server": c["server"], "input": json.dumps(c["input"]), "error": c["error"],
               "result": c["result"], "image": c["image"]} for c in timeline["calls"]]
     return row, calls
+
+
+MISSING = ("run", "os", "name", "task_file", "run_index", "kind", "harness_errors")
+
+
+def missing_row(folder):
+    """A trial infrastructure cut short past its re-runs, from the record the fleet's worker uploads for it."""
+    record = json.loads((folder / "missing.json").read_text())
+    return {"run": folder.parent.name, "os": record["os"], "name": record["name"], "task_file": record["task_file"],
+            "run_index": record["run_index"], "kind": record["kind"],
+            "harness_errors": sum(record["harness_errors"].values())}
+
+
+def _harness_errors(folder):
+    """How many times infrastructure cut the trial short before this run of it, 0 when its folder doesn't say."""
+    attempts = folder / "attempts.json"
+    return sum(json.loads(attempts.read_text())["harness_errors"].values()) if attempts.exists() else 0
 
 
 if __name__ == "__main__":

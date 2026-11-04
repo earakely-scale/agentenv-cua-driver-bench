@@ -1,12 +1,16 @@
 """worker.py RUN SPECS: on a fleet VM, run each trial SPECS lists (lines of `task-file-stem|trial-name|run-index`) in
-the bench's checkout with agent-env, retrying it as trycua's runner does, then export it and upload it to the dataset
-at runs/linux/RUN/<name>, replacing what was there. A line with a fourth field, a task instance id, exports and uploads
-that finished trial without running it.
+the bench's checkout with agent-env, re-running it when infrastructure cut it short, then export it and upload it to
+the dataset at runs/OS/RUN/<name>, replacing what was there, OS being $RUN_OS (linux by default). A line with a fourth
+field, a task instance id, exports and uploads that finished trial without running it. First it uploads the run's
+manifest (manifest.py) to runs/OS/RUN/manifest.json, the model being $RUN_MODEL.
 
-trycua's gates: a trial cut short by a rate limit is retried after a backoff; an API 5xx or overload up to 3 times,
-then the trial is excluded; a harness or setup failure once, then excluded. Everything else (timeout, max turns, a
-wrong end state, a GUI-only violation) is a failed trial and counts. Progress goes to ~/fleet/progress.jsonl, which a
-restart resumes from. A file ~/fleet/stop stops the worker before its next trial, the one running left to finish."""
+A trial infrastructure cut short is a harness error, never a score: a rate limit is re-run after a backoff, up to 6
+times; an API 5xx or overload up to 3 times; a failed setup or health check (a step of SETUP_STEPS) up to 2 times, each
+on a fresh deploy. Past that the trial is missing: its record goes to the dataset as <name>/missing.json, and a row
+with a missing trial is incomplete. A graded trial's folder carries attempts.json, the harness errors it was re-run
+for. Everything else (timeout, max turns, a wrong end state, a GUI-only violation) is a failed trial and counts.
+Progress goes to ~/fleet/progress.jsonl, which a restart resumes from. A file ~/fleet/stop stops the worker before its
+next trial, the one running left to finish."""
 import json
 import os
 import sqlite3
@@ -18,7 +22,10 @@ from pathlib import Path
 
 from huggingface_hub import HfApi
 
+import manifest
+
 REPO = os.environ.get("HF_REPO") or "earakely-scale/CuaDriverBench-AgentEnv"
+OS = os.environ.get("RUN_OS") or "linux"
 HOME = Path.home()
 BENCH = Path(os.environ.get("BENCH", HOME / "bench")).expanduser()
 FLEET = HOME / "fleet"
@@ -31,7 +38,7 @@ SETUP_STEPS = ("env", "sandbox", "box", "pack", "agent", "skills", "record", "ar
                "gui_only")
 RATE = ("rate limit", "rate_limit", "api error: 429", "too many requests")
 SERVER = ("overloaded", "api error: 5", "internal server error", "service unavailable", "bad gateway")
-LIMITS = {"rate": 6, "server": 3, "setup": 1}
+LIMITS = {"rate": 6, "server": 3, "setup": 2}
 
 
 def main():
@@ -40,7 +47,9 @@ def main():
     api.create_repo(REPO, repo_type="dataset", exist_ok=True)
     done = {json.loads(line)["name"] for line in _progress().read_text().splitlines() if line.strip()} \
         if _progress().exists() else set()
-    for line in specs.read_text().split():
+    lines = specs.read_text().split()
+    _upload_manifest(api, run, lines)
+    for line in lines:
         stem, name, index, *finished = line.split("|")
         if name in done:
             continue
@@ -64,7 +73,7 @@ def _trial(api, run, stem, name, index, finished):
             break
         tries[kind] += 1
         if tries[kind] > LIMITS[kind]:
-            return _record(name, stem, index, instance, "excluded", kind=kind, tries=tries, exit=code)
+            return _missing(api, run, name, stem, index, instance, kind, tries, code)
         time.sleep(60 * tries[kind] if kind == "rate" else 10)
     export = subprocess.run([str(PYTHON), str(BENCH / "tools" / "dataset" / "export.py"), str(OUT),
                              f"{instance['instance_id']}|{name}|{index}"],
@@ -74,17 +83,48 @@ def _trial(api, run, stem, name, index, finished):
     summary = json.loads(export.stdout.strip().splitlines()[-1])
     if summary["leaked"]:
         return _record(name, stem, index, instance, "withheld", leaked=summary["leaked"], tries=tries)
+    (OUT / name / "attempts.json").write_text(json.dumps({"harness_errors": tries}))
+    if error := _upload(api, run, name):
+        return _record(name, stem, index, instance, "upload_failed", error=error, tries=tries)
+    _record(name, stem, index, instance, "uploaded", summary=summary, tries=tries)
+
+
+def _missing(api, run, name, stem, index, instance, kind, tries, code):
+    """A trial infrastructure cut short past its re-runs: missing, its record in the dataset beside the graded ones."""
+    folder = OUT / name
+    folder.mkdir(parents=True, exist_ok=True)
+    for stale in folder.iterdir():
+        if stale.is_file():
+            stale.unlink()
+    record = {"name": name, "task_file": stem, "run_index": index, "os": OS, "status": "missing", "kind": kind,
+              "harness_errors": tries, "instance": instance and instance["instance_id"], "exit": code}
+    (folder / "missing.json").write_text(json.dumps(record, indent=1))
+    error = _upload(api, run, name)
+    _record(name, stem, index, instance, "missing", kind=kind, tries=tries, exit=code, upload_error=error)
+
+
+def _upload(api, run, name):
+    """Upload OUT/name to the run's folder for it, replacing what was there; the last error, or None."""
     for attempt in range(5):
         try:
             api.upload_folder(repo_id=REPO, repo_type="dataset", folder_path=str(OUT / name),
-                              path_in_repo=f"runs/linux/{run}/{name}", commit_message=f"{run}: {name}",
+                              path_in_repo=f"runs/{OS}/{run}/{name}", commit_message=f"{run}: {name}",
                               delete_patterns="*")
-            break
+            return None
         except Exception as error:
             if attempt == 4:
-                return _record(name, stem, index, instance, "upload_failed", error=str(error)[:500], tries=tries)
+                return str(error)[:500]
             time.sleep(30 * (attempt + 1))
-    _record(name, stem, index, instance, "uploaded", summary=summary, tries=tries)
+
+
+def _upload_manifest(api, run, lines):
+    """The run's manifest, written and uploaded once a worker starts; every worker of a run writes the same pins."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    built = manifest.build(BENCH, run, OS, os.environ.get("RUN_MODEL"), lines,
+                           {"setup_steps": list(SETUP_STEPS), "reruns": LIMITS}, manifest.installed_drivers())
+    (OUT / "manifest.json").write_text(json.dumps(built, indent=1))
+    api.upload_file(path_or_fileobj=str(OUT / "manifest.json"), path_in_repo=f"runs/{OS}/{run}/manifest.json",
+                    repo_id=REPO, repo_type="dataset", commit_message=f"{run}: manifest")
 
 
 def failure(instance):

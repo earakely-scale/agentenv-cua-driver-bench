@@ -121,6 +121,22 @@ def test_a_trials_row_holds_every_half_of_its_grade_and_where_its_files_are(tabl
     assert [(c["trial_id"], c["tool"]) for c in calls] == [(folder.name, "click")]
 
 
+def test_a_trial_re_run_for_harness_errors_says_so_and_one_whose_re_runs_were_spent_is_a_missing_row(tables, tmp_path):
+    run = tmp_path / "runs" / "macos" / "sonnet-5-5-2026-11-09"
+    graded, missing = run / "ir-02-r1-background", run / "ir-02-r2-background"
+    graded.mkdir(parents=True)
+    missing.mkdir()
+    (graded / "attempts.json").write_text(json.dumps({"harness_errors": {"rate": 1, "server": 0, "setup": 1}}))
+    (missing / "missing.json").write_text(json.dumps({
+        "name": missing.name, "task_file": "ir-02-r2-background", "run_index": 2, "os": "macos", "status": "missing",
+        "kind": "setup", "harness_errors": {"rate": 0, "server": 0, "setup": 3}, "instance": "i-2", "exit": 1}))
+
+    assert tables._harness_errors(graded) == 2 and tables._harness_errors(missing) == 0
+    assert tables.missing_row(missing) == {"run": "sonnet-5-5-2026-11-09", "os": "macos", "name": missing.name,
+                                           "task_file": "ir-02-r2-background", "run_index": 2, "kind": "setup",
+                                           "harness_errors": 3}
+
+
 def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables):
     g02 = tables.task_row(ROOT, ROOT / "tasks" / "cdb-g02-background.json")
 

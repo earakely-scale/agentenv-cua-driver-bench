@@ -212,10 +212,19 @@ python tools/fleet/watch.py instances.txt                      # each worker's t
   Hugging Face token. The worker decrypts them into its own environment and deletes them.
 - `--taskpack` ships the task pack you fetched. Ten VMs behind one address run out of GitHub's API calls fetching it
   themselves.
-- `tools/fleet/worker.py` runs on the VM. It runs each trial with `agent-env run . --task`, with trycua's retry
-  gates: a rate limit retried after a backoff, an API 5xx or overload up to three times, a broken setup once, and
-  everything else counted. Then `tools/dataset/export.py` exports the trial, and the worker uploads it to
-  `runs/linux/<run>/<task>-r<run>-<condition>/`, replacing what was there.
+- `tools/fleet/worker.py` runs on the VM. It first uploads the run's manifest (`tools/fleet/manifest.py`) to
+  `runs/<os>/<run>/manifest.json`: the task pack's commit and sha256, the framework's version, the model and agent,
+  each computer with its driver and the sha256 of the driver's tool list, the limits and conditions, and the re-run
+  policy.
+- It runs each trial with `agent-env run . --task`. A trial infrastructure cut short is a harness error, never a score:
+  - a rate limit is re-run after a backoff, up to six times;
+  - an API 5xx or overload, up to three times;
+  - a failed setup or health-check step, up to twice, each on a fresh deploy.
+- Past that, the trial is missing: its record goes to the dataset as `missing.json` in its folder, and its run counts
+  as incomplete. Everything else counts.
+- `tools/dataset/export.py` then exports each graded trial, with `attempts.json` holding the harness errors it was
+  re-run for. The worker uploads it to `runs/<os>/<run>/<task>-r<run>-<condition>/`, replacing what was there.
+  `start.py --os macos` puts a run under `runs/macos/`; `linux` is the default.
 - A worker restarted with `start.py` resumes from its progress; `--fresh` starts it over.
 - A file `~/fleet/stop` on a worker stops it before its next trial and lets the one running finish, to stop a run
   at a budget; `start.py` removes it.
