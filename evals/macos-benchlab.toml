@@ -1,0 +1,15 @@
+tasks = [
+  "macos-benchlab-listdrag",
+  "macos-benchlab-hover",
+  "macos-benchlab-tooltip",
+  "macos-benchlab-irmodal",
+  "macos-benchlab-irbanner",
+  "macos-benchlab-irunsaved",
+  "macos-benchlab-irconsent",
+  "macos-benchlab-solve-ir-01",
+  "macos-benchlab-solve-mb-10",
+  "macos-benchlab-solve-mb-11",
+  "macos-benchlab-background-ir-01",
+  "macos-benchlab-background-ir-03",
+  "macos-benchlab-background-ir-04",
+]

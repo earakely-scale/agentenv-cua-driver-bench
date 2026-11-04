@@ -2,7 +2,7 @@
 trycua's runner prompts them, with the task's brief (a CDB task's with its workspace, a BenchLab task's rendered from
 the run's seed), in the background their background brief, and the time and turns they tell the agent, and with their
 system prompt for a Linux desktop, a browser task's allowing its localhost site, all checked against the fetched task
-pack; with the sentinel in that condition and BenchLab in the task's mode with the run's seed, claude-code with no
+pack; on macOS the BenchLab trials alone, the same but on BenchLab's macOS computer with their system prompt as it is; with the sentinel in that condition and BenchLab in the task's mode with the run's seed, claude-code with no
 built-in tools but Skill and Read, the sentinel armed just around the prompt within the task's time and turns; its
 grade, whatever became of the agent: in a container of its own with no network, on the trial's snapshot, and the
 trajectory's half outside; and the whole of Bench v2 in trycua's schedule."""
@@ -20,11 +20,14 @@ TRIALS = {"cdb-g02": "cdb-s02", "cdb-g03": "cdb-s03", "cdb-g04": "cdb-s04"}
 LABS = ("MB-09", "MB-10", "MB-11", "IR-01", "IR-02", "IR-03", "IR-04")
 RUNS = (1, 2, 3, 4, 5)
 CONDITIONS = ("background", "foreground")
-EVERY = (*TRIALS, *(f"{probe.lower()}-r{run}" for probe in LABS for run in RUNS))
+LAB_TRIALS = tuple(f"{probe.lower()}-r{run}" for probe in LABS for run in RUNS)
+EVERY = (*((name, "linux") for name in (*TRIALS, *LAB_TRIALS)), *((name, "macos") for name in LAB_TRIALS))
+OSES = ("linux", "macos")
 
 
-def _trial(name, condition):
-    return {step["id"]: step for step in json.loads((ROOT / "tasks" / f"{name}-{condition}.json").read_text())}
+def _trial(name, condition, os="linux"):
+    prefix = "" if os == "linux" else f"{os}-"
+    return {step["id"]: step for step in json.loads((ROOT / "tasks" / f"{prefix}{name}-{condition}.json").read_text())}
 
 
 @pytest.fixture
@@ -49,19 +52,20 @@ def test_each_trial_is_prompted_as_trycuas_runner_prompts_it(trycua, probe, cond
     assert (trial["task"]["timeout_seconds"], trial["task"]["max_turns"]) == (limits["timeout_s"], limits["max_turns"])
 
 
+@pytest.mark.parametrize("os", OSES)
 @pytest.mark.parametrize("probe", LABS)
 @pytest.mark.parametrize("run", RUNS)
 @pytest.mark.parametrize("condition", CONDITIONS)
-def test_each_benchlab_trial_is_seeded_and_prompted_as_trycuas_runner_does_it(trycua, probe, run, condition):
+def test_each_benchlab_trial_is_seeded_and_prompted_as_trycuas_runner_does_it(trycua, probe, run, condition, os):
     seed = _module(PACK / "runner" / "bench_core.py").probe_seed(probe, run - 1)
     limits = json.loads((PACK / "probes" / probe / "task.json").read_text())
     brief = _module(PACK / "probes" / probe / "render_brief.py").render(seed)
-    trial = _trial(f"{probe.lower()}-r{run}", condition)
+    trial = _trial(f"{probe.lower()}-r{run}", condition, os)
 
     assert trial["env"]["env_params"]["app_settings"]["benchlab"] == {
         "mode": limits["app_args"][limits["app_args"].index("--mode") + 1], "seed": seed}
     assert trial["task"]["prompt"] == _prompt(trycua, brief, condition, limits)
-    assert trial["agent"]["system_prompt"] == _system(limits)
+    assert trial["agent"]["system_prompt"] == _system(limits, os)
     assert (trial["task"]["timeout_seconds"], trial["task"]["max_turns"]) == (limits["timeout_s"], limits["max_turns"])
     assert trial["grade"]["command"] == f"python3 /grade/grade.py {probe} {seed}"
 
@@ -74,11 +78,12 @@ def test_trycuas_runner_prompts_with_the_brief_in_its_condition_and_tells_the_ti
     assert 'p.add_argument("--tell-budget", action=argparse.BooleanOptionalAction, default=True)' in runner
 
 
-@pytest.mark.parametrize("name", EVERY)
+@pytest.mark.parametrize(("name", "os"), EVERY)
 @pytest.mark.parametrize("condition", CONDITIONS)
-def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and_grades_it(name, condition):
-    trial = _trial(name, condition)
-    env = f"desktop-{TRIALS[name].removeprefix('cdb-')}" if name in TRIALS else "desktop-benchlab"
+def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and_grades_it(name, os, condition):
+    trial = _trial(name, condition, os)
+    env = (f"desktop-{TRIALS[name].removeprefix('cdb-')}" if name in TRIALS
+           else "desktop-benchlab" if os == "linux" else f"desktop-benchlab-{os}")
 
     assert trial["env"]["env_id"] == env
     assert trial["env"]["env_params"]["app_settings"]["bench-sentinel"] == {"condition": condition}
@@ -93,13 +98,14 @@ def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and
     assert trial["task"]["fail_task_on_error"] is False and trial["disarm"]["fail_task_on_error"] is False
 
 
-@pytest.mark.parametrize("name", EVERY)
+@pytest.mark.parametrize(("name", "os"), EVERY)
 @pytest.mark.parametrize("condition", CONDITIONS)
-def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_trajectory_outside(name, condition):
-    trial = _trial(name, condition)
+def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_trajectory_outside(name, os, condition):
+    trial = _trial(name, condition, os)
     container = {"sandbox_name": "grader", "container_name": "grade"}
 
     assert trial["box"]["network"] == "none" and trial["box"]["docker_context_artifact_id"] == "grader"
+    assert trial["sandbox"].get("sandbox_type") == (None if os == "linux" else "local")
     assert {key: trial["pack"][key] for key in (*container, "artifact_id")} == {**container, "artifact_id": "taskpack"}
     assert {key: trial["trial"][key] for key in (*container, "artifact_from_step_id")} == {
         **container, "artifact_from_step_id": "snapshot"}
@@ -114,7 +120,8 @@ def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_tr
 
 def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule(trycua):
     """trycua's schedule: the v2 tasks in order, runs 1 to 3, then runs 4 and 5, a whole run in one condition. A CDB
-    task's runs are one task file, its seed unused; the eval runs each task file once, and a condition's eval its half."""
+    task's runs are one task file, its seed unused; the eval runs each task file once, and a condition's eval its half.
+    On macOS, the BenchLab tasks' trials in the same order."""
     trials = (ROOT / "evals" / "bench-v2-trials.txt").read_text().split()
     expected = [f"{task.lower()}-{condition}" if task.startswith("CDB-") else f"{task.lower()}-r{run}-{condition}"
                 for condition in ("foreground", "background") for runs in ((1, 2, 3), (4, 5))
@@ -126,6 +133,10 @@ def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule(t
     for condition in ("foreground", "background"):
         assert tomllib.loads((ROOT / "evals" / f"{condition}.toml").read_text())["tasks"] == [
             name for name in dict.fromkeys(trials) if name.endswith(f"-{condition}")]
+    macos = (ROOT / "evals" / "macos-bench-v2-trials.txt").read_text().split()
+    assert macos == [f"macos-{name}" for name in trials if not name.startswith("cdb-")] and len(macos) == 70
+    assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in macos)
+    assert tomllib.loads((ROOT / "evals" / "macos-bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(macos))
 
 
 def _prompt(v2, brief, condition, limits):
@@ -135,11 +146,11 @@ def _prompt(v2, brief, condition, limits):
             + f"\nYou have about {limits['timeout_s'] // 60} minutes and at most {limits['max_turns']} turns.\n")
 
 
-def _system(limits):
+def _system(limits, os="linux"):
     runner = ast.parse((PACK / "runner" / "claude_arms.py").read_text())
     [macos] = [ast.literal_eval(node.value) for node in runner.body if isinstance(node, ast.Assign)
                and any(getattr(target, "id", None) == "MACOS_SYSTEM_PROMPT" for target in node.targets)]
-    system = macos.replace("a macOS desktop", "a Linux desktop")
+    system = macos.replace("a macOS desktop", "a Linux desktop") if os == "linux" else macos
     if limits.get("browser"):
         system = system.replace("Do not use the network.", "Do not use the internet; the task's localhost site is allowed.")
     return system
