@@ -1,18 +1,22 @@
 """Inside a bench task's computer, as its session user: arm the bench's sentinel just before the agent starts, or disarm it
-just after, as trycua's runner does. Arming empties the clipboard, goes to the first desktop and activates the sentinel
-until its window is active and holds the focus, then arms it, and fails unless the armed line says so too and, with
-``condition``, unless the sentinel runs in that condition. Each waits for the sentinel's log to say it's done, and does
-nothing when the sentinel is already in that state; disarming a sentinel that's no longer running says so, for the
-grade to fail the trial. ``args``: ``action``, ``arm`` or ``disarm``, and ``condition``. Returns the log's armed or
-disarmed line."""
+just after, as trycua's runner does. Arming empties the clipboard, on Linux goes to the first desktop, and activates
+the sentinel until its window is active and holds the focus, then arms it, and fails unless the armed line says so too
+and, with ``condition``, unless the sentinel runs in that condition. Each waits for the sentinel's log to say it's
+done, and does nothing when the sentinel is already in that state; disarming a sentinel that's no longer running says
+so, for the grade to fail the trial. ``args``: ``action``, ``arm`` or ``disarm``, and ``condition``. Returns the log's
+armed or disarmed line."""
 import json
 import os
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 LOG = Path.home() / ".bench-sentinel" / "sentinel.jsonl"
+#: The condition the sentinel's launch writes beside its log on macOS, whose start line doesn't carry it.
+CONDITION = LOG.parent / "condition"
+MACOS = sys.platform == "darwin"
 WAIT_S = 30.0
 ACTIVATE_EVERY_S = 3.0
 
@@ -27,7 +31,10 @@ def run(input):
         raise RuntimeError(f"the sentinel runs in the {condition} condition, not {input['args']['condition']}")
     if armed == (action == "arm"):
         return {"action": action, "already": True, "line": log.last(("armed", "disarmed"))}
-    if action == "arm":
+    if action == "arm" and MACOS:
+        subprocess.run(["pbcopy"], input=b"", check=True)
+        log.activate(pid)
+    elif action == "arm":
         subprocess.run(["xclip", "-selection", "clipboard", "-i", "/dev/null"], stdin=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, check=True)
         subprocess.run(["wmctrl", "-s", "0"], check=True)
@@ -58,7 +65,7 @@ class Log:
             pid, armed, condition = None, False, None
             for line in self.read():
                 if line["ev"] == "start":
-                    pid, armed, condition = line["pid"], False, line.get("condition")
+                    pid, armed, condition = line["pid"], False, line.get("condition") or _condition()
                 elif line["ev"] in ("armed", "disarmed"):
                     armed = line["ev"] == "armed"
             if pid is not None:
@@ -103,3 +110,8 @@ class Log:
         whole = data[:data.rfind(b"\n") + 1]
         self.offset += len(whole)
         return [json.loads(raw) for raw in whole.splitlines() if raw.strip()]
+
+
+def _condition():
+    """The condition the sentinel's launch wrote beside its log, when it did."""
+    return CONDITION.read_text().strip() if CONDITION.is_file() else None

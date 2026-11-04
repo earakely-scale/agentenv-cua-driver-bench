@@ -50,7 +50,8 @@ def grade(task, trial, trycua, scratch, seed=None):
     start = max((i for i, line in enumerate(lines) if line["ev"] == "start"), default=0)
     lines = lines[start:]
     summary = summarize.summarize(str(log))
-    condition = next((line.get("condition") for line in reversed(lines) if line["ev"] == "start"), None)
+    condition = next((line.get("condition") for line in reversed(lines) if line["ev"] == "start"), None) or (
+        _read(trial / SENTINEL / "condition"))
     window = [line for line in lines if line["armed"] or line["ev"] == "disarmed"]
     armed = next((line for line in window if line["ev"] == "armed"), {})
     problems = _problems(window, condition)
@@ -127,6 +128,11 @@ def _module(path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _read(path):
+    """A file's text, stripped; None when there's no file."""
+    return path.read_text().strip() if path.exists() else None
 
 
 def _lines(log):

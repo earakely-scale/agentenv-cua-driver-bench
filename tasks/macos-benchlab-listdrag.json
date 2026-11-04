@@ -1,0 +1,5 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-benchlab-macos", "env_params": {"app_settings": {"benchlab": {"mode": "listdrag", "seed": 790113}, "bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop-benchlab-macos", "artifact_id": "taskpack", "destination_path": "bench", "depends_on": ["env"]},
+  {"id": "check", "type": "run_code", "env_id": "desktop-benchlab-macos", "script_artifact_id": "check_benchlab", "args": {"mode": "listdrag", "seed": 790113}, "depends_on": ["load"]}
+]

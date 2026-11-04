@@ -1,0 +1,7 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-benchlab-macos", "env_params": {"app_settings": {"benchlab": {"mode": "irmodal", "seed": 517139}, "bench-sentinel": {"condition": "background"}}}},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop-benchlab-macos", "artifact_id": "taskpack", "destination_path": "bench", "depends_on": ["env"]},
+  {"id": "arm", "type": "run_code", "env_id": "desktop-benchlab-macos", "script_artifact_id": "sentinel", "args": {"action": "arm", "condition": "background"}, "depends_on": ["load"]},
+  {"id": "check", "type": "run_code", "env_id": "desktop-benchlab-macos", "script_artifact_id": "check_benchlab", "args": {"mode": "irmodal", "seed": 517139, "background": true}, "timeout_seconds": 300, "depends_on": ["arm"]},
+  {"id": "disarm", "type": "run_code", "env_id": "desktop-benchlab-macos", "script_artifact_id": "sentinel", "args": {"action": "disarm"}, "depends_on": ["check"]}
+]

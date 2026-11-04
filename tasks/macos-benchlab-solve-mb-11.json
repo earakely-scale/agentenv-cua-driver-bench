@@ -1,0 +1,13 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-benchlab-macos", "env_params": {"app_settings": {"benchlab": {"mode": "tooltip", "seed": 160721}, "bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "sandbox", "type": "deploy_sandbox", "sandbox_name": "grader", "sandbox_mode": "vm"},
+  {"id": "box", "type": "run_docker_container", "sandbox_name": "grader", "docker_context_artifact_id": "grader", "dockerfile_path": "grader.Dockerfile", "container_name": "grade", "command_override": "sleep infinity", "network": "none", "depends_on": ["sandbox"]},
+  {"id": "pack", "type": "load_artifact", "sandbox_name": "grader", "container_name": "grade", "artifact_id": "taskpack", "destination_path": "/grade/trycua", "depends_on": ["box"]},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop-benchlab-macos", "artifact_id": "taskpack", "destination_path": "bench", "depends_on": ["env"]},
+  {"id": "arm", "type": "run_code", "env_id": "desktop-benchlab-macos", "script_artifact_id": "sentinel", "args": {"action": "arm", "condition": "foreground"}, "depends_on": ["load"]},
+  {"id": "solve", "type": "run_code", "env_id": "desktop-benchlab-macos", "script_artifact_id": "check_benchlab", "args": {"mode": "tooltip", "seed": 160721, "solve": true}, "timeout_seconds": 300, "depends_on": ["arm"]},
+  {"id": "disarm", "type": "run_code", "env_id": "desktop-benchlab-macos", "script_artifact_id": "sentinel", "args": {"action": "disarm"}, "depends_on": ["solve"]},
+  {"id": "snapshot", "type": "snapshot_env", "env_id": "desktop-benchlab-macos", "depends_on": ["disarm"]},
+  {"id": "trial", "type": "load_artifact", "sandbox_name": "grader", "container_name": "grade", "artifact_from_step_id": "snapshot", "destination_path": "/grade/trial", "depends_on": ["box", "snapshot"]},
+  {"id": "grade", "type": "run_container_unit_tests_verifier", "sandbox_name": "grader", "container_name": "grade", "command": "python3 /grade/grade.py MB-11 160721", "reward_path": "/grade/reward.txt", "result_paths": ["/grade/result.json"], "depends_on": ["pack", "trial"]}
+]
