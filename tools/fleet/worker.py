@@ -39,6 +39,7 @@ SETUP_STEPS = ("env", "sandbox", "box", "pack", "agent", "skills", "record", "ar
 RATE = ("rate limit", "rate_limit", "api error: 429", "too many requests")
 SERVER = ("overloaded", "api error: 5", "internal server error", "service unavailable", "bad gateway")
 LIMITS = {"rate": 6, "server": 3, "setup": 2}
+TRIAL_S, STOP_S = 3600, 120
 
 
 def main():
@@ -64,8 +65,7 @@ def _trial(api, run, stem, name, index, finished):
     while not finished:
         before = _instances(stem)
         with open(FLEET / "logs" / f"{name}.log", "a") as log:
-            code = subprocess.run(["timeout", "3600", str(AGENT_ENV), "run", ".", "--task", stem], cwd=BENCH,
-                                  stdout=log, stderr=subprocess.STDOUT).returncode
+            code = _run([str(AGENT_ENV), "run", ".", "--task", stem], log)
         instance = max((d for i, d in _instances(stem).items() if i not in before),
                        key=lambda d: d.get("created_at_utc") or "", default=None)
         kind = failure(instance)
@@ -87,6 +87,22 @@ def _trial(api, run, stem, name, index, finished):
     if error := _upload(api, run, name):
         return _record(name, stem, index, instance, "upload_failed", error=error, tries=tries)
     _record(name, stem, index, instance, "uploaded", summary=summary, tries=tries)
+
+
+def _run(argv, log):
+    """``argv`` run in the bench, logging to ``log``, stopped as GNU timeout stops it after TRIAL_S, which macOS lacks:
+    SIGTERM, for agent-env to tear down what it deployed, then SIGKILL; its exit code, 124 when it was stopped."""
+    process = subprocess.Popen(argv, cwd=BENCH, stdout=log, stderr=subprocess.STDOUT)
+    try:
+        return process.wait(TRIAL_S)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        try:
+            process.wait(STOP_S)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        return 124
 
 
 def _missing(api, run, name, stem, index, instance, kind, tries, code):

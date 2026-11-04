@@ -24,7 +24,7 @@ PRICES = {"claude-sonnet-4-5": (3.0, 15.0, 0.30), "claude-sonnet-5-5": (2.0, 10.
           "claude-opus-5-5": (4.0, 20.0, 0.20)}
 TIERED = {"claude-haiku-5-5": (100_000, (0.10, 0.50, 0.01), (0.50, 2.50, 0.05))}
 BENCH = Path(os.environ.get("BENCH", Path.home() / "bench"))
-STEM = re.compile(r"^(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?-(?P<condition>foreground|background)$")
+STEM = re.compile(r"^(?:macos-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?-(?P<condition>foreground|background)$")
 
 
 def main():
@@ -108,7 +108,7 @@ def export(instance, artifacts, out, name, run_index):
         "system_prompt": steps["agent"].get("system_prompt"),
         "max_turns": steps["task"].get("max_turns"),
         "timeout_s": steps["task"].get("timeout_seconds"),
-        "os": "linux",
+        "os": os.environ.get("RUN_OS") or "linux",
         "computer": ctx["deployed_envs"][0]["env_id"].rsplit("/", 1)[-1],
         "app": workspace_app,
         "model": response.get("model"),

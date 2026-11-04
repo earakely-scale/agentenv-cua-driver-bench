@@ -1,7 +1,8 @@
 """plan.py TRIALS OUT PER_WORKER: split the trial list (`evals/bench-v2-trials.txt`: one task-file stem per line, a G
 task's stem once per run) into worker spec files OUT/worker-NN.txt of at most PER_WORKER trials, each worker on one
 computer so that it builds one, in the list's order. A trial's name is its stem with its run: cdb-g02-background's
-third line is cdb-g02-r3-background; a stem that names its run keeps it."""
+third line is cdb-g02-r3-background; a stem that names its run keeps it. A macOS trial's name is its Linux twin's,
+the OS being its run's folder (runs/macos/RUN)."""
 import json
 import re
 import sys
@@ -27,7 +28,7 @@ def split(bench, stems, per):
         seen[stem] += 1
         named = RUN.search(stem)
         index = int(named[1]) if named else seen[stem]
-        name = stem if named else re.sub(r"-(foreground|background)$", rf"-r{index}-\1", stem)
+        name = (stem if named else re.sub(r"-(foreground|background)$", rf"-r{index}-\1", stem)).removeprefix("macos-")
         env = next(s for s in json.loads((bench / "tasks" / f"{stem}.json").read_text()) if s["id"] == "env")["env_id"]
         groups[env].append(f"{stem}|{name}|{index}")
     return [(env, specs[start:start + per]) for env, specs in groups.items() for start in range(0, len(specs), per)]

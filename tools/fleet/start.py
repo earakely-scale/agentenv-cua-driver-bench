@@ -1,6 +1,7 @@
 """start.py INSTANCE RUN MODEL SPECS [--os OS] [--taskpack TGZ] [--keep] [--fresh]: start the fleet worker on INSTANCE
-for the trials SPECS lists (a file plan.py wrote), on the bench's main, as the systemd unit `fleet`; its trials and
-manifest go under runs/OS/RUN (OS linux by default).
+for the trials SPECS lists (a file plan.py wrote), on the bench's main, as the systemd unit `fleet` on a Linux VM, or
+on an EC2 Mac (`--os macos`) as the launchd job `dev.fleet.worker` of ec2-user's login session, where the lume
+provider runs its macOS computers; its trials and manifest go under runs/OS/RUN (OS linux by default).
 
 The model key (`FLEET_MODEL_KEY`) and the Hugging Face token (huggingface_hub's login) are encrypted to a key the VM
 makes for this job; the job decrypts them into its own environment and deletes the files. `--taskpack` ships a task
@@ -13,9 +14,22 @@ from pathlib import Path
 
 from huggingface_hub import get_token
 
-from common import opener, sealer, setting, ship, ssm
+from common import HOSTS, opener, sealer, setting, ship, ssm
 
-KEYS = "/run/trialkey"
+#: Where each OS's worker keeps the job's key pair: a folder its boot empties.
+KEYS = {"linux": "/run/trialkey", "macos": "/private/var/run/trialkey"}
+#: The launchd job a Mac worker runs as, in ec2-user's login session.
+MAC_JOB = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>dev.fleet.worker</string>
+<key>ProgramArguments</key><array><string>/bin/bash</string><string>-c</string>
+<string>ulimit -n 65536; bash ~/fleet/job.sh &gt; ~/fleet/job.log 2&gt;&amp;1</string></array>
+<key>RunAtLoad</key><true/>
+<key>EnvironmentVariables</key><dict><key>PATH</key>
+<string>/Users/ec2-user/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+<key>SoftResourceLimits</key><dict><key>NumberOfFiles</key><integer>65536</integer></dict>
+</dict></plist>"""
 
 
 def main():
@@ -24,46 +38,61 @@ def main():
     parser.add_argument("run")
     parser.add_argument("model")
     parser.add_argument("specs", type=Path)
-    parser.add_argument("--os", default="linux")
+    parser.add_argument("--os", default="linux", choices=sorted(HOSTS))
     parser.add_argument("--taskpack", type=Path)
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--fresh", action="store_true")
     args = parser.parse_args()
     venv, bench = setting("FLEET_VENV", "~/venv"), setting("FLEET_BENCH", "~/bench")
+    os_type, keys, home = args.os, KEYS[args.os], HOSTS[args.os][2]
     if args.taskpack:
-        ship(args.instance, args.taskpack, "/home/ubuntu/fleet/taskpack.tgz")
-    seal = sealer(args.instance, KEYS)
+        ship(args.instance, args.taskpack, f"{home}/fleet/taskpack.tgz", os_type)
+    seal = sealer(args.instance, keys, os_type)
     key, token = seal(setting("FLEET_MODEL_KEY")), seal(get_token())
     pull = "" if args.keep else "git fetch -q origin && git reset -q --hard origin/main && "
     unpack = "rm -rf artifacts/taskpack && tar xzf ~/fleet/taskpack.tgz -C artifacts && " if args.taskpack else ""
+    sandbox = '[sandbox]\ndefault = "lume"\n' if os_type == "macos" else ""
+    state = "export XDG_STATE_HOME=$HOME/.local/state\n" if os_type == "macos" else ""
     print(ssm(args.instance, f"""set -e
 umask 077
 {"rm -rf ~/fleet/progress.jsonl ~/fleet/out ~/fleet/logs" if args.fresh else ""}
 rm -f ~/fleet/stop
 mkdir -p ~/fleet/logs ~/fleet/out
 echo '{base64.b64encode(args.specs.read_bytes()).decode()}' | base64 -d > ~/fleet/specs.txt
-printf %s '{key}' > {KEYS}/model.enc
-printf %s '{token}' > {KEYS}/hf.enc
+printf %s '{key}' > {keys}/model.enc
+printf %s '{token}' > {keys}/hf.enc
 cat > ~/fleet/config.toml <<'CFG'
-[model]
+{sandbox}[model]
 base_url = "{setting("FLEET_MODEL_BASE_URL")}"
 api_key = "env:LITELLM_API_KEY"
 default = "{args.model}"
 CFG
 cat > ~/fleet/job.sh <<'JOB'
-{opener(KEYS)}
-export LITELLM_API_KEY="$(dec "$(cat {KEYS}/model.enc)")" HF_TOKEN="$(dec "$(cat {KEYS}/hf.enc)")"
-rm -f {KEYS}/key.pem {KEYS}/model.enc {KEYS}/hf.enc
-export AGENT_ENV_CONFIG=$HOME/fleet/config.toml VENV={venv} BENCH={bench} HF_REPO={setting("HF_REPO", "")}
-export RUN_OS={args.os} RUN_MODEL={args.model}
+{opener(keys)}
+export LITELLM_API_KEY="$(dec "$(cat {keys}/model.enc)")" HF_TOKEN="$(dec "$(cat {keys}/hf.enc)")"
+rm -f {keys}/key.pem {keys}/model.enc {keys}/hf.enc
+{state}export AGENT_ENV_CONFIG=$HOME/fleet/config.toml VENV={venv} BENCH={bench} HF_REPO={setting("HF_REPO", "")}
+export RUN_OS={os_type} RUN_MODEL={args.model}
 cd {bench} && {pull}{unpack}{venv}/bin/python tools/taskpack.py >/dev/null
 {venv}/bin/python tools/fleet/worker.py {args.run} ~/fleet/specs.txt
 JOB
-sudo systemctl reset-failed fleet 2>/dev/null || true
+{_launch(os_type)}
+echo started""", os_type=os_type))
+
+
+def _launch(os_type):
+    """The worker's job started where it runs its computers: a systemd unit, or a launchd job of the login session."""
+    if os_type == "macos":
+        return f"""cat > ~/fleet/dev.fleet.worker.plist <<'PLIST'
+{MAC_JOB}
+PLIST
+uid=$(id -u)
+sudo launchctl bootout gui/$uid/dev.fleet.worker 2>/dev/null || true
+sudo launchctl bootstrap gui/$uid ~/fleet/dev.fleet.worker.plist"""
+    return """sudo systemctl reset-failed fleet 2>/dev/null || true
 sudo systemd-run --unit fleet --property=LimitNOFILE=65536 --uid ubuntu --gid ubuntu --setenv=HOME=/home/ubuntu \\
   --setenv=PATH=/home/ubuntu/.local/bin:/usr/bin:/bin --working-directory=/home/ubuntu \\
-  bash -c 'bash ~/fleet/job.sh > ~/fleet/job.log 2>&1'
-echo started"""))
+  bash -c 'bash ~/fleet/job.sh > ~/fleet/job.log 2>&1'"""
 
 
 if __name__ == "__main__":

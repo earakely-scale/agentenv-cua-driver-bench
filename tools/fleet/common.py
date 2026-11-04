@@ -1,6 +1,7 @@
 """The fleet's settings, from the environment or `tools/fleet/fleet.env` (git-ignored; `fleet.env.example` lists them),
 and what every fleet tool does over SSM: run a script as the VM's user, copy a small file, make a key pair on the VM
-and encrypt a secret to it, so that only ciphertext ever crosses SSM."""
+and encrypt a secret to it, so that only ciphertext ever crosses SSM. A worker is a Linux VM, its user ubuntu, or an EC2
+Mac, its user ec2-user (`HOSTS`)."""
 import base64
 import hashlib
 import os
@@ -14,6 +15,9 @@ import boto3
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 CHUNK = 80_000
+#: Each OS's worker: its user, the user's group and home, and the command that prints a file's sha256.
+HOSTS = {"linux": ("ubuntu", "ubuntu", "/home/ubuntu", "sha256sum"),
+         "macos": ("ec2-user", "staff", "/Users/ec2-user", "shasum -a 256")}
 
 
 def _load(path):
@@ -35,11 +39,11 @@ def setting(name, default=None):
     return value
 
 
-def ssm(instance, script, timeout=300):
-    """``script`` run on ``instance`` as its ``ubuntu`` user; its output, or exit with its error."""
+def ssm(instance, script, timeout=300, os_type="linux"):
+    """``script`` run on ``instance`` as its worker user; its output, or exit with its error."""
     command = SSM.send_command(
         InstanceIds=[instance], DocumentName="AWS-RunShellScript", TimeoutSeconds=60,
-        Parameters={"commands": [f"sudo -iu ubuntu bash <<'__FLEET__'\n{script}\n__FLEET__"],
+        Parameters={"commands": [f"sudo -iu {HOSTS[os_type][0]} bash <<'__FLEET__'\n{script}\n__FLEET__"],
                     "executionTimeout": [str(timeout)]})["Command"]["CommandId"]
     while True:
         time.sleep(4)
@@ -53,23 +57,25 @@ def ssm(instance, script, timeout=300):
             return out["StandardOutputContent"]
 
 
-def ship(instance, local, remote):
+def ship(instance, local, remote, os_type="linux"):
     """A small file copied to ``remote`` on the VM in base64 chunks an SSM command can hold, checked by sha256."""
     data = base64.b64encode(local.read_bytes()).decode()
-    ssm(instance, f"mkdir -p $(dirname {remote}) && rm -f {remote}.b64")
+    ssm(instance, f"mkdir -p $(dirname {remote}) && rm -f {remote}.b64", os_type=os_type)
     for start in range(0, len(data), CHUNK):
-        ssm(instance, f"printf %s '{data[start:start + CHUNK]}' >> {remote}.b64")
-    got = ssm(instance, f"base64 -d {remote}.b64 > {remote} && rm {remote}.b64 && sha256sum {remote}").split()[0]
+        ssm(instance, f"printf %s '{data[start:start + CHUNK]}' >> {remote}.b64", os_type=os_type)
+    got = ssm(instance, f"base64 -d < {remote}.b64 > {remote} && rm {remote}.b64 && {HOSTS[os_type][3]} {remote}",
+              os_type=os_type).split()[0]
     if got != hashlib.sha256(local.read_bytes()).hexdigest():
         raise SystemExit(f"{instance}: {remote} arrived changed")
 
 
-def sealer(instance, folder):
+def sealer(instance, folder, os_type="linux"):
     """A key pair made on the VM in ``folder`` (root-made, not /dev/shm, which logind empties when each SSM session
     ends); a function that encrypts a secret to it."""
-    public = ssm(instance, f"""sudo install -d -m 700 -o ubuntu -g ubuntu {folder}
+    user, group, _, _ = HOSTS[os_type]
+    public = ssm(instance, f"""sudo install -d -m 700 -o {user} -g {group} {folder}
 umask 077; openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out {folder}/key.pem 2>/dev/null
-openssl pkey -in {folder}/key.pem -pubout""")
+openssl pkey -in {folder}/key.pem -pubout""", os_type=os_type)
     pem = public[public.index("-----BEGIN"):]
     return lambda secret: _encrypt(pem, secret)
 
