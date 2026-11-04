@@ -214,8 +214,11 @@ python tools/fleet/watch.py instances.txt                      # each worker's t
   themselves.
 - `tools/fleet/worker.py` runs on the VM. It first uploads the run's manifest (`tools/fleet/manifest.py`) to
   `runs/<os>/<run>/manifest.json`: the task pack's commit and sha256, the framework's version, the model and agent,
-  each computer with its driver and the sha256 of the driver's tool list, the limits and conditions, and the re-run
-  policy.
+  each computer with its driver and the sha256 of the driver's tool list, the host, the limits, conditions and seeds,
+  and the re-run policy. It refuses a framework older than 0.9.1412, whose verifiers get the graded trajectory.
+  A run made elsewhere, such as on a Mac, writes the same manifest with
+  `python tools/fleet/manifest.py . RUN OS MODEL SPECS --image image.json`, `image.json` being the identity its image
+  records (a macOS image's `/etc/agentenv/image.json`).
 - It runs each trial with `agent-env run . --task`. A trial infrastructure cut short is a harness error, never a score:
   - a rate limit is re-run after a backoff, up to six times;
   - an API 5xx or overload, up to three times;

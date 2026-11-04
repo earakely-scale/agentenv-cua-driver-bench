@@ -71,14 +71,18 @@ def manifest():
     return _module(ROOT / "tools" / "fleet" / "manifest.py")
 
 
-def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_limits_and_re_run_policy(manifest, tmp_path):
+def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_image_host_seeds_and_re_run_policy(
+        manifest, tmp_path, monkeypatch):
     driver = tmp_path / "cua-driver"
     driver.mkdir()
     (driver / "mcp.json").write_text('{"tools": []}')
     specs = ["cdb-g02-foreground|cdb-g02-r1-foreground|1", "mb-09-r4-background|mb-09-r4-background|4"]
     policy = {"setup_steps": list(SETUP), "reruns": {"rate": 6, "server": 3, "setup": 2}}
+    image = {"image": "agentenv-macos-bench", "macos_build": "25F84"}
+    monkeypatch.setattr(manifest, "_version", lambda name: "0.9.1412")
+    monkeypatch.setattr(manifest, "_ec2", lambda item: "mac2-m2.metal")
 
-    built = manifest.build(ROOT, "run-1", "macos", "anthropic/claude-sonnet-5-5", specs, policy, tmp_path)
+    built = manifest.build(ROOT, "run-1", "macos", "anthropic/claude-sonnet-5-5", specs, policy, tmp_path, image)
 
     lock = manifest.tomllib.loads((ROOT / "taskpack.lock.toml").read_text())
     assert built["task_pack"] == {"repo": "trycua/cua", "commit": lock["commit"], "sha256": lock["sha256"]}
@@ -90,6 +94,12 @@ def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_limits_
     assert (s02["computer"], s02["driver"], s02["display"]) == ("ubuntu-24.04", "cua-driver",
                                                                 {"width": 1920, "height": 1080})
     assert s02["tool_list_sha256"] == manifest.hashlib.sha256(b'{"tools": []}').hexdigest()
+    assert built["seeds"] == {"mb-09-r4-background": {"benchlab": 539937}}
+    assert (built["image"], built["host"]["instance_type"]) == (image, "mac2-m2.metal")
+
+    monkeypatch.setattr(manifest, "_version", lambda name: "0.9.1411")
+    with pytest.raises(SystemExit, match="needs 0.9.1412 or later"):
+        manifest.build(ROOT, "run-1", "macos", "anthropic/claude-sonnet-5-5", specs, policy, tmp_path)
 
 
 def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_dataset(worker, tmp_path, monkeypatch):
