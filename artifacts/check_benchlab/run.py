@@ -1,13 +1,13 @@
 """Inside BenchLab's computer, run as its session user once the task pack is loaded into ``~/bench``: BenchLab shows its
-window in the app's mode, titled ``BenchLab — <mode>``, its outer frame at the place trycua's macOS BenchLab takes,
-having written its state and its ``app_start`` for that mode and seed, which its data plane returns; and with ``solve``,
-it does the task as an agent does, through the computer's driver over its MCP endpoint, element by element, with the
-values trycua's files derive from the seed, the pointer only where the task needs one, for the grade to score with
-their evaluator; and with ``background``, its interruption brought up and answered by background actions alone, as an
-agent would in trycua's background condition, and what the user's window went through, reported: under this computer's
-xfwm4 the modal dialog takes the keyboard and comes to the front, so ``user_kept_focus`` and ``user_window_on_top``
-are "no" (openbox, trycua's Linux window manager, leaves the keyboard but still stacks it on top). ``args``: ``mode``,
-``seed``, ``solve`` and ``background``."""
+window in the app's mode, titled ``BenchLab — <mode>`` (on macOS, trycua's app itself, ``BenchLab``), its outer frame at
+the place trycua's macOS BenchLab takes, having written its state and its ``app_start`` for that mode and seed, which
+its data plane returns; and with ``solve``, it does the task as an agent does, through the computer's driver over its
+MCP endpoint, element by element, with the values trycua's files derive from the seed, the pointer only where the task
+needs one, for the grade to score with their evaluator; and with ``background``, its interruption brought up and
+answered by background actions alone, as an agent would in trycua's background condition, and what the user's window
+went through, reported: under this computer's xfwm4 the modal dialog takes the keyboard and comes to the front, so
+``user_kept_focus`` and ``user_window_on_top`` are "no" (openbox, trycua's Linux window manager, leaves the keyboard but
+still stacks it on top). ``args``: ``mode``, ``seed``, ``solve`` and ``background``."""
 import base64
 import json
 import re
@@ -26,16 +26,18 @@ LOST = {"didResignKey", "didResignActive"}
 DATA_OBJECTS = "urn:agentenv:data-objects/v1"
 FRAME_AT = (60, 80)
 WAIT_S = 30.0
+MACOS = sys.platform == "darwin"
 
 
 def run(input):
     args, env = input["args"], input["env"]
     driver = Driver(env)
-    lab = driver.window(lambda window: window["app_name"] == "BenchLab" and window["title"].startswith("BenchLab — "))
+    title = "BenchLab" if MACOS else f"BenchLab — {args['mode']}"
+    lab = driver.window(lambda window: window["app_name"] == "BenchLab" and window["title"] == title)
     state = _wait(lambda: _json(DATA / "state.json"))
     events = _events()
     bounds = lab["bounds"]
-    report = {"title_ok": lab["title"] == f"BenchLab — {args['mode']}" and lab["app_name"] == "BenchLab",
+    report = {"title_ok": lab["title"] == title and lab["app_name"] == "BenchLab",
               "placed_ok": 0 <= bounds["x"] - FRAME_AT[0] <= 12 and 0 <= bounds["y"] - FRAME_AT[1] <= 48,
               "state_ok": (state["mode"], state["seed"]) == (args["mode"], args["seed"]),
               "started_ok": events[0]["type"] == "app_start" and events[0]["details"] == {
