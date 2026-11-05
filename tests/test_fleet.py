@@ -2,6 +2,7 @@
 one computer each, each trial named with its run; a finished trial counted, or run again for a rate limit, an API
 error or a failed setup, and recorded as missing once its re-runs are spent; and a run's manifest pinning each input
 that changes a score."""
+import hashlib
 import importlib.util
 import json
 import sys
@@ -264,8 +265,8 @@ def test_a_boards_runs_are_planned_as_plan_py_plans_them_each_worker_one_compute
     assert runs["mh"] == workers[0].specs + workers[1].specs and len(runs["mh"]) == 70
 
 
-def _peek(running, digest="", ended=0, framework=None):
-    return (f"running={int(running)}\ndigest={digest}\nended={ended}\n"
+def _peek(running, digest="", ended=0, framework=None, failed=0):
+    return (f"running={int(running)}\ndigest={digest}\nended={ended}\nfailed={failed}\n"
             + (f"framework={framework}\n" if framework else "") + "log=last line\n")
 
 
@@ -326,6 +327,33 @@ def test_an_unreachable_host_and_a_failed_start_drop_nothing_and_a_short_worker_
     assert [a[-1] for a in calls] == ["--fresh", "--fresh", "macos", "macos"]
     assert json.loads((tmp_path / "b.state.json").read_text())["r/lab"]["status"] == "failed"
     assert "b4 r/lab failed: 2 of 3 trials" in log
+
+
+def test_a_worker_whose_trials_failed_their_export_exports_just_those_again_from_their_task_instances(
+        board, tmp_path, monkeypatch):
+    worker = _worker(board, "r", "lab", 2)
+    host = board.Host("b4", "i-4", workers=[worker])
+    runner, calls = _runner(board, tmp_path, monkeypatch, [host])
+    progress = "\n".join(json.dumps(record) for record in (
+        {"name": "t0", "stem": "lab-stem", "run_index": 1, "status": "uploaded", "instance": "inst-0"},
+        {"name": "t1", "stem": "lab-stem", "run_index": 1, "status": "export_failed", "instance": "inst-1"}))
+    again = hashlib.sha256(b"lab-stem|t1|1|inst-1\n").hexdigest()
+    replies = board.common.replies
+
+    replies["i-4"] = _peek(False)
+    runner.poll(host)
+    replies["i-4"] = lambda script: progress if script.startswith("cat ") else _peek(False, worker.digest, 2, failed=1)
+    runner.poll(host)
+    replies["i-4"] = _peek(True, again, 0)
+    runner.poll(host)
+    replies["i-4"] = _peek(False, again, 1)
+    runner.poll(host)
+
+    assert len(calls) == 2 and calls[1][5].endswith("r--lab--reexport-1.txt") and calls[1][-1] == "--fresh"
+    assert (tmp_path / "r--lab--reexport-1.txt").read_text() == "lab-stem|t1|1|inst-1\n"
+    assert json.loads((tmp_path / "b.state.json").read_text())["r/lab"]["status"] == "done"
+    log = (tmp_path / "b.log").read_text()
+    assert "b4 r/lab: 1 trial not uploaded; exporting it again (1/2)" in log and "b4 ended r/lab: 1 trials;" in log
 
 
 def test_an_idle_host_moves_to_its_framework_pin_before_its_next_worker(board, tmp_path, monkeypatch):

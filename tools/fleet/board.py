@@ -8,8 +8,10 @@ another, through start.py.
 
 It's restart-safe: what it started is kept in BOARD.state.json, and each poll reads what each host runs, by its
 worker's trials' digest, so nothing starts twice. A host that can't be asked is passed over for that poll; a start that
-fails is tried again; a worker that ended with trials left resumes, up to `RESUMES` times, then counts as failed. A
-host's framework is checked out and installed at its pin only while it runs nothing. `--plan` prints the plan and
+fails is tried again; a worker that ended with trials left resumes, up to `RESUMES` times, then counts as failed; one
+whose trials all ended but some failed their export or upload exports and uploads just those again, from their
+finished task instances, as many times. A host's framework is checked out and installed at its pin only while it runs
+nothing. `--plan` prints the plan and
 starts nothing. What happens goes to BOARD.log."""
 import argparse
 import hashlib
@@ -126,11 +128,12 @@ def assign(workers: list[Worker], hosts: list[Host]) -> list[Host]:
     return hosts
 
 
-#: What a host runs: whether a worker runs, its trials' digest, how many of them have ended, the head of the framework
-#: checkout when one is named, and the job log's last line.
+#: What a host runs: whether a worker runs, its trials' digest, how many of them have ended and how many of those failed
+#: their export or upload, the head of the framework checkout when one is named, and the job log's last line.
 PEEK = """pgrep -f tools/fleet/worker.py >/dev/null && echo running=1 || echo running=0
 echo "digest=$(shasum -a 256 ~/fleet/specs.txt 2>/dev/null | cut -c1-64)"
 echo "ended=$(cat ~/fleet/progress.jsonl 2>/dev/null | wc -l | tr -d ' ')"
+echo "failed=$(grep -cE '"status": "(export|upload)_failed"' ~/fleet/progress.jsonl 2>/dev/null)"
 {framework}echo "log=$(tail -1 ~/fleet/job.log 2>/dev/null | cut -c1-200)"
 """
 
@@ -155,21 +158,24 @@ class Runner:
             return
         current = next((w for w in host.workers if self.state.get(w.id, {}).get("status") == "started"), None)
         if current is not None:
-            mine = seen["digest"] == current.digest
-            if seen["running"] and mine:
-                self.state[current.id]["seen"] = True
-                return self.save()
             record = self.state[current.id]
+            mine = seen["digest"] == record.get("digest", current.digest)
+            if seen["running"] and mine:
+                record["seen"] = True
+                return self.save()
             if not record.get("seen") and not mine and time.time() - record["at"] < START_S:
                 return
-            if mine and seen["ended"] >= len(current.specs):
-                record["status"] = "done"
-                self.say(f"{host.name} ended {current.id}: {seen['ended']} trials; {seen['log']}")
+            if mine and seen["ended"] >= record.get("trials", len(current.specs)):
+                if seen["failed"] and record.get("reexports", 0) < RESUMES:
+                    return self.reexport(host, current)
+                record["status"] = "failed" if seen["failed"] else "done"
+                lost = f", {seen['failed']} not uploaded" if seen["failed"] else ""
+                self.say(f"{host.name} ended {current.id}: {seen['ended']} trials{lost}; {seen['log']}")
             elif record.get("resumes", 0) < RESUMES and (record.get("seen") or mine):
                 record["resumes"] = record.get("resumes", 0) + 1
-                self.say(f"{host.name} {current.id} ended with {seen['ended']} of {len(current.specs)} trials; "
-                         f"resuming ({record['resumes']}/{RESUMES}); {seen['log']}")
-                return self.start(host, current, fresh=False)
+                self.say(f"{host.name} {current.id} ended with {seen['ended']} of {record.get('trials', len(current.specs))} "
+                         f"trials; resuming ({record['resumes']}/{RESUMES}); {seen['log']}")
+                return self.start(host, current, fresh=False, specs=Path(record["specs"]) if "specs" in record else None)
             else:
                 record["status"] = "failed"
                 self.say(f"{host.name} {current.id} failed: {seen['ended']} of {len(current.specs)} trials; "
@@ -197,7 +203,8 @@ class Runner:
         if "running" not in seen:
             return None
         return {"running": seen["running"] == "1", "digest": seen.get("digest", ""),
-                "ended": int(seen.get("ended") or 0), "framework": seen.get("framework") or None,
+                "ended": int(seen.get("ended") or 0), "failed": int(seen.get("failed") or 0),
+                "framework": seen.get("framework") or None,
                 "log": seen.get("log", "")}
 
     def pin(self, host: Host) -> None:
@@ -218,12 +225,32 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
         host.framework = head
         self.say(f"{host.name} pinned to {head[:12]}")
 
-    def start(self, host: Host, worker: Worker, *, fresh: bool) -> None:
+    def reexport(self, host: Host, worker: Worker) -> None:
+        """``worker``'s trials that failed their export or upload exported and uploaded again on ``host``, from the task
+        instances they finished on, without running them."""
+        try:
+            out = ssm(host.instance, "cat ~/fleet/progress.jsonl", timeout=90, os_type=self.os)
+        except (Exception, SystemExit) as error:
+            return self.say(f"{host.name} couldn't read {worker.id}'s progress: {error}"[:300])
+        records = [json.loads(line) for line in out.splitlines() if line.startswith("{")]
+        lines = [f"{r['stem']}|{r['name']}|{r['run_index']}|{r['instance']}" for r in records
+                 if r.get("status") in ("export_failed", "upload_failed") and r.get("instance")]
+        record = self.state[worker.id]
+        record["reexports"] = record.get("reexports", 0) + 1
+        specs = self.work / f"{worker.id.replace('/', '--')}--reexport-{record['reexports']}.txt"
+        specs.write_text("\n".join(lines) + "\n")
+        one = len(lines) == 1
+        self.say(f"{host.name} {worker.id}: {len(lines)} trial{'' if one else 's'} not uploaded; exporting "
+                 f"{'it' if one else 'them'} again ({record['reexports']}/{RESUMES})")
+        self.start(host, worker, fresh=True, specs=specs)
+
+    def start(self, host: Host, worker: Worker, *, fresh: bool, specs: Path | None = None) -> None:
         env = {**os.environ, **{name: value for name, value in (("FLEET_VENV", self.board.get("venv")),
                                                                   ("FLEET_BENCH", self.board.get("bench")),
                                                                   ("FLEET_STATE", host.state)) if value}}
+        specs = specs or self.work / f"{worker.id.replace('/', '--')}.txt"
         argv = [sys.executable, str(Path(__file__).with_name("start.py")), host.instance, worker.run, worker.model,
-                str(self.work / f"{worker.id.replace('/', '--')}.txt"), "--run-specs",
+                str(specs), "--run-specs",
                 str(self.work / f"{worker.run}.run.txt"), "--os", self.os]
         if taskpack := self.board.get("taskpack"):
             argv += ["--taskpack", str(ROOT / taskpack)]
@@ -234,9 +261,10 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
         if done.returncode or not said or said[-1] != "started":
             return self.say(f"{host.name} couldn't start {worker.id}: {said[-1:] or done.returncode}; trying again")
         record = self.state.setdefault(worker.id, {})
-        record.update(status="started", at=time.time(), seen=False, host=host.name)
-        self.say(f"{host.name} {'started' if fresh else 'resumed'} {worker.id} ({len(worker.specs)} trials, "
-                 f"{worker.computer})")
+        lines = specs.read_text().splitlines()
+        record.update(status="started", at=time.time(), seen=False, host=host.name, specs=str(specs), trials=len(lines),
+                      digest=hashlib.sha256(("\n".join(lines) + "\n").encode()).hexdigest())
+        self.say(f"{host.name} {'started' if fresh else 'resumed'} {worker.id} ({len(lines)} trials, {worker.computer})")
         self.save()
 
     def _finished(self, host: Host) -> bool:
