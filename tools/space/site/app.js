@@ -10,8 +10,9 @@ function h(tag, attrs, ...kids) {
     if (k === "class") el.className = v;
     else if (k === "html") el.innerHTML = v;
     else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-    else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
-    else el.setAttribute(k, v === true ? "" : v);
+    else if (k === "style" && typeof v === "object") {
+      for (const [p, x] of Object.entries(v)) p.startsWith("--") ? el.style.setProperty(p, x) : (el.style[p] = x);
+    } else el.setAttribute(k, v === true ? "" : v);
   }
   for (const kid of kids.flat(Infinity)) {
     if (kid == null || kid === false) continue;
@@ -41,12 +42,17 @@ const pct = (v) => (v == null ? "–" : `${Math.round(v * 100)}%`);
 const mins = (s) => (s == null ? "–" : s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${Math.round(s)} s`);
 const ICON_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>';
+const ICON_LOCK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="7" width="10" height="7.5" rx="1.8"/><path d="M5.4 7V5.1a2.6 2.6 0 0 1 5.2 0V7"/></svg>';
 const SPEEDS = [1, 2, 4, 8, 16];
 
 let CAT = null;
 let PLAYER = null;
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
-let TASKS = {}, CONDS = {}, MODELS = {}, OSES = {}, CRIT = [];
+let TASKS = {}, CONDS = {}, MODELS = {}, OSES = {}, DRIVERS = {}, CRIT = [];
+// The board's state for this visit: the grid's driver, the comparison's OS and model, and where the board was left.
+const VIEW = { board: false, ready: false, driver: null, compare: null, y: null };
+const settled = (el) => Promise.all([...el.querySelectorAll(".fig img")].map((img) =>
+  img.complete ? null : new Promise((r) => { img.addEventListener("load", r, { once: true }); img.addEventListener("error", r, { once: true }); })));
 
 async function boot() {
   try {
@@ -56,7 +62,9 @@ async function boot() {
     return;
   }
   TASKS = byId(CAT.tasks); CONDS = byId(CAT.conditions); MODELS = byId(CAT.models); OSES = byId(CAT.oses);
+  DRIVERS = byId(CAT.drivers);
   CRIT = CAT.criteria;
+  VIEW.driver = CAT.driver;
   const L = CAT.links || {};
   $("#links").replaceChildren(
     L.dataset && h("a", { href: L.dataset, target: "_blank", rel: "noopener", class: "keep" }, "Dataset"),
@@ -79,13 +87,14 @@ async function boot() {
 
 const enc = encodeURIComponent;
 function hashOf(t) {
-  return "#/" + [t.os, t.task, t.condition, t.model].map(enc).join("/") + (t.of > 1 ? "/" + enc(t.key) : "");
+  const lead = t.driver === CAT.driver ? "" : enc(t.driver) + "/";
+  return "#/" + lead + [t.os, t.task, t.condition, t.model].map(enc).join("/") + (t.of > 1 ? "/" + enc(t.key) : "");
 }
 
-const sameCell = (a, b) => a.os === b.os && a.task === b.task && a.condition === b.condition && a.model === b.model;
+const sameCell = (a, b) => a.driver === b.driver && a.os === b.os && a.task === b.task && a.condition === b.condition && a.model === b.model;
 
 function best(sel) {
-  const keys = ["os", "task", "condition", "model"];
+  const keys = ["os", "task", "condition", "model", "driver"];
   const pool = CAT.trials.slice().sort((a, b) => (MODELS[b.model]?.board ? 1 : 0) - (MODELS[a.model]?.board ? 1 : 0));
   if (sel.key) {
     const hit = pool.find((t) => sameCell(t, sel) && t.key === sel.key) || pool.find((t) => t.uid === sel.key);
@@ -101,13 +110,30 @@ function best(sel) {
 
 function route() {
   if (PLAYER) { PLAYER.destroy(); PLAYER = null; }
-  const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
-  if (!parts.length) { boardView(); return; }
+  const raw = location.hash;
+  const parts = raw.startsWith("#/") ? raw.slice(2).split("/").filter(Boolean).map(decodeURIComponent) : [];
+  if (!parts.length || parts[0] === "drivers") {
+    const [section, ...args] = parts.length ? parts : [raw.slice(1)];
+    const back = VIEW.y != null && !VIEW.board;
+    if (args.length) VIEW.compare = { os: args[0], model: args[1] };
+    if (!VIEW.board || args.length) boardView();
+    settled($("#app")).then(() => {
+      const el = section && document.getElementById(section);
+      const glide = VIEW.ready && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto";
+      if (back) window.scrollTo(0, VIEW.y);
+      else if (el) el.scrollIntoView({ behavior: glide });
+      else window.scrollTo({ top: 0, behavior: glide });
+      VIEW.ready = true;
+    });
+    return;
+  }
+  const driver = DRIVERS[parts[0]] || (OSES[parts[1]] && !OSES[parts[0]]) ? parts.shift() : CAT.driver;
   const [os, task, condition, model, key] = parts;
-  const t = best({ os, task, condition, model, key });
+  const t = best({ driver, os, task, condition, model, key, run: /^r\d+$/.test(key || "") ? +key.slice(1) : null });
   if (!t) { boardView(); return; }
   const canon = hashOf(t);
   if (canon !== location.hash) history.replaceState(null, "", canon);
+  if (VIEW.board) VIEW.y = window.scrollY;
   trialView(t);
 }
 
@@ -135,54 +161,114 @@ function userBox(cls) {
 
 function osPhrase() {
   const names = CAT.oses.map((o) => o.name);
-  return names.length === 1 ? `a ${names[0]} desktop` : `a desktop (${names.join(", ")})`;
+  return names.length === 1 ? `a ${names[0]} desktop` : `a ${names.slice(0, -1).join(", ")} or ${names[names.length - 1]} desktop`;
+}
+
+const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+const osesOf = (driver) => CAT.oses.filter((o) => CAT.trials.some((t) => t.driver === driver && t.os === o.id));
+const driverName = (id) => DRIVERS[id]?.name || id;
+const driverDot = (id) => h("span", { class: "dot", style: { background: `var(--s${(DRIVERS[id]?.slot ?? 0) % 8})` } });
+
+function driverClause() {
+  const arms = CAT.drivers.filter((d) => d.id !== CAT.driver);
+  if (!arms.length) return "the computer-use driver's clicks, keys and window reads";
+  const where = [...new Set(arms.flatMap((d) => osesOf(d.id).map((o) => o.name)))];
+  const on = where.length < CAT.oses.length ? `on ${listOf(where)} ` : "";
+  return `the clicks, keys and window reads of a computer-use driver: ${driverName(CAT.driver)}, and ${on}also ${listOf(arms.map((d) => d.name))}, to compare them`;
 }
 
 function boardView() {
   document.title = CAT.title;
-  const app = $("#app");
+  VIEW.board = true;
   const wrap = h("div", { class: "wrap" });
+  wrap.append(landing(), resultsSection());
+  if (CAT.comparisons.length) wrap.append(driversSection());
+  wrap.append(trialsSection(), howSection());
+  $("#app").replaceChildren(wrap);
+}
+
+function landing() {
   const hero = CAT.trials.find((t) => t.uid === CAT.hero);
   const models = CAT.models.filter((m) => m.board).map((m) => m.name);
-  wrap.append(h("section", { class: "landing" },
+  return h("section", { class: "landing" },
     h("p", { class: "kicker" }, "trycua's Cua Driver Bench · run on AgentEnv computers"),
     h("h1", {}, "Can an AI agent do the office work without getting in your way?"),
     h("p", { class: "lede" },
       `An agent gets real office tasks on ${osPhrase()} (mail, chat, a calendar, a spreadsheet, a ledger, a browser) and may work `,
-      h("b", {}, "only through the GUI"), ", with the computer-use driver's clicks, keys and window reads. ",
+      h("b", {}, "only through the GUI"), `, with ${driverClause()}. `,
       "In the ", h("b", {}, "background"), " runs a person is typing in their own window the whole time, and the agent must finish ",
       h("b", {}, "without disturbing them"), ": no stolen focus, no window over theirs, no moved pointer, no touched clipboard."),
     h("div", { class: "cta" },
       hero && h("a", { class: "btn primary", href: hashOf(hero) }, h("span", { html: ICON_PLAY, style: { width: "14px", display: "inline-flex" } }), "Watch a background replay"),
-      h("a", { class: "btn", href: "#results" }, "See the results")),
+      h("a", { class: "btn", href: "#results" }, "See the results"),
+      CAT.comparisons.length ? h("a", { class: "btn", href: "#/drivers" }, "Compare drivers") : null),
     h("div", { class: "players" },
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot agent" }), "The agent"),
-        h("p", {}, `${models.join(", ") || "A model"} in the claude-code CLI. It reads windows and acts through the computer-use driver's tools: click, type, press a key, open a menu. No terminal, no scripts, no side doors.`)),
+        h("p", {}, `${models.join(", ") || "A model"} in the claude-code CLI. It reads windows and acts through its computer-use driver's tools: click, type, press a key, open a menu. No terminal, no scripts, no side doors.`)),
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot user" }), "The user"),
         h("p", {}, "In the background condition a simulated user types into their own window, “User activity”, one character a second. A sentinel logs everything that reaches them.")),
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot judge" }), "The grade"),
-        h("p", {}, "Every half must hold: the task, by trycua's own evaluator; GUI only, no way out of the GUI; and in the background, the user undisturbed on all eight of trycua's criteria."))),
-  ));
+        h("p", {}, "Every half must hold: the task, by trycua's own evaluator; GUI only, no way out of the GUI; and in the background, the user undisturbed on all eight of trycua's criteria."))));
+}
 
-  const head = h("div", { class: "section-head", id: "results" }, h("h2", {}, "Results"),
-    h("p", {}, resultsNote()));
-  wrap.append(head);
-  const figs = h("div", { class: "figs" });
-  for (const f of CAT.figures) {
-    figs.append(h("div", { class: "fig" }, h("picture", {},
-      h("source", { media: "(max-width: 480px) and (prefers-color-scheme: dark)", srcset: `figures/${f}-phone-dark.svg` }),
-      h("source", { media: "(max-width: 480px)", srcset: `figures/${f}-phone.svg` }),
-      h("source", { media: "(prefers-color-scheme: dark)", srcset: `figures/${f}-dark.svg` }),
-      h("img", { src: `figures/${f}.svg`, alt: f === "task-score" ? "Task score by condition" : "Full pass by condition", loading: "lazy" }))));
-  }
-  wrap.append(figs);
+function figures(keys, alt) {
+  return h("div", { class: "figs" }, keys.map((f) => h("div", { class: "fig" }, h("picture", {},
+    h("source", { media: "(max-width: 480px) and (prefers-color-scheme: dark)", srcset: `figures/${f}-phone-dark.svg` }),
+    h("source", { media: "(max-width: 480px)", srcset: `figures/${f}-phone.svg` }),
+    h("source", { media: "(prefers-color-scheme: dark)", srcset: `figures/${f}-dark.svg` }),
+    h("img", { src: `figures/${f}.svg`, alt: alt(f) })))));
+}
 
+function resultsSection() {
+  const lines = CAT.models.filter((m) => m.board).length > 1 ? ", a line per model" : "";
+  return h("section", { "aria-labelledby": "results-h" },
+    h("div", { class: "section-head", id: "results" }, h("h2", { id: "results-h" }, "Results"),
+      h("p", {}, `All through ${driverName(CAT.driver)}: a panel per OS${lines}.`)),
+    figures(CAT.figures, (f) => (f === "task-score" ? "Task score by condition" : "Full pass by condition")));
+}
+
+function driversSection() {
+  return h("section", { class: "drivers", "aria-labelledby": "drivers-h" },
+    h("div", { class: "section-head", id: "drivers" }, h("h2", { id: "drivers-h" }, "Drivers"),
+      h("p", {}, "The same OS, model and tasks; only the computer-use driver changes.")),
+    h("div", { class: "dcards" }, CAT.drivers.map((d) => h("article", { class: "dcard", style: { "--dc": `var(--s${d.slot % 8})` } },
+      h("h3", {}, h("span", { class: "dot" }), d.name),
+      h("p", {}, d.detail || ""),
+      h("div", { class: "apps" }, osesOf(d.id).map((o) => h("span", { class: "app" }, o.name)))))),
+    h("p", { class: "dnote" }, "Every driver also serves the same neutral ", h("code", {}, "computer_*"),
+      " tools to the grader and the recordings, which the agents in these runs don't see."),
+    figures(CAT.driver_figures, (f) => (f.endsWith("task-score") ? "Task score by driver" : "Full pass by driver")),
+    compareView());
+}
+
+function trialsSection() {
+  const head = h("div", { class: "section-head", id: "trials" }, h("h2", {}, "Every trial"), h("p", {}, resultsNote()));
+  const ranOn = (driver, os) => osesOf(driver).some((o) => o.id === os);
   let osSel = store.get("cdb-os", CAT.oses[0]?.id);
   if (!OSES[osSel]) osSel = CAT.oses[0]?.id;
+  if (!osesOf(VIEW.driver).length) VIEW.driver = CAT.driver;
+  if (!ranOn(VIEW.driver, osSel)) osSel = osesOf(VIEW.driver)[0]?.id ?? osSel;
   const boardModels = CAT.models.filter((m) => m.board).map((m) => m.id);
   let shown = boardModels.slice();
   const gridHost = h("div");
-  const renderGrid = () => gridHost.replaceChildren(boardGrid(osSel, shown));
+  const controls = h("div", { class: "controls" });
+  const groups = [];
+  const sync = () => {
+    for (const [g, cur] of groups) for (const b of g.children) b.setAttribute("aria-pressed", String(b.dataset.id === cur()));
+    gridHost.replaceChildren(boardGrid(osSel, shown, VIEW.driver));
+  };
+  const group = (label, items, cur, onpick, cls = "") => {
+    const g = h("div", { class: `tabs ${cls}`, role: "group", "aria-label": label },
+      items.map(([id, ...kids]) => h("button", { "data-id": id, onclick: () => { onpick(id); sync(); } }, ...kids)));
+    groups.push([g, cur]);
+    controls.append(g);
+  };
+  if (CAT.drivers.length > 1) {
+    group("Driver", CAT.drivers.map((d) => [d.id, driverDot(d.id), d.name]), () => VIEW.driver, (id) => {
+      VIEW.driver = id;
+      if (!ranOn(id, osSel)) osSel = osesOf(id)[0].id;
+    }, "drivers-tabs");
+  }
   if (boardModels.length > 1) {
     const chips = h("div", { class: "tabs models", role: "group", "aria-label": "Models" });
     for (const mid of boardModels) {
@@ -191,37 +277,36 @@ function boardView() {
         if (on && shown.length === 1) return;
         shown = on ? shown.filter((x) => x !== mid) : boardModels.filter((x) => x === mid || shown.includes(x));
         e.currentTarget.setAttribute("aria-pressed", String(!on));
-        renderGrid();
+        sync();
       } }, h("span", { class: "dot", style: { background: `var(--s${(MODELS[mid].slot ?? 0) % 8})` } }), MODELS[mid].name));
     }
-    head.append(chips);
+    controls.append(chips);
   }
   if (CAT.oses.length > 1) {
-    const tabs = h("div", { class: "tabs", role: "group", "aria-label": "Operating system" });
-    for (const o of CAT.oses) {
-      tabs.append(h("button", { "aria-pressed": String(o.id === osSel), onclick: () => {
-        osSel = o.id; store.set("cdb-os", osSel);
-        for (const b of tabs.children) b.setAttribute("aria-pressed", String(b.textContent === o.name));
-        renderGrid();
-      } }, o.name));
-    }
-    head.append(tabs);
+    group("Operating system", CAT.oses.map((o) => [o.id, o.name]), () => osSel, (id) => {
+      osSel = id;
+      store.set("cdb-os", id);
+      if (!ranOn(VIEW.driver, id)) VIEW.driver = CAT.driver;
+    });
   }
-  renderGrid();
-  wrap.append(gridHost);
-  wrap.append(h("div", { class: "section-head" }, h("h2", {}, "How a trial is graded")));
-  wrap.append(h("div", { class: "how" },
-    h("article", {}, h("h3", {}, "Task"),
-      h("p", {}, "trycua's evaluator for the task reads the files the apps left (the calendar, the workbook, the ledger, the cases) and runs weighted checks. The score is the share of points; the half holds only if every check passes.")),
-    h("article", {}, h("h3", {}, "GUI only"),
-      h("p", {}, "The sentinel's guard watches live for a terminal, a run dialog or a script, and a scan of the trajectory checks every tool call. Any way out of the GUI fails the trial.")),
-    h("article", {}, h("h3", {}, "User undisturbed · background only"),
-      h("ul", { class: "crit-list" }, CRIT.map((c) => h("li", {}, h("b", {}, c.short), " ", h("code", {}, c.id)))))));
-  app.replaceChildren(wrap);
-  if (location.hash === "#results") head.scrollIntoView();
+  if (controls.children.length) head.append(controls);
+  sync();
+  return h("section", {}, head, gridHost);
 }
 
-function boardGrid(os, shown) {
+function howSection() {
+  return h("section", {},
+    h("div", { class: "section-head" }, h("h2", {}, "How a trial is graded")),
+    h("div", { class: "how" },
+      h("article", {}, h("h3", {}, "Task"),
+        h("p", {}, "trycua's evaluator for the task reads the files the apps left (the calendar, the workbook, the ledger, the cases) and runs weighted checks. The score is the share of points; the half holds only if every check passes.")),
+      h("article", {}, h("h3", {}, "GUI only"),
+        h("p", {}, "The sentinel's guard watches live for a terminal, a run dialog or a script, and a scan of the trajectory checks every tool call. Any way out of the GUI fails the trial.")),
+      h("article", {}, h("h3", {}, "User undisturbed · background only"),
+        h("ul", { class: "crit-list" }, CRIT.map((c) => h("li", {}, h("b", {}, c.short), " ", h("code", {}, c.id)))))));
+}
+
+function boardGrid(os, shown, driver) {
   const conds = CAT.conditions;
   const multi = shown.length > 1;
   const grid = h("div", { class: "board", style: { "--cols": conds.length } });
@@ -230,7 +315,7 @@ function boardGrid(os, shown) {
   let fam = null;
   const fams = new Set(CAT.tasks.map((t) => t.family));
   for (const task of CAT.tasks) {
-    const ts = CAT.trials.filter((t) => t.os === os && t.task === task.id && shown.includes(t.model));
+    const ts = CAT.trials.filter((t) => t.driver === driver && t.os === os && t.task === task.id && shown.includes(t.model));
     if (!ts.length) continue;
     if (fams.size > 1 && task.family !== fam) {
       fam = task.family;
@@ -250,7 +335,7 @@ function boardGrid(os, shown) {
         any = true;
         cell.append(cellBlock(runs, multi));
       }
-      const lost = missingOf(os, task.id, c.id, shown);
+      const lost = missingOf(driver, os, task.id, c.id, shown);
       if (!any && !lost) cell.append(h("div", { class: "empty-cell" }, "No trial."));
       if (lost) cell.append(h("div", { class: "caveat" }, h("b", {}, "Incomplete"),
         ` ${lost} trial${lost > 1 ? "s" : ""} missing: infrastructure cut ${lost > 1 ? "them" : "it"} short past the re-runs, so this isn't ranked.`));
@@ -262,9 +347,153 @@ function boardGrid(os, shown) {
   return grid;
 }
 
-function missingOf(os, task, cond, models) {
-  const runs = new Set(CAT.trials.filter((t) => models.includes(t.model)).map((t) => t.run));
-  return (CAT.missing || []).filter((x) => x.os === os && x.task === task && x.condition === cond && runs.has(x.run)).length;
+function missingOf(driver, os, task, cond, models) {
+  const runs = new Set(CAT.trials.filter((t) => t.driver === driver && models.includes(t.model)).map((t) => t.run));
+  return (CAT.missing || []).filter((x) => x.driver === driver && x.os === os && x.task === task && x.condition === cond && runs.has(x.run)).length;
+}
+
+function compareView() {
+  const host = h("div", { class: "compare", role: "region", "aria-label": "Compare drivers" });
+  const pick = () => {
+    const all = CAT.comparisons;
+    const want = VIEW.compare || {};
+    return all.find((c) => c.os === want.os && c.model === want.model) || all.find((c) => c.os === want.os) || all[0];
+  };
+  const select = (patch) => {
+    const cur = pick();
+    VIEW.compare = { os: cur.os, model: cur.model, ...patch };
+    const next = pick();
+    VIEW.compare = { os: next.os, model: next.model };
+    if (location.hash.startsWith("#/drivers")) history.replaceState(null, "", `#/drivers/${enc(next.os)}/${enc(next.model)}`);
+    render();
+  };
+  const render = () => {
+    const c = pick();
+    host.replaceChildren(compareHead(c, select), compareGrid(c), compareFoot(c));
+  };
+  render();
+  return host;
+}
+
+function compareHead(c, select) {
+  const oses = [...new Set(CAT.comparisons.map((x) => x.os))];
+  const models = CAT.comparisons.filter((x) => x.os === c.os).map((x) => x.model);
+  const tabs = (label, ids, cur, name, patch) => h("div", { class: "tabs", role: "group", "aria-label": label },
+    ids.map((id) => h("button", { "aria-pressed": String(id === cur), onclick: () => select(patch(id)) }, name(id))));
+  const n = Math.round(Math.max(...c.drivers.map((d) => d.foreground.n / c.tasks.length)));
+  return h("div", { class: "cmp-head" },
+    h("div", { class: "cmp-row" },
+      h("span", { class: "cmp-k" }, h("span", { html: ICON_LOCK, "aria-hidden": "true", style: { display: "inline-flex" } }), "Held fixed"),
+      h("div", { class: "cmp-pick" }, h("small", {}, "OS"), tabs("Operating system", oses, c.os, (id) => OSES[id]?.name || id, (id) => ({ os: id }))),
+      h("div", { class: "cmp-pick" }, h("small", {}, "Model"), tabs("Model", models, c.model, (id) => MODELS[id]?.name || id, (id) => ({ model: id }))),
+      h("span", { class: "cmp-scope" }, `${c.tasks.length} task${c.tasks.length === 1 ? "" : "s"}${c.tasks.length < c.of ? ` of ${c.of}` : ""} · ${n} run${n === 1 ? "" : "s"} each · same seeds, prompts and grade`)),
+    h("div", { class: "cmp-row" },
+      h("span", { class: "cmp-k" }, "Compared"),
+      h("div", { class: "cmp-drivers" }, c.drivers.map((d) => h("span", { class: "dchip" }, driverDot(d.id), driverName(d.id))))));
+}
+
+const cellRuns = (c, driver, task, cond) => CAT.trials.filter((t) => t.driver === driver && t.os === c.os && t.model === c.model && t.task === task && t.condition === cond);
+const meanOf = (xs) => { xs = xs.filter((v) => v != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
+const tone = (k, n) => (!n ? "na" : k === n ? "ok" : k ? "mid" : "no");
+
+function rank(results) {
+  const key = (r) => (r && r.n ? [r.k / r.n, r.score ?? -1] : null);
+  const keys = results.map(key);
+  const top = keys.filter(Boolean).reduce((a, b) => (!a || b[0] > a[0] || (b[0] === a[0] && b[1] > a[1]) ? b : a), null);
+  const same = (k) => k && top && Math.abs(k[0] - top[0]) < 1e-9 && Math.abs(k[1] - top[1]) < 1e-9;
+  const lead = keys.map(same);
+  return lead.every((x, i) => x || !keys[i]) ? keys.map(() => false) : lead;
+}
+
+function compareGrid(c) {
+  const conds = CAT.conditions.filter((k) => c.drivers.every((d) => d[k.id]));
+  const grid = h("div", { class: "cmp-grid" });
+  grid.append(h("div", { class: "ch" }, "Task"), h("div", { class: "ch" }, "Driver"),
+    ...conds.map((k) => h("div", { class: "ch cond" }, h("b", {}, k.name), h("span", {}, k.short))));
+  const fams = new Set(CAT.tasks.map((t) => t.family));
+  let fam = null;
+  const ran = CAT.tasks.filter((t) => c.drivers.some((d) => conds.some((k) => cellRuns(c, d.id, t.id, k.id).length)));
+  for (const task of ran) {
+    if (fams.size > 1 && task.family !== fam) {
+      fam = task.family;
+      grid.append(h("div", { class: "fam" }, task.family_name || task.family));
+    }
+    const inTotals = c.tasks.includes(task.id);
+    const cvs = conds.map((k) => [k, caveatOf(c.os, k.id, task.id)]).filter(([, cv]) => cv);
+    grid.append(h("div", { class: `ct${inTotals ? "" : " out"}`, style: { gridRow: `span ${c.drivers.length}` } },
+      h("div", { class: "probe" }, (task.probe || task.id).replace("CDB-", "")),
+      h("h3", {}, task.title),
+      cvs.map(([k, cv]) => h("p", { class: "ct-note cv", title: cv.reason }, `${cv.mark} ${k.name}: ${cv.short.toLowerCase()}`)),
+      inTotals ? null : h("p", { class: "ct-note" }, "Not in the totals: not every driver has it in both conditions yet.")));
+    const results = Object.fromEntries(conds.map((k) => [k.id, c.drivers.map((d) => {
+      const runs = cellRuns(c, d.id, task.id, k.id);
+      return runs.length ? { runs, k: runs.filter((t) => t.passed).length, n: runs.length, score: meanOf(runs.map((t) => t.grade?.task?.score)) } : null;
+    })]));
+    const leads = Object.fromEntries(conds.map((k) => [k.id, rank(results[k.id])]));
+    c.drivers.forEach((d, i) => {
+      const first = i === 0 ? " first" : "";
+      grid.append(h("div", { class: `cd${first}` }, driverDot(d.id), h("span", {}, driverName(d.id))));
+      for (const k of conds) {
+        const lost = missingOf(d.id, c.os, task.id, k.id, [c.model]);
+        grid.append(cmpCell(results[k.id][i], leads[k.id][i], lost, d.id, first));
+      }
+    });
+  }
+  grid.append(...totalsRows(c, conds));
+  return grid;
+}
+
+function cmpCell(r, lead, lost, driver, first) {
+  const style = { "--dc": `var(--s${(DRIVERS[driver]?.slot ?? 0) % 8})` };
+  if (!r) return h("div", { class: `cc empty${first}`, style }, lost ? `${lost} missing` : "Not run");
+  const rep = r.runs.slice().sort((a, b) => (b.grade?.task?.score ?? -1) - (a.grade?.task?.score ?? -1))[0];
+  const runName = (t) => (t.run_index != null ? `Run ${t.run_index}` : `#${t.nth}`);
+  return h("div", { class: `cc${lead ? " lead" : ""}${first}`, style },
+    h("a", { class: `pc ${tone(r.k, r.n)}`, href: hashOf(rep), title: `${r.k} of ${r.n} runs pass. Replay ${r.n > 1 ? "the best run, " : ""}${runName(rep).toLowerCase()}` },
+      h("b", {}, `${r.k}/${r.n}`), h("span", {}, "pass")),
+    h("span", { class: "pips" }, r.runs.map((t) => h("a", { class: `pip ${t.passed ? "ok" : "no"}`, href: hashOf(t),
+      title: `${runName(t)}: ${t.passed ? "pass" : "fail"}, ${pct(t.grade?.task?.score)} task score`,
+      "aria-label": `${runName(t)}, ${t.passed ? "pass" : "fail"}, ${pct(t.grade?.task?.score)} task score: replay` }))),
+    h("span", { class: "sc", title: "Mean task score" }, h("span", { class: "bar" }, h("i", { style: { width: pct(r.score ?? 0) } })), h("b", {}, pct(r.score))),
+    lead ? h("span", { class: "lead-tag" }, "Best") : null,
+    lost ? h("span", { class: "miss", title: `${lost} trial${lost > 1 ? "s" : ""} missing: infrastructure cut ${lost > 1 ? "them" : "it"} short past the re-runs` }, `+${lost} missing`) : null);
+}
+
+function totalsRows(c, conds) {
+  const base = c.drivers.find((d) => d.id === CAT.driver) || c.drivers[0];
+  const out = [h("div", { class: "ct total", style: { gridRow: `span ${c.drivers.length}` } },
+    h("div", { class: "probe" }, "Totals"),
+    h("h3", {}, c.tasks.length < c.of ? `The ${c.tasks.length} tasks every driver ran` : `All ${c.tasks.length} tasks`),
+    h("p", { class: "ct-note" }, "Full pass and mean task score over the same tasks, so the rows compare like with like."))];
+  const leads = Object.fromEntries(conds.map((k) => [k.id, rank(c.drivers.map((d) => ({ k: d[k.id].passed, n: d[k.id].n, score: d[k.id].score })))]));
+  c.drivers.forEach((d, i) => {
+    const first = i === 0 ? " first" : "";
+    const style = { "--dc": `var(--s${(DRIVERS[d.id]?.slot ?? 0) % 8})` };
+    out.push(h("div", { class: `cd total${first}` }, driverDot(d.id), h("span", {}, driverName(d.id))));
+    for (const k of conds) {
+      const v = d[k.id];
+      const delta = (a, b) => {
+        if (d.id === base.id || a == null || b == null) return null;
+        const pts = Math.round(100 * a) - Math.round(100 * b);
+        return h("span", { class: `delta ${pts > 0 ? "up" : pts < 0 ? "down" : "flat"}` }, pts > 0 ? "▲ " : pts < 0 ? "▼ " : "", `${pts > 0 ? "+" : pts < 0 ? "−" : "±"}${Math.abs(pts)} pts`);
+      };
+      out.push(h("div", { class: `cc total${leads[k.id][i] ? " lead" : ""}${first}`, style },
+        h("div", { class: "tl" }, h("b", { class: "big" }, pct(v.pass)), h("span", {}, "full pass"), delta(v.pass, base[k.id].pass)),
+        h("div", { class: "tl sub" }, h("span", { class: `pc ${tone(v.passed, v.n)}` }, h("b", {}, `${v.passed}/${v.n}`), h("span", {}, "trials")),
+          h("span", {}, `${pct(v.score)} task score`), delta(v.score, base[k.id].score)),
+        leads[k.id][i] ? h("span", { class: "lead-tag" }, "Best") : null));
+    }
+  });
+  return out;
+}
+
+function compareFoot(c) {
+  const used = [...new Map(c.tasks.flatMap((t) => CAT.conditions.map((k) => caveatOf(c.os, k.id, t))).filter(Boolean).map((cv) => [cv.mark, cv])).values()];
+  const base = driverName(c.drivers.some((d) => d.id === CAT.driver) ? CAT.driver : c.drivers[0].id);
+  return h("div", { class: "cmp-foot" },
+    h("p", {}, h("b", {}, "Reading it. "), "Each cell is one driver on one task in one condition: how many of its runs passed every half of the grade, a square per run (each opens its replay), and the mean task score. ",
+      h("span", { class: "lead-tag" }, "Best"), " marks the driver with the most passes there, then the higher task score, and each driver tied with it; when all of them tie, none. The totals' arrows compare each driver with ", base, "."),
+    used.map((cv) => h("p", {}, h("b", {}, `${cv.mark} ${cv.short}. `), cv.reason)));
 }
 
 function rate(runs, f) {
@@ -317,13 +546,14 @@ function picker(label, value, options, onchange) {
 
 function crumbs(t) {
   const all = CAT.trials;
-  const go = (patch) => { location.hash = hashOf(best({ os: t.os, task: t.task, condition: t.condition, model: t.model, run: t.run_index, ...patch })); };
+  const go = (patch) => { location.hash = hashOf(best({ driver: t.driver, os: t.os, task: t.task, condition: t.condition, model: t.model, run: t.run_index, ...patch })); };
   const uniq = (xs) => [...new Set(xs)];
   const oses = uniq(all.map((x) => x.os));
   const tasks = uniq(all.filter((x) => x.os === t.os).map((x) => x.task));
   const conds = uniq(all.filter((x) => x.os === t.os && x.task === t.task).map((x) => x.condition));
   const models = uniq(all.filter((x) => x.os === t.os && x.task === t.task && x.condition === t.condition).map((x) => x.model));
-  const runs = all.filter((x) => x.os === t.os && x.task === t.task && x.condition === t.condition && x.model === t.model);
+  const drivers = uniq(all.filter((x) => x.os === t.os && x.task === t.task && x.condition === t.condition && x.model === t.model).map((x) => x.driver));
+  const runs = all.filter((x) => sameCell(x, t));
   const order = (ids, ref) => ids.sort((a, b) => ref.findIndex((r) => r.id === a) - ref.findIndex((r) => r.id === b));
   return h("div", { class: "crumbs" },
     h("a", { class: "back", href: "#/" }, "← All trials"),
@@ -331,20 +561,23 @@ function crumbs(t) {
     picker("Task", t.task, order(tasks, CAT.tasks).map((k) => [k, `${(TASKS[k]?.probe || k).replace("CDB-", "")} · ${TASKS[k]?.title || k}`, TASKS[k]?.family_name]), (v) => go({ task: v })),
     picker("Condition", t.condition, order(conds, CAT.conditions).map((k) => [k, CONDS[k]?.name || k]), (v) => go({ condition: v })),
     picker("Model", t.model, order(models, CAT.models).map((k) => [k, MODELS[k]?.name || k]), (v) => go({ model: v })),
+    CAT.drivers.length > 1 && picker("Driver", t.driver, order(drivers, CAT.drivers).map((k) => [k, driverName(k)]), (v) => go({ driver: v })),
     runs.length > 1 && picker("Run", t.key, runs.map((r) => [r.key, `${r.run_index != null ? `Run ${r.run_index}` : `#${r.nth}`} · ${pct(r.grade?.task?.score)} · ${r.passed ? "pass" : "fail"}${r.seed != null ? ` · seed ${r.seed}` : ""}`]), (v) => go({ key: v })));
 }
 
 function trialView(t) {
   const task = TASKS[t.task] || { title: t.task };
   const cond = CONDS[t.condition] || { name: t.condition };
-  document.title = `${task.title} · ${cond.name} · ${t.model_name}`;
+  document.title = `${task.title} · ${cond.name} · ${t.model_name}${t.driver === CAT.driver ? "" : ` · ${driverName(t.driver)}`}`;
+  VIEW.board = false;
+  VIEW.driver = t.driver;
   const app = $("#app");
   const wrap = h("div", { class: "wrap replay" });
   wrap.append(crumbs(t));
   wrap.append(h("div", { class: "rtitle" },
     h("span", { class: `cond-chip ${t.condition}` }, cond.name),
     h("h1", {}, task.title),
-    h("p", { class: "sub" }, cond.detail || "", " ", h("span", { style: { color: "var(--ink-3)" } }, `${t.model_name} · ${OSES[t.os]?.name || t.os}${OSES[t.os]?.detail ? " (" + OSES[t.os].detail + ")" : ""}`))));
+    h("p", { class: "sub" }, cond.detail || "", " ", h("span", { style: { color: "var(--ink-3)" } }, `${t.model_name} through ${driverName(t.driver)} · ${OSES[t.os]?.name || t.os}${OSES[t.os]?.detail ? " (" + OSES[t.os].detail + ")" : ""}`))));
   const player = h("div", { class: "player" },
     h("div", { class: "screen" }, h("div", { class: "stage" }), h("div", { class: "nowbar" })),
     h("div", { class: "transport" }), h("div", { class: "userbar" }), h("aside", { class: "lane" }));
@@ -389,7 +622,7 @@ function gradeSection(t) {
     h("p", { class: "gsub" }, "No way out of the GUI, live or in the agent's tool calls."),
     gu ? h("ul", { class: "checks" },
       gu.live && h("li", { class: gu.violations.some((v) => !v.startsWith("builtin:")) ? "no" : "ok" }, h("span", { class: "s" }, gu.violations.some((v) => !v.startsWith("builtin:")) ? "✗" : "✓"), h("span", {}, "Live guard: no terminal, run dialog or script in front")),
-      gu.trajectory && h("li", { class: gu.result ? "ok" : "no" }, h("span", { class: "s" }, gu.result ? "✓" : "✗"), h("span", {}, "Trajectory scan: only the computer-use driver's tools")),
+      gu.trajectory && h("li", { class: gu.result ? "ok" : "no" }, h("span", { class: "s" }, gu.result ? "✓" : "✗"), h("span", {}, `Trajectory scan: only ${driverName(t.driver)}'s tools`)),
       gu.violations.map((v) => h("li", { class: "no" }, h("span", { class: "s" }, "✗"), h("span", {}, "Violation", h("code", {}, v)))),
       gu.transient.map((v) => h("li", { class: "na" }, h("span", { class: "s" }, "!"), h("span", {}, "Briefly in front", h("code", {}, v)))),
       Object.entries(gu.refused || {}).map(([k, n]) => h("li", { class: "na" }, h("span", { class: "s" }, "·"), h("span", {}, `Refused by the harness, never ran: ${k}${n > 1 ? ` ×${n}` : ""}`)))) : h("p", { class: "gsub" }, "Not graded."),
@@ -412,6 +645,7 @@ function gradeSection(t) {
     h("h3", {}, "Run"),
     h("dl", { class: "kv" },
       h("dt", {}, "Model"), h("dd", {}, t.model_name),
+      h("dt", {}, "Driver"), h("dd", {}, driverName(t.driver)),
       h("dt", {}, "Harness"), h("dd", {}, `${t.harness || "–"} ${t.harness_version || ""}`),
       h("dt", {}, "Computer"), h("dd", {}, t.computer || "–"),
       h("dt", {}, "Turns"), h("dd", {}, t.turns ?? "–"),
@@ -698,7 +932,7 @@ function createPlayer(root, trial, tl) {
     const harness = trial.harness ? `${trial.harness}` : "";
     lane.replaceChildren(
       h("div", { class: "lane-head" }, h("div", { class: "who" }, h("span", { class: "dot agent" }), "AGENT"),
-        h("div", { class: "m" }, `${trial.model_name}${harness ? " in " + harness : ""}`),
+        h("div", { class: "m" }, `${trial.model_name}${harness ? " in " + harness : ""}`, h("span", { class: "via" }, ` · ${driverName(trial.driver)}`)),
         h("div", { class: "c" }, `${calls.length} tool calls${nErr ? ` · ${nErr} errors` : ""}${trial.turns ? ` · ${trial.turns} turns` : ""}${texts.length ? ` · ${texts.length} remarks` : ""}`)),
       h("div", { class: "lane-scroll" }, list));
     const callEls = Object.fromEntries(items.filter((it) => it.kind === "call").map((it) => [it.c.i, it.el]));
@@ -762,7 +996,7 @@ function createPlayer(root, trial, tl) {
       h("div", { class: "halves" }, halves.map(([name, ok, sub, val]) => h("div", { class: "half" },
         h("span", { class: `ic ${ok == null ? "na" : ok ? "ok" : "no"}` }, ok == null ? "–" : ok ? "✓" : "✗"),
         h("div", {}, h("b", {}, name), h("span", {}, sub)), h("em", {}, val)))),
-      h("div", { class: "facts" }, [trial.model_name, `${trial.harness || ""} ${trial.harness_version || ""}`.trim(), trial.turns != null && `${trial.turns} turns`, trial.tool_calls != null && `${trial.tool_calls} tool calls`, mins(trial.duration), trial.cost != null && `$${trial.cost.toFixed(2)}`, trial.ending].filter(Boolean).join(" · ")),
+      h("div", { class: "facts" }, [trial.model_name, driverName(trial.driver), `${trial.harness || ""} ${trial.harness_version || ""}`.trim(), trial.turns != null && `${trial.turns} turns`, trial.tool_calls != null && `${trial.tool_calls} tool calls`, mins(trial.duration), trial.cost != null && `$${trial.cost.toFixed(2)}`, trial.ending].filter(Boolean).join(" · ")),
       h("div", { class: "row" },
         h("button", { class: "btn primary", onclick: () => { endDismissed = false; seek(Math.max(0, (armed[0] || 0) - 0.5), true); } }, "↺ Replay"),
         h("button", { class: "btn", onclick: () => $("#grade")?.scrollIntoView({ behavior: "smooth" }) }, "Full grade ↓"),

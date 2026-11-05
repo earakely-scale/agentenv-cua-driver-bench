@@ -16,7 +16,8 @@ datasets:
 
 Replays of computer-use agents doing trycua's [Cua Driver Bench](https://github.com/trycua/cua) tasks on
 [AgentEnv](https://www.agentenvframework.com) computers: the desktop as recorded, every tool call the agent made, the
-simulated user typing in their own window in the background condition, and the grade.
+simulated user typing in their own window in the background condition, and the grade; and, where several computer-use
+drivers ran the same tasks with the same model, the drivers side by side.
 
 The trials, recordings and grades are in the dataset
 [earakely-scale/CuaDriverBench-AgentEnv](https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv); this
