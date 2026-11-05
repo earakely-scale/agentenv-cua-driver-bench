@@ -49,14 +49,14 @@ their keystrokes. In the **foreground** condition the desktop is the agent's alo
 GUI: no terminal, no scripts, no way round the apps.
 
 The tasks, prompts and scoring are [trycua](https://github.com/trycua/cua)'s Cua Driver Bench, all ten tasks of
-its Bench v2 (multi-app workflows, precision interactions, interruptions), ported to Linux computers on the [AgentEnv Framework](https://www.agentenvframework.com) by
+its Bench v2 (multi-app workflows, precision interactions, interruptions), run on Linux and macOS computers on the [AgentEnv Framework](https://www.agentenvframework.com) by
 [earakely-scale/agentenv-cua-driver-bench](https://github.com/earakely-scale/agentenv-cua-driver-bench). Each trial
 is graded by trycua's own evaluator, its A22 criteria for an undisturbed user and its GUI-only scan, run outside the
 computer. This dataset holds every trial: the screen recording, the agent's full trajectory, the user's log, the
 grade and the apps' final files. The [replay Space](https://huggingface.co/spaces/earakely-scale/CuaDriverBench-AgentEnv)
 plays each trial with the agent's tool calls and the user's typing beside it.
 
-It starts with Linux (Ubuntu 24.04) and Claude in Claude Code. Each run, one model on one operating system at one
+It covers Linux (Ubuntu 24.04) and macOS 26, with Claude in Claude Code. Each run, one model on one operating system at one
 commit of the bench, is a folder of its own under `runs/`, so other operating systems and models are added beside it.
 
 These are not trycua's results and are not comparable with them: trycua runs the bench with its own runner, on macOS

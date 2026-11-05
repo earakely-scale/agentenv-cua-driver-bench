@@ -1,3 +1,17 @@
+**Claude Sonnet 5.5 in Claude Code, the BenchLab tasks on macOS** (run `sonnet-5-5-2026-11-05`: the seven precision
+and interruption tasks, 5 runs each, both conditions, on macOS 26 on EC2 Macs, on agentenv-framework at PR #498's
+2d4ad6fe, released in 0.9.1443, with trycua's macOS system prompt and the Linux run's tasks, limits and grade). 53 of
+the 70 trials pass, against 39 of the same 70 on Linux, for $18.77 at list price ($18.76 on Linux), and none leaves the
+GUI.
+
+- **Foreground: 35 of 35, task score 1.00.** On Linux 34 of 35.
+- **Background: 18 of 35, task score 0.81.** 18 of the 20 interruption trials pass, IR-03 and IR-04 every time. On
+  macOS a background app's dialog stays behind the user's window, where on Linux it covers it (‡). In IR-01's and
+  IR-02's second runs it does the task but a window is raised over the user's. MB-09 to MB-11 still can't pass
+  without moving the user's pointer (§): on MB-09 it doesn't finish the reorder in 4 of 5 runs and the user stays
+  undisturbed, and in the fifth it finishes at the user's expense; on MB-10 it does the task every time and moves the
+  pointer; on MB-11 it submits the right code in 2 of 5 and moves the pointer in all 5.
+
 **Claude Sonnet 5.5 in Claude Code, every trial of Bench v2 on Linux** (run `sonnet-5-5-2026-11-03`: 10 tasks, 5 runs
 each, both conditions, on agentenv-framework 0.9.1412, with the tasks, limits and grade of the Haiku 5.5 run). 41 of
 the 100 trials pass, as many as Claude Haiku 5.5's (`haiku-5-5-2026-11-02`), for $57.31 at list price against

@@ -1,8 +1,9 @@
 ## The tasks
 
 trycua's Bench v2: ten GUI-only tasks in three groups. The multi-app tasks use their task pack's own Electron apps
-(Calc and GnuCash are Ubuntu's); the precision and interruption tasks run in BenchLab, trycua's test app, in the GTK
-version of their Linux port, in a mode and with a seed of their own for each run.
+(Calc and GnuCash are Ubuntu's); the precision and interruption tasks run in BenchLab, trycua's test app, in a mode
+and with a seed of their own for each run: on Linux the GTK version of their Linux port, on macOS their own app, built
+from their Swift sources at the pinned commit.
 
 | Probe | Task | Apps | What is checked |
 |---|---|---|---|
@@ -36,8 +37,11 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
 
 1. Deploy the task's computer: Ubuntu 24.04 on Xvfb at 1920x1080 with the xfwm4 window manager, AgentEnv's
    computer-use driver (trycua's `cua-driver`), the task's apps and the bench's sentinel (the "User activity" window).
+   On macOS (`tasks/macos-*.json`): Cua's macOS 26 VM bundle at 1920x1080, run by Lume on an EC2 Mac (mac2-m2.metal),
+   with cua-driver, BenchLab and trycua's own BenchSentinel.
 2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver as its
-   only MCP server, trycua's Linux system prompt, at most 45 turns and 360 seconds.
+   only MCP server, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns and
+   360 seconds.
 3. Start recording the screen (10 fps), arm the sentinel, prompt the agent, disarm the sentinel.
 4. Snapshot the computer's app data and grade it in a separate container with no network.
 
@@ -45,7 +49,9 @@ The sentinel logs in trycua's own format: 20 samples a second of what is frontmo
 what is stacked above the user's window, the pointer and the clipboard, and, in the background condition, every
 character it types and whether it landed. Inside it a guard watches for ways out of the GUI while the agent works:
 a terminal or run dialog in front, a terminal program, a program started on a pseudo-terminal, LibreOffice's macro
-editor or an Electron app's DevTools opening.
+editor or an Electron app's DevTools opening. On macOS the sentinel is trycua's BenchSentinel itself, and beside it
+runs a port of their macOS guard: Terminal, iTerm, Script Editor, Automator or Shortcuts in front or running, or a
+program started on a terminal.
 
 ## The grade
 
@@ -91,10 +97,12 @@ runs/<os>/<run>/<trial>/
 - Few trials per cell: trycua's schedule runs each task 5 times per condition, and a cell's rate rests on those 5.
   The pilot run `sonnet-4-5-2026-11-02` covers only the three multi-app tasks, once per condition, and its prompts
   lack trycua's closing line with the time and turn limits, which later runs have.
-- Linux only so far. trycua's bench targets macOS, where the driver can deliver input to a window in the background.
-  On Linux the driver can click, type and scroll only into the focused window for Chromium, Electron and
+- **macOS covers the seven BenchLab tasks, with one model.** The three multi-app tasks (G02 to G04) aren't on macOS
+  yet, and Claude Sonnet 5.5 is the only model run there.
+- On Linux the driver can click, type and scroll only into the focused window for Chromium, Electron and
   LibreOffice Calc. In the background it has the accessibility (AT-SPI) actions, menus and the clipboard, so many
-  background moves are refused and the agent must find another way.
+  background moves are refused and the agent must find another way. On macOS, trycua's home OS, it delivers input to
+  a window in the background.
 - **Three interruption tasks can't pass in the background on Linux.** IR-01, IR-03 and IR-04 interrupt with a
   modal dialog, and on Linux the window manager stacks a new modal dialog over the user's window whatever the agent
   does. xfwm4, which these computers run, also gives it the keyboard; openbox, which trycua's own Linux session runs,
