@@ -13,8 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 RUN = re.compile(r"-r(\d)-(foreground|background)$")
-#: A macOS trial's OS and, for another arm than cua-driver's, its driver, which its name leaves to its run's folder.
-PREFIX = re.compile(r"^macos-(?:agent-desktop-|macos-harness-)?")
+#: A macOS trial's OS and its driver, an arm's or cua-driver's on its own tools, which its name leaves to its run's
+#: folder.
+PREFIX = re.compile(r"^macos-(?:agent-desktop-|macos-harness-|cua-driver-)?")
 
 
 def main():

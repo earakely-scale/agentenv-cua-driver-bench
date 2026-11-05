@@ -21,7 +21,7 @@ from agentenv_protocol.computer.app import ComputerAppEnvironment  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TASKS = {"cdb-s02": "CdbS02", "cdb-s03": "CdbS03", "cdb-s04": "CdbS04"}
-SHARED = ("bench_app.py", "install.sh", "install-macos.sh", "devtools_hook.js")
+SHARED = ("bench_app.py", "install.sh", "install-macos.sh", "devtools_hook.js", "requirements-macos.txt")
 
 
 def _declared(task):
@@ -89,6 +89,8 @@ def test_a_task_app_declares_its_files_runtimes_workspace_and_launch(task):
         "cdb-s02": ["runtime/LibreOffice.dmg"], "cdb-s03": ["runtime/LibreOffice.dmg", "runtime/Gnucash.dmg"],
         "cdb-s04": ["runtime/node-arm64.tar.xz", "runtime/chromium-arm64.zip"]}[task]])
     assert macos.install["run"] == [{"script": "install-macos.sh", "scope": "session"}]
+    assert macos.install["python"] == "requirements-macos.txt"
+    assert macos.install["grants"] == [{"executable": "venv/bin/python", "services": ["accessibility"]}]
     assert macos.paths == [task] and macos.launch.command == ["venv/bin/python", "bench_app.py"]
     assert macos.launch.ready is None
 
@@ -130,25 +132,22 @@ def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node_with_elect
         "NODE_OPTIONS": f"--require={bench_app.HERE / 'devtools_hook.js'}"}
 
 
-def test_on_macos_the_launcher_finds_and_places_windows_through_cua_drivers_daemon(bench_app, monkeypatch):
-    windows = [{"pid": 7, "window_id": 70, "title": "Copperfield Mail", "bounds": {"x": 20, "y": 30, "width": 900,
-                                                                                  "height": 680}},
-               {"pid": 9, "window_id": 90, "title": "lighthouse-replan.ods - LibreOffice Calc",
-                "bounds": {"x": 0, "y": 0, "width": 800, "height": 600}}]
-    calls = []
-
-    def driver(tool, **args):
-        calls.append((tool, args))
-        return {"windows": windows}
+def test_on_macos_the_launcher_finds_and_places_windows_through_the_accessibility_api(bench_app, monkeypatch):
+    frames = {"mail": (20, 30, 900, 680), "calc": (0, 0, 800, 600)}
+    moved = []
     monkeypatch.setattr(bench_app, "MACOS", True)
-    monkeypatch.setattr(bench_app, "_driver", driver)
+    monkeypatch.setattr(bench_app, "_shown", lambda: [("7:70", "Copperfield Mail", "mail"),
+                                                      ("9:90", "lighthouse-replan.ods - LibreOffice Calc", "calc")])
+    monkeypatch.setattr(bench_app, "_frame", frames.__getitem__)
+    monkeypatch.setattr(bench_app, "_set_frame", lambda element, bounds: moved.append((element, bounds)))
     bounds = {"x": 380, "y": 160, "width": 1180, "height": 780}
 
     assert bench_app._search({"title": "Copperfield Mail"}) == ["7:70"] and bench_app._search({"title": "Mail"}) == []
     assert bench_app._search({"title_contains": "lighthouse-replan"}) == ["9:90"]
     assert bench_app._at("7:70", {"x": 20, "y": 30, "width": 900, "height": 680}) and not bench_app._at("9:90", bounds)
+    assert not bench_app._at("8:80", bounds)
     bench_app._move("9:90", bounds)
-    assert calls[-1] == ("set_window_frame", {"pid": 9, "window_id": 90, **bounds})
+    assert moved == [("calc", bounds)]
 
 
 def test_a_browser_install_unpacks_chromium_with_its_execute_bits_and_writes_the_policies(bench_app, tmp_path):
