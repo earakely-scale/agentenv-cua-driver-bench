@@ -1,4 +1,4 @@
-"""The fleet's plan, its workers' gates and its runs' manifests, offline: Bench v2's 100 trials split into workers on
+"""The fleet's plan, its workers' gates and its runs' manifests, offline: Bench v2's 90 trials split into workers on
 one computer each, each trial named with its run; a finished trial counted, or run again for a rate limit, an API
 error or a failed setup, and recorded as missing once its re-runs are spent; and a run's manifest pinning each input
 that changes a score."""
@@ -39,10 +39,10 @@ def test_bench_v2_splits_into_workers_of_one_computer_each_with_each_trial_named
 
     workers = plan.split(ROOT, stems, 10)
 
-    assert [env for env, _ in workers] == ["desktop-s02", "desktop-s03", "desktop-s04"] + ["desktop-benchlab"] * 7
+    assert [env for env, _ in workers] == ["desktop-s02", "desktop-s03", "desktop-s04"] + ["desktop-benchlab"] * 6
     assert all(len(specs) == 10 for _, specs in workers)
     names = [line.split("|")[1] for _, specs in workers for line in specs]
-    assert len(set(names)) == 100
+    assert len(set(names)) == 90
     assert workers[0][1][:4] == [f"cdb-g02-foreground|cdb-g02-r{run}-foreground|{run}" for run in (1, 2, 3, 4)]
     assert "mb-09-r4-background|mb-09-r4-background|4" in [line for _, specs in workers for line in specs]
 
@@ -55,7 +55,7 @@ def test_a_plan_writes_each_workers_trials_and_the_whole_runs_for_its_manifest(p
 
     workers = sorted(tmp_path.glob("worker-*.txt"))
     assert (tmp_path / "run.txt").read_text().split() == [line for f in workers for line in f.read_text().split()]
-    assert len((tmp_path / "run.txt").read_text().split()) == 100
+    assert len((tmp_path / "run.txt").read_text().split()) == 90
 
 
 def _instance(error=None, failed=(), responses=True):
@@ -261,8 +261,8 @@ def test_a_boards_runs_are_planned_as_plan_py_plans_them_each_worker_one_compute
         {"name": "mh", "model": "m", "trials": "evals/macos-macos-harness-benchlab-trials.txt"}]})
 
     assert [(w.id, w.computer, len(w.specs)) for w in workers] == [
-        ("mh/01", "desktop-benchlab-macos-macos-harness", 35), ("mh/02", "desktop-benchlab-macos-macos-harness", 35)]
-    assert runs["mh"] == workers[0].specs + workers[1].specs and len(runs["mh"]) == 70
+        ("mh/01", "desktop-benchlab-macos-macos-harness", 35), ("mh/02", "desktop-benchlab-macos-macos-harness", 25)]
+    assert runs["mh"] == workers[0].specs + workers[1].specs and len(runs["mh"]) == 60
 
 
 def _peek(running, digest="", ended=0, framework=None, failed=0):

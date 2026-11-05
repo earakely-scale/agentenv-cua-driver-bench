@@ -60,12 +60,6 @@ macos-cdb-g04-background
 macos-mb-09-r1-background
 macos-mb-09-r2-background
 macos-mb-09-r3-background
-macos-mb-10-r1-background
-macos-mb-10-r2-background
-macos-mb-10-r3-background
-macos-mb-11-r1-background
-macos-mb-11-r2-background
-macos-mb-11-r3-background
 macos-ir-01-r1-background
 macos-ir-01-r2-background
 macos-ir-01-r3-background
@@ -86,10 +80,6 @@ macos-cdb-g04-background
 macos-cdb-g04-background
 macos-mb-09-r4-background
 macos-mb-09-r5-background
-macos-mb-10-r4-background
-macos-mb-10-r5-background
-macos-mb-11-r4-background
-macos-mb-11-r5-background
 macos-ir-01-r4-background
 macos-ir-01-r5-background
 macos-ir-02-r4-background

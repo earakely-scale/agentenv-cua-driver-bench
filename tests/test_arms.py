@@ -71,7 +71,7 @@ def test_an_arms_trial_lists_are_cua_drivers_and_its_benchlab_list_leaves_out_th
     benchlab = (ROOT / "evals" / f"macos-{arm}-benchlab-trials.txt").read_text().split()
 
     assert every == [f"macos-{arm}-{stem.removeprefix('macos-')}" for stem in twins]
-    assert benchlab == [stem for stem in every if "-cdb-" not in stem] and len(benchlab) == 70
+    assert benchlab == [stem for stem in every if "-cdb-" not in stem] and len(benchlab) == 60
 
 
 def test_an_arms_trial_is_named_as_its_twin_and_its_driver_reaches_the_dataset():

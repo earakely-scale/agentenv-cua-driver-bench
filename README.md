@@ -31,7 +31,7 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 | `envs/benchlab/`, `envs/desktop-benchlab/` | trycua's BenchLab as a computer app, in a task's mode and seed, and its computer, with the sentinel (below). |
 | `tasks/benchlab-listdrag.json` .. `tasks/benchlab-irconsent.json`, `tasks/benchlab-solve-*.json`, `evals/benchlab.toml` | BenchLab in each mode in its computer (`artifacts/check_benchlab/`), and three of its tasks done through the driver and graded with no model. |
 | `tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` | The BenchLab tasks, five runs each, each run with its seed, in both conditions, with a model (below). |
-| `evals/bench-v2.toml`, `evals/bench-v2-trials.txt` | All of Bench v2: each of its task files once, and its 100 trials in trycua's schedule (below). |
+| `evals/bench-v2.toml`, `evals/bench-v2-trials.txt` | All of Bench v2: each of its task files once, and its 90 trials in trycua's schedule (below). |
 | `evals/foreground.toml`, `evals/background.toml` | Bench v2's task files in one condition each. |
 | `tools/fleet/` | Runs the trials on a fleet of EC2 VMs, each trial exported and uploaded to the dataset as it finishes (below). |
 | `tools/dataset/` | The dataset's exporter, tables, card and licences, and `publish.sh`, which rebuilds and uploads them (below). |
@@ -87,7 +87,7 @@ api_key = "env:LITELLM_API_KEY"
 default = "anthropic/claude-sonnet-5-5"
 EOF
 agent-env run . --task macos-ir-01-r1-foreground
-agent-env run . --eval macos-bench-v2     # every task of Bench v2 once (76 task files)
+agent-env run . --eval macos-bench-v2     # every task of Bench v2 once (66 task files)
 ```
 
 **The first run takes a while.** It pulls Cua's base (about 29 GB), then composes the task's computer, about 7
@@ -207,8 +207,10 @@ their runner adds by default, "You have about 6 minutes and at most 45 turns." t
 "is already open on your Mac"; the trials keep their text as it is. MB-10's brief speaks of a toolbar strip whose
 "Actions" area reveals the buttons; their Linux BenchLab's zone reads "Hover here to reveal actions".
 
-`evals/bench-v2-trials.txt` lists Bench v2's 100 trials, one task file per line, in trycua's schedule: the v2 tasks in
-order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, the foreground's then the background's.
+`evals/bench-v2-trials.txt` lists Bench v2's 90 trials, one task file per line, in trycua's schedule: the v2 tasks in
+order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, the foreground's then the background's. MB-10's
+and MB-11's background runs are left out, as agreed with trycua: a hover or a resting pointer can't leave the user
+undisturbed, and the runs that have them don't score them.
 `evals/bench-v2.toml` runs each of those task files once, since an eval runs a task once; a runner that repeats a G
 task's file per line runs them all. `evals/foreground.toml` and `evals/background.toml` are its two halves, one
 condition each.
@@ -242,7 +244,7 @@ The Hugging Face token is huggingface_hub's login (`hf auth login`).
 **Run.** pip install `boto3 huggingface_hub` where you drive the fleet; nothing heavy runs there.
 
 ```bash
-python tools/fleet/plan.py evals/bench-v2-trials.txt plan 10   # 100 trials, 10 workers, each on one computer
+python tools/fleet/plan.py evals/bench-v2-trials.txt plan 10   # 90 trials, 9 workers, each on one computer
 tools/fleet/launch.sh 10 c6i.2xlarge > instances.txt           # the workers set themselves up in a few minutes
 tar czf taskpack.tgz -C artifacts taskpack                     # the task pack, fetched once here
 export FLEET_MODEL_KEY=...

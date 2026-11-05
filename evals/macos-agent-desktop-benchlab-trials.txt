@@ -36,12 +36,6 @@ macos-agent-desktop-ir-04-r5-foreground
 macos-agent-desktop-mb-09-r1-background
 macos-agent-desktop-mb-09-r2-background
 macos-agent-desktop-mb-09-r3-background
-macos-agent-desktop-mb-10-r1-background
-macos-agent-desktop-mb-10-r2-background
-macos-agent-desktop-mb-10-r3-background
-macos-agent-desktop-mb-11-r1-background
-macos-agent-desktop-mb-11-r2-background
-macos-agent-desktop-mb-11-r3-background
 macos-agent-desktop-ir-01-r1-background
 macos-agent-desktop-ir-01-r2-background
 macos-agent-desktop-ir-01-r3-background
@@ -56,10 +50,6 @@ macos-agent-desktop-ir-04-r2-background
 macos-agent-desktop-ir-04-r3-background
 macos-agent-desktop-mb-09-r4-background
 macos-agent-desktop-mb-09-r5-background
-macos-agent-desktop-mb-10-r4-background
-macos-agent-desktop-mb-10-r5-background
-macos-agent-desktop-mb-11-r4-background
-macos-agent-desktop-mb-11-r5-background
 macos-agent-desktop-ir-01-r4-background
 macos-agent-desktop-ir-01-r5-background
 macos-agent-desktop-ir-02-r4-background

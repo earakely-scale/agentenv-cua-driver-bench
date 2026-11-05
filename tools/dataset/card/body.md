@@ -123,9 +123,10 @@ runs/<os>/<run>/<trial>/
   IR-02's banner is drawn inside BenchLab's window, so it can pass.
 - trycua's text is kept as written: the BenchLab briefs say BenchLab "is already open on your Mac", and MB-10's
   brief names an "Actions" strip that their Linux BenchLab labels "Hover here to reveal actions".
-- MB-10's and MB-11's background trials are kept with their grades but not scored, our call rather than trycua's,
-  whose task list runs both conditions: every hover BenchLab saw in these runs moved the user's pointer, and on macOS
-  a tooltip shows only for the app in front, so in the background no driver here can pass them.
+- MB-10's and MB-11's background trials are kept with their grades but not scored, and new runs leave them out, as
+  agreed with trycua, whose task list at the pinned commit still runs both conditions: every hover BenchLab saw in
+  these runs moved the user's pointer, and on macOS a tooltip shows only for the app in front, so in the background
+  no driver here can pass them.
   MB-09 is scored in both conditions, though in the background its drag keeps the user undisturbed only through a
   driver that drags without moving the user's pointer.
 - Claude Code's `num_turns` counts tool round trips, across a context compaction too, so it passes 45 when the model

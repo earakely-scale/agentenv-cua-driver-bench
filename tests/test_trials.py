@@ -5,7 +5,7 @@ system prompt for a Linux desktop, a browser task's allowing its localhost site,
 pack; on macOS the BenchLab trials alone, the same but on BenchLab's macOS computer with their system prompt as it is; with the sentinel in that condition and BenchLab in the task's mode with the run's seed, claude-code with no
 built-in tools but Skill and Read, the sentinel armed just around the prompt within the task's time and turns; its
 grade, whatever became of the agent: in a container of its own with no network, on the trial's snapshot, and the
-trajectory's half outside; and the whole of Bench v2 in trycua's schedule."""
+trajectory's half outside; and the whole of Bench v2 in trycua's schedule, less MB-10's and MB-11's background runs."""
 import ast
 import importlib.util
 import json
@@ -20,6 +20,8 @@ TRIALS = {"cdb-g02": "cdb-s02", "cdb-g03": "cdb-s03", "cdb-g04": "cdb-s04"}
 LABS = ("MB-09", "MB-10", "MB-11", "IR-01", "IR-02", "IR-03", "IR-04")
 RUNS = (1, 2, 3, 4, 5)
 CONDITIONS = ("background", "foreground")
+#: The tasks run in the foreground alone: a hover or a resting pointer can't leave the user undisturbed.
+FOREGROUND_ONLY = ("MB-10", "MB-11")
 LAB_TRIALS = tuple(f"{probe.lower()}-r{run}" for probe in LABS for run in RUNS)
 EVERY = tuple((name, os) for os in ("linux", "macos") for name in (*TRIALS, *LAB_TRIALS))
 #: Where each OS's computer keeps a task's workspace: its session user's home.
@@ -121,16 +123,18 @@ def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_tr
         "env_outcome_verifier", "gui_only", "task")
 
 
-def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule(trycua):
-    """trycua's schedule: the v2 tasks in order, runs 1 to 3, then runs 4 and 5, a whole run in one condition. A CDB
-    task's runs are one task file, its seed unused; the eval runs each task file once, and a condition's eval its half.
-    On macOS, the same trials in the same order."""
+def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule_less_the_foreground_only_ones(trycua):
+    """trycua's schedule: the v2 tasks in order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, less the
+    background runs of MB-10 and MB-11, which trycua and the bench agree aren't run there. A CDB task's runs are one
+    task file, its seed unused; the eval runs each task file once, and a condition's eval its half. On macOS, the same
+    trials in the same order."""
     trials = (ROOT / "evals" / "bench-v2-trials.txt").read_text().split()
     expected = [f"{task.lower()}-{condition}" if task.startswith("CDB-") else f"{task.lower()}-r{run}-{condition}"
                 for condition in ("foreground", "background") for runs in ((1, 2, 3), (4, 5))
-                for task in trycua.V2_TASKS for run in runs]
+                for task in trycua.V2_TASKS for run in runs
+                if not (condition == "background" and task in FOREGROUND_ONLY)]
 
-    assert trials == expected and len(trials) == 100
+    assert trials == expected and len(trials) == 90
     assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in trials)
     assert tomllib.loads((ROOT / "evals" / "bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(trials))
     for condition in ("foreground", "background"):

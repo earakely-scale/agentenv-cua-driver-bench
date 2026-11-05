@@ -36,12 +36,6 @@ macos-macos-harness-ir-04-r5-foreground
 macos-macos-harness-mb-09-r1-background
 macos-macos-harness-mb-09-r2-background
 macos-macos-harness-mb-09-r3-background
-macos-macos-harness-mb-10-r1-background
-macos-macos-harness-mb-10-r2-background
-macos-macos-harness-mb-10-r3-background
-macos-macos-harness-mb-11-r1-background
-macos-macos-harness-mb-11-r2-background
-macos-macos-harness-mb-11-r3-background
 macos-macos-harness-ir-01-r1-background
 macos-macos-harness-ir-01-r2-background
 macos-macos-harness-ir-01-r3-background
@@ -56,10 +50,6 @@ macos-macos-harness-ir-04-r2-background
 macos-macos-harness-ir-04-r3-background
 macos-macos-harness-mb-09-r4-background
 macos-macos-harness-mb-09-r5-background
-macos-macos-harness-mb-10-r4-background
-macos-macos-harness-mb-10-r5-background
-macos-macos-harness-mb-11-r4-background
-macos-macos-harness-mb-11-r5-background
 macos-macos-harness-ir-01-r4-background
 macos-macos-harness-ir-01-r5-background
 macos-macos-harness-ir-02-r4-background
