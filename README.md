@@ -58,9 +58,11 @@ arm64 emulation it says it can't build linux/arm64 and goes on with amd64.
 
 ### On macOS
 
-The BenchLab tasks run on macOS too, on trycua's own BenchLab and BenchSentinel apps, built from their Swift sources at
-the pinned commit. The computer is Cua's public macOS 26 VM bundle, run by Lume, with cua-driver and the two apps
-installed. The agent and the grade run in containers beside it.
+Every task runs on macOS too. BenchLab and the sentinel are trycua's own BenchLab and BenchSentinel apps, built from
+their Swift sources at the pinned commit. The multi-app tasks run trycua's macOS descriptors, with the macOS builds of
+the same apps: their Electron apps on Electron for Apple silicon, LibreOffice 25.8 and GnuCash 5.17 from their disk
+images, and Chrome for Testing. The computer is Cua's public macOS 26 VM bundle, run by Lume, with cua-driver and the
+task's apps installed. The agent and the grade run in containers beside it.
 
 You need:
 
@@ -84,11 +86,11 @@ api_key = "env:LITELLM_API_KEY"
 default = "anthropic/claude-sonnet-5-5"
 EOF
 agent-env run . --task macos-ir-01-r1-foreground
-agent-env run . --eval macos-bench-v2     # all 70 trials, one after another
+agent-env run . --eval macos-bench-v2     # every task of Bench v2 once (76 task files)
 ```
 
-**The first run takes a while.** It pulls Cua's base (about 29 GB), then composes the computer, about 7 minutes:
-trycua's apps build in a VM of the base, and the probe checks the result. Later runs reuse the composed computer. A trial
+**The first run takes a while.** It pulls Cua's base (about 29 GB), then composes the task's computer, about 7
+minutes: its apps install in a VM of the base, and the probe checks the result. Later runs reuse the composed computer. A trial
 then takes 2 to 6 minutes.
 
 An eval runs its trials one after another. Apple's licence allows two macOS VMs on a Mac.

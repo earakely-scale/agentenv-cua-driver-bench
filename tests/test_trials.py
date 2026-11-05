@@ -124,7 +124,7 @@ def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_tr
 def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule(trycua):
     """trycua's schedule: the v2 tasks in order, runs 1 to 3, then runs 4 and 5, a whole run in one condition. A CDB
     task's runs are one task file, its seed unused; the eval runs each task file once, and a condition's eval its half.
-    On macOS, the BenchLab tasks' trials in the same order."""
+    On macOS, the same trials in the same order."""
     trials = (ROOT / "evals" / "bench-v2-trials.txt").read_text().split()
     expected = [f"{task.lower()}-{condition}" if task.startswith("CDB-") else f"{task.lower()}-r{run}-{condition}"
                 for condition in ("foreground", "background") for runs in ((1, 2, 3), (4, 5))
@@ -137,7 +137,7 @@ def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule(t
         assert tomllib.loads((ROOT / "evals" / f"{condition}.toml").read_text())["tasks"] == [
             name for name in dict.fromkeys(trials) if name.endswith(f"-{condition}")]
     macos = (ROOT / "evals" / "macos-bench-v2-trials.txt").read_text().split()
-    assert macos == [f"macos-{name}" for name in trials if not name.startswith("cdb-")] and len(macos) == 70
+    assert macos == [f"macos-{name}" for name in trials]
     assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in macos)
     assert tomllib.loads((ROOT / "evals" / "macos-bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(macos))
 

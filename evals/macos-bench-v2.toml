@@ -1,4 +1,7 @@
 tasks = [
+  "macos-cdb-g02-foreground",
+  "macos-cdb-g03-foreground",
+  "macos-cdb-g04-foreground",
   "macos-mb-09-r1-foreground",
   "macos-mb-09-r2-foreground",
   "macos-mb-09-r3-foreground",
@@ -34,6 +37,9 @@ tasks = [
   "macos-ir-03-r5-foreground",
   "macos-ir-04-r4-foreground",
   "macos-ir-04-r5-foreground",
+  "macos-cdb-g02-background",
+  "macos-cdb-g03-background",
+  "macos-cdb-g04-background",
   "macos-mb-09-r1-background",
   "macos-mb-09-r2-background",
   "macos-mb-09-r3-background",

@@ -100,7 +100,7 @@ agent-env run . --eval bench-v2                # every task of Bench v2 once (76
 The first run builds each task's computer (a few minutes); later runs reuse it. `agent-env run . --eval sentinel`
 checks, without a model, that every kind of disturbance is caught and scored by trycua's files.
 
-On an Apple silicon Mac, the BenchLab tasks run on macOS 26 (we used EC2 mac2-m2.metal hosts). `agent-env` must run in
+On an Apple silicon Mac, the tasks run on macOS 26 (we used EC2 mac2-m2.metal hosts). `agent-env` must run in
 a logged-in session, with [Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima
 will do) with the same registry:
 
@@ -116,9 +116,9 @@ api_key = "env:LITELLM_API_KEY"
 default = "anthropic/claude-sonnet-5-5"
 EOF
 agent-env run . --task macos-ir-01-r1-foreground   # one trial
-agent-env run . --eval macos-bench-v2              # the 70 BenchLab trials
+agent-env run . --eval macos-bench-v2              # every task of Bench v2 once (76 task files)
 ```
 
-The first run pulls Cua's macOS base (about 29 GB) and composes the computer, about 7 minutes.
+The first run pulls Cua's macOS base (about 29 GB) and composes the task's computer, about 7 minutes.
 
 {{BODY}}
