@@ -28,12 +28,15 @@ FRAME_AT = (60, 80)
 WAIT_S = 30.0
 MACOS = sys.platform == "darwin"
 #: What trycua's macOS BenchLab calls the fields their Linux BenchLab names otherwise, by mode.
-MAC_NAMES = {"irmodal": {"Name": "Full name", "Email": "Work email"}, "irconsent": {"Email": "Email address"}}
+MAC_NAMES = {"irmodal": {"Name": "Full name", "Email": "Work email"}, "irconsent": {"Email": "Email address", "Reject optional": "Reject non-essential"}}
 #: Where trycua's macOS BenchLab draws what its accessibility tree leaves out, in its window's pixels: the notes'
 #: first row and their pitch, the first tooltip icon's centre and the icons' pitch, and the hover zone's button.
 MAC_ROWS, MAC_ROW_PITCH = (75, 93), 24
 MAC_ICONS, MAC_ICON_PITCH = (125, 127), 165
 MAC_ACTIONS = (103, 78)
+#: How a background set_value is sent: macOS's cua-driver sets a value through the accessibility API alone, which
+#: never activates the app, and takes no delivery mode.
+BACKGROUND_SET = {} if MACOS else {"delivery_mode": "background"}
 #: An element in cua-driver's tree, by its title or by its value, and a field by its label, as macOS gives it beside
 #: its value.
 ROW = re.compile(r'\s*- \[(\d+)\] (.+?) "([^"]*)"')
@@ -117,14 +120,14 @@ SOLVERS = {"irmodal": _irmodal, "tooltip": _tooltip, "hover": _hover}
 
 def _permission_prompt(driver, lab, values):
     """IR-01's prompt: the first step filled and Next pressed, then Don't Allow, all in the background."""
-    driver.act("set_value", lab, _name("irmodal", "Name"), value=values["name"], delivery_mode="background")
+    driver.act("set_value", lab, _name("irmodal", "Name"), value=values["name"], **BACKGROUND_SET)
     driver.act("click", lab, "Next", delivery_mode="background")
     return _answered(driver, lab, "Allow BenchLab", "Don’t Allow")
 
 
 def _unsaved_prompt(driver, lab, values):
     """IR-03's prompt: the open note's title edited and another note chosen, then Cancel, all in the background."""
-    driver.act("set_value", lab, "Title", value=values["titles"][0] + " (edited)", delivery_mode="background")
+    driver.act("set_value", lab, "Title", value=values["titles"][0] + " (edited)", **BACKGROUND_SET)
     if MACOS:
         driver.call("click", pid=lab["pid"], window_id=lab["window_id"], x=MAC_ROWS[0],
                     y=MAC_ROWS[1] + MAC_ROW_PITCH, delivery_mode="background")
@@ -139,7 +142,7 @@ def _consent_prompt(driver, lab, values):
         driver.act("type_text", lab, _name("irconsent", "Email"), text="user@example.com", delivery_mode="background")
     else:
         driver.act("set_value", lab, "Email", value="user@example.com", delivery_mode="background")
-    return _answered(driver, lab, "Cookie preferences", "Reject optional")
+    return _answered(driver, lab, "Cookie preferences", _name("irconsent", "Reject optional"))
 
 
 def _answered(driver, lab, title, answer):
