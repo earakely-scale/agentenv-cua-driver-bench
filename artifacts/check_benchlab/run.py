@@ -27,6 +27,17 @@ DATA_OBJECTS = "urn:agentenv:data-objects/v1"
 FRAME_AT = (60, 80)
 WAIT_S = 30.0
 MACOS = sys.platform == "darwin"
+#: What trycua's macOS BenchLab calls the fields their Linux BenchLab names otherwise, by mode.
+MAC_NAMES = {"irmodal": {"Name": "Full name", "Email": "Work email"}, "irconsent": {"Email": "Email address"}}
+#: Where trycua's macOS BenchLab draws what its accessibility tree leaves out, in its window's pixels: the notes'
+#: first row and their pitch, the first tooltip icon's centre and the icons' pitch, and the hover zone's button.
+MAC_ROWS, MAC_ROW_PITCH = (75, 93), 24
+MAC_ICONS, MAC_ICON_PITCH = (125, 127), 165
+MAC_ACTIONS = (103, 78)
+#: An element in cua-driver's tree, by its title or by its value, and a field by its label, as macOS gives it beside
+#: its value.
+ROW = re.compile(r'\s*- \[(\d+)\] (.+?) "([^"]*)"')
+LABEL = re.compile(r'\s*- \[(\d+)\] [^"]*?(?:= "[^"]*" )?\(([^)]*)\)')
 
 
 def run(input):
@@ -66,11 +77,13 @@ def run(input):
 
 
 def _irmodal(driver, lab, values):
-    """IR-01: the form's first step, the permission prompt denied, the second step, Submit once."""
-    driver.act("set_value", lab, "Name", value=values["name"])
-    driver.act("set_value", lab, "Email", value=values["email"])
+    """IR-01: the form's first step, the permission prompt denied, the second step, Submit once. On macOS the prompt
+    is a sheet on BenchLab's window, and Team a pop-up menu that set_value picks from."""
+    driver.act("set_value", lab, _name("irmodal", "Name"), value=values["name"])
+    driver.act("set_value", lab, _name("irmodal", "Email"), value=values["email"])
     driver.act("click", lab, "Next")
-    prompt = driver.window(lambda window: window["pid"] == lab["pid"] and window["title"].startswith("Allow BenchLab"))
+    prompt = lab if MACOS else driver.window(
+        lambda window: window["pid"] == lab["pid"] and window["title"].startswith("Allow BenchLab"))
     driver.act("click", prompt, "Don’t Allow")
     driver.act("set_value", lab, "Team", value=values["team"])
     driver.act("set_value", lab, "Seats", value=str(values["seats"]))
@@ -82,9 +95,10 @@ def _tooltip(driver, lab, values):
     """MB-11: the pointer rested on the target's icon until BenchLab is asked for its tooltip, then its code typed
     and Submit once."""
     cell = (760 - 2 * 24 - 3 * 24) // 4
-    _rest(lab, 24 + values["target_index"] * (cell + 24) + cell // 2, 60,
-          lambda: any(event["type"] == "tooltip_query" and event["details"].get("icon") == values["target"]
-                      for event in _events()))
+    x, y = ((MAC_ICONS[0] + values["target_index"] * MAC_ICON_PITCH, MAC_ICONS[1]) if MACOS
+            else (24 + values["target_index"] * (cell + 24) + cell // 2, 60))
+    _rest(driver, lab, x, y, lambda: any(event["type"] == "tooltip_query"
+                                         and event["details"].get("icon") == values["target"] for event in _events()))
     driver.act("set_value", lab, "Code", value=values["target_code"])
     driver.act("click", lab, "Submit")
     return values
@@ -92,7 +106,8 @@ def _tooltip(driver, lab, values):
 
 def _hover(driver, lab, values):
     """MB-10: the pointer into the Actions zone until the buttons show, then the target's clicked once."""
-    _rest(lab, 380, 40, lambda: any(event["type"] == "overlay_shown" for event in _events()))
+    _rest(driver, lab, *(MAC_ACTIONS if MACOS else (380, 40)),
+          lambda: any(event["type"] == "overlay_shown" for event in _events()))
     driver.act("click", lab, values["target"])
     return values
 
@@ -102,7 +117,7 @@ SOLVERS = {"irmodal": _irmodal, "tooltip": _tooltip, "hover": _hover}
 
 def _permission_prompt(driver, lab, values):
     """IR-01's prompt: the first step filled and Next pressed, then Don't Allow, all in the background."""
-    driver.act("set_value", lab, "Name", value=values["name"], delivery_mode="background")
+    driver.act("set_value", lab, _name("irmodal", "Name"), value=values["name"], delivery_mode="background")
     driver.act("click", lab, "Next", delivery_mode="background")
     return _answered(driver, lab, "Allow BenchLab", "Don’t Allow")
 
@@ -110,35 +125,54 @@ def _permission_prompt(driver, lab, values):
 def _unsaved_prompt(driver, lab, values):
     """IR-03's prompt: the open note's title edited and another note chosen, then Cancel, all in the background."""
     driver.act("set_value", lab, "Title", value=values["titles"][0] + " (edited)", delivery_mode="background")
-    driver.act("click", lab, values["titles"][1], delivery_mode="background")
+    if MACOS:
+        driver.call("click", pid=lab["pid"], window_id=lab["window_id"], x=MAC_ROWS[0],
+                    y=MAC_ROWS[1] + MAC_ROW_PITCH, delivery_mode="background")
+    else:
+        driver.act("click", lab, values["titles"][1], delivery_mode="background")
     return _answered(driver, lab, "Save changes", "Cancel")
 
 
 def _consent_prompt(driver, lab, values):
     """IR-04's overlay: the form's email edited, then the optional cookies rejected, all in the background."""
-    driver.act("set_value", lab, "Email", value="user@example.com", delivery_mode="background")
+    if MACOS:
+        driver.act("type_text", lab, _name("irconsent", "Email"), text="user@example.com", delivery_mode="background")
+    else:
+        driver.act("set_value", lab, "Email", value="user@example.com", delivery_mode="background")
     return _answered(driver, lab, "Cookie preferences", "Reject optional")
 
 
 def _answered(driver, lab, title, answer):
     """The dialog titled ``title`` of BenchLab's process answered with ``answer`` in the background, a moment after it
-    showed; its title."""
-    dialog = driver.window(lambda window: window["pid"] == lab["pid"] and window["title"].startswith(title))
+    showed; its title. On macOS it's a sheet or an overlay on BenchLab's own window."""
+    dialog = lab if MACOS else driver.window(
+        lambda window: window["pid"] == lab["pid"] and window["title"].startswith(title))
+    if MACOS:
+        _wait(lambda: driver.elements(lab).get(answer))
     time.sleep(1.0)
     driver.act("click", dialog, answer, delivery_mode="background")
     time.sleep(1.0)
-    return dialog["title"]
+    return title if MACOS else dialog["title"]
 
 
 INTERRUPTIONS = {"irmodal": _permission_prompt, "irunsaved": _unsaved_prompt, "irconsent": _consent_prompt}
 
 
-def _rest(window, x, y, done):
-    """The pointer at ``x``, ``y`` of the window's content, nudged, and left there until ``done``."""
+def _rest(driver, window, x, y, done):
+    """The pointer at ``x``, ``y`` of the window, nudged, and left there until ``done``: on macOS the real pointer moved
+    through the driver, which has no xdotool."""
     point = (window["bounds"]["x"] + x, window["bounds"]["y"] + y)
-    subprocess.run(["xdotool", "mousemove", *map(str, point)], check=True)
-    subprocess.run(["xdotool", "mousemove_relative", "--", "2", "1"], check=True)
+    if MACOS:
+        for dx, dy in ((0, 0), (2, 1)):
+            driver.call("move_cursor", x=point[0] + dx, y=point[1] + dy, scope="desktop")
+    else:
+        subprocess.run(["xdotool", "mousemove", *map(str, point)], check=True)
+        subprocess.run(["xdotool", "mousemove_relative", "--", "2", "1"], check=True)
     _wait(lambda: done() or None)
+
+
+def _name(mode, name):
+    return MAC_NAMES.get(mode, {}).get(name, name) if MACOS else name
 
 
 class Driver:
@@ -162,13 +196,16 @@ class Driver:
                                    if match(window)), None))
 
     def elements(self, window):
-        """The window's actionable elements by name: their role and element token."""
+        """The window's actionable elements by name, their title or value, or a field's label: their role and element
+        token."""
         state = self.call("get_window_state", pid=window["pid"], window_id=window["window_id"],
                           include_screenshot=False)["structuredContent"]
         found = {}
         for line in state["tree_markdown"].splitlines():
-            if match := re.match(r'\s*- \[(\d+)\] (.+?) "([^"]*)"', line):
+            if match := ROW.match(line):
                 found.setdefault(match.group(3), (match.group(2), f"{state['snapshot_id']}:{match.group(1)}"))
+            if match := LABEL.match(line):
+                found.setdefault(match.group(2), ("", f"{state['snapshot_id']}:{match.group(1)}"))
         return found
 
     def act(self, tool, window, name, **args):
