@@ -24,11 +24,13 @@ FRAMEWORK_FLOOR = (0, 9, 1412)
 
 
 def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], policy: dict,
-          drivers: Path | None, image: dict | None = None, state: Path | None = None) -> dict:
+          drivers: Path | None, image: dict | None = None, state: Path | None = None,
+          harness: dict | None = None) -> dict:
     """The manifest of ``run`` on ``os_type``: ``specs`` are its `stem|name|run` lines, ``policy`` the worker's setup
     steps and re-run limits, ``drivers`` the installed framework's driver folders (each with its mcp.json), ``image``
-    the identity of the image the computers boot, where it records one, and ``state`` agent-env's state folder, whose
-    store records how each computer was composed."""
+    the identity of the image the computers boot, where it records one, ``state`` agent-env's state folder, whose
+    store records how each computer was composed, and ``harness`` the agent's harness: its name, the versions its trials
+    ran and its effort, None being the model's default."""
     framework = {name: _version(name) for name in ("agentenv-framework", "agentenv-framework-protocol")}
     _require_floor(framework["agentenv-framework"])
     if commit := _checkout_commit("agentenv-framework"):
@@ -47,6 +49,7 @@ def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], pol
                                            text=True).stdout.strip() or None},
         "framework": framework,
         "model": model,
+        "harness": harness,
         "agents": sorted({steps["agent"].get("a2a_agent_id") or "default" for steps in tasks.values()}),
         "builtin_tools": _distinct(steps["agent"].get("builtin_tools") for steps in tasks.values()),
         "computers": {env: {**_computer(bench, env, drivers, os_type), "composed": composed(state, bench, env)}
@@ -82,8 +85,9 @@ def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux
 
 def composed(state: Path | None, bench: Path, env: str) -> dict | None:
     """``env``'s computer as agent-env's store in ``state`` records it composed, at its latest version: for each form
-    and arch, the image a deploy boots, its compose key, when it was built, its probe's counts, and the image of its
-    base, pinned by digest. None without a store, or before the env is composed."""
+    and arch, the image a deploy boots, its compose key, when it was built, its probe's counts, the image of its base,
+    pinned by digest, and the platform its driver reports there (the OS's version). None without a store, or before the
+    env is composed."""
     db = state / "agent-env" / "document_store" / "local.db" if state else None
     if db is None or not db.exists():
         return None
@@ -101,9 +105,21 @@ def composed(state: Path | None, bench: Path, env: str) -> dict | None:
                                                                               record["computer"].get("version"))), {})
     return {f"{form}/{arch}": {"image": built.get("image"), "key": built.get("key"), "built_at": built.get("built_at"),
                                "base": ((base.get("forms") or {}).get(form) or {}).get("image"),
-                               "probe": (built.get("probe") or {}).get("checks")}
+                               "probe": (built.get("probe") or {}).get("checks"),
+                               "platform": _platform(built.get("card"))}
             for form, arches in record["metadata"]["composed"].items() for arch, built in arches.items()
             if built.get("status") == "ready"}
+
+
+def _platform(card) -> dict | None:
+    """The platform a computer's card says its driver runs on: its OS, version, arch and display."""
+    if isinstance(card, dict):
+        if isinstance(card.get("platform"), dict) and "version" in card["platform"]:
+            return card["platform"]
+        return next((found for value in card.values() if (found := _platform(value))), None)
+    if isinstance(card, list):
+        return next((found for value in card if (found := _platform(value))), None)
+    return None
 
 
 def _seeds(env_step: dict) -> dict:

@@ -1,5 +1,6 @@
-"""start.py INSTANCE RUN MODEL SPECS [--os OS] [--taskpack TGZ] [--keep] [--fresh]: start the fleet worker on INSTANCE
-for the trials SPECS lists (a file plan.py wrote), on the bench's main, as the systemd unit `fleet` on a Linux VM, or
+"""start.py INSTANCE RUN MODEL SPECS [--run-specs FILE] [--os OS] [--taskpack TGZ] [--keep] [--fresh]: start the fleet
+worker on INSTANCE for the trials SPECS lists (a file plan.py wrote; FILE, its run.txt, lists the whole run's, which
+the run's manifest pins), on the bench's main, as the systemd unit `fleet` on a Linux VM, or
 on an EC2 Mac (`--os macos`) as the launchd job `dev.fleet.worker` of ec2-user's login session, where the lume
 provider runs its macOS computers; its trials and manifest go under runs/OS/RUN (OS linux by default).
 
@@ -38,6 +39,7 @@ def main():
     parser.add_argument("run")
     parser.add_argument("model")
     parser.add_argument("specs", type=Path)
+    parser.add_argument("--run-specs", type=Path)
     parser.add_argument("--os", default="linux", choices=sorted(HOSTS))
     parser.add_argument("--taskpack", type=Path)
     parser.add_argument("--keep", action="store_true")
@@ -59,6 +61,7 @@ umask 077
 rm -f ~/fleet/stop
 mkdir -p ~/fleet/logs ~/fleet/out
 echo '{base64.b64encode(args.specs.read_bytes()).decode()}' | base64 -d > ~/fleet/specs.txt
+echo '{base64.b64encode((args.run_specs or args.specs).read_bytes()).decode()}' | base64 -d > ~/fleet/run-specs.txt
 printf %s '{key}' > {keys}/model.enc
 printf %s '{token}' > {keys}/hf.enc
 cat > ~/fleet/config.toml <<'CFG'

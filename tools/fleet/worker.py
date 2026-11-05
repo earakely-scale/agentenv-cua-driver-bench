@@ -20,7 +20,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub.errors import EntryNotFoundError
 
 import manifest
 
@@ -49,7 +50,7 @@ def main():
     done = {json.loads(line)["name"] for line in _progress().read_text().splitlines() if line.strip()} \
         if _progress().exists() else set()
     lines = specs.read_text().split()
-    _upload_manifest(api, run, lines)
+    _upload_manifest(api, run)
     for line in lines:
         stem, name, index, *finished = line.split("|")
         if name in done:
@@ -57,7 +58,7 @@ def main():
         if (FLEET / "stop").exists():
             return
         _trial(api, run, stem, name, int(index), finished[0] if finished else None)
-    _upload_manifest(api, run, lines)
+    _upload_manifest(api, run, [line.split("|")[1] for line in lines])
 
 
 def _trial(api, run, stem, name, index, finished):
@@ -134,16 +135,42 @@ def _upload(api, run, name):
             time.sleep(30 * (attempt + 1))
 
 
-def _upload_manifest(api, run, lines):
-    """The run's manifest, written and uploaded once a worker starts, and again once its trials are done, when it knows
-    how the computers they booted were composed; every worker of a run writes the same pins."""
+def _upload_manifest(api, run, done=()):
+    """The run's manifest, of the whole run's trials (FLEET/run-specs.txt), written and uploaded once a worker starts,
+    and again once its trials, ``done`` by name, are, when it knows how the computers they booted were composed and the
+    harness versions they ran; merged with what the run's manifest already holds from other workers."""
     OUT.mkdir(parents=True, exist_ok=True)
-    built = manifest.build(BENCH, run, OS, os.environ.get("RUN_MODEL"), lines,
+    versions = sorted({facts["harness_version"] for name in done if (path := OUT / name / "trial.json").exists()
+                       and (facts := json.loads(path.read_text())).get("harness_version")})
+    built = manifest.build(BENCH, run, OS, os.environ.get("RUN_MODEL"), (FLEET / "run-specs.txt").read_text().split(),
                            {"setup_steps": list(SETUP_STEPS), "reruns": LIMITS}, manifest.installed_drivers(),
-                           state=DB.parents[2])
+                           state=DB.parents[2], harness={"name": "claude-code", "versions": versions, "effort": None})
+    built = _merged(built, _uploaded(run))
     (OUT / "manifest.json").write_text(json.dumps(built, indent=1))
     api.upload_file(path_or_fileobj=str(OUT / "manifest.json"), path_in_repo=f"runs/{OS}/{run}/manifest.json",
                     repo_id=REPO, repo_type="dataset", commit_message=f"{run}: manifest")
+
+
+def _uploaded(run):
+    """The run's manifest as the dataset holds it, or None before any worker of the run uploaded one."""
+    try:
+        return json.loads(Path(hf_hub_download(REPO, f"runs/{OS}/{run}/manifest.json", repo_type="dataset",
+                                               token=os.environ["HF_TOKEN"], force_download=True)).read_text())
+    except EntryNotFoundError:
+        return None
+
+
+def _merged(built, uploaded):
+    """``built`` with what another worker's ``uploaded`` manifest knows that it doesn't: how the computers it didn't
+    compose were composed, and the harness versions other trials ran."""
+    if not uploaded:
+        return built
+    for env, computer in built["computers"].items():
+        if computer.get("composed") is None:
+            computer["composed"] = ((uploaded.get("computers") or {}).get(env) or {}).get("composed")
+    theirs = (uploaded.get("harness") or {}).get("versions") or []
+    built["harness"]["versions"] = sorted({*built["harness"]["versions"], *theirs})
+    return built
 
 
 def failure(instance):
