@@ -122,6 +122,8 @@ agent-env run . --task macos-ir-01-r1-foreground   # one trial
 agent-env run . --eval macos-bench-v2              # every task of Bench v2 once (76 task files)
 ```
 
-The first run pulls Cua's macOS base (about 29 GB) and composes the task's computer, about 7 minutes.
+The first run pulls Cua's macOS base (about 29 GB) and composes the task's computer, about 7 minutes. The drivers
+comparison's trials name their driver: `macos-agent-desktop-ir-01-r1-foreground`, `macos-macos-harness-…`, and
+cua-driver on its own tools alone, `macos-cua-driver-…`.
 
 {{BODY}}
