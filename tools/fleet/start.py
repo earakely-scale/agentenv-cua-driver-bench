@@ -52,7 +52,7 @@ def main():
     pull = "" if args.keep else "git fetch -q origin && git reset -q --hard origin/main && "
     unpack = "rm -rf artifacts/taskpack && tar xzf ~/fleet/taskpack.tgz -C artifacts && " if args.taskpack else ""
     sandbox = '[sandbox]\ndefault = "lume"\n' if os_type == "macos" else ""
-    state = "export XDG_STATE_HOME=$HOME/.local/state\n" if os_type == "macos" else ""
+    state = f"export XDG_STATE_HOME={setting('FLEET_STATE', '$HOME/.local/state')}\n" if os_type == "macos" else ""
     print(ssm(args.instance, f"""set -e
 umask 077
 {"rm -rf ~/fleet/progress.jsonl ~/fleet/out ~/fleet/logs" if args.fresh else ""}
