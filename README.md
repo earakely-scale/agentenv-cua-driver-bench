@@ -275,6 +275,26 @@ python tools/fleet/watch.py instances.txt                      # each worker's t
   at a budget; `start.py` removes it.
 - Terminate the workers when `watch.py` says they're done; each trial is on the dataset by then.
 
+**A board: several runs over several hosts, from one command.** `tools/fleet/board.py` takes a board file
+(`tools/fleet/board.example.toml`): its runs, each a name, a model and a trial list, and its hosts.
+
+```bash
+python tools/fleet/board.py my-board.toml --plan   # who runs what, and the computers each host composes
+python tools/fleet/board.py my-board.toml          # runs it; my-board.log says what started, ended or failed where
+```
+
+- **Scheduling.** Each run is planned as `plan.py` plans it, and each computer's workers go to one host, so a host
+  composes only the computers it runs. The computers with the most trials are placed first, on the least loaded host.
+  A computer is split over hosts only where one host would carry more than a quarter over its share of the board's
+  trials. Load counts trials, not their minutes; a multi-app trial takes about three of a BenchLab trial's.
+- **Restart-safe.** What it started is kept in `my-board.state.json`, and each poll reads what each host runs, by the
+  digest of its worker's trials, so a worker never starts twice. Stop it and start it again at any time.
+- **Nothing dropped.** A host that can't be asked is passed over for that poll, and a start that fails is tried
+  again at the next. A worker that ended with trials left resumes from its progress, up to twice, then counts as failed.
+- **A framework per host.** A host's `framework` is the commit its checkout is moved to and installed at, while it runs
+  nothing, and `state` is the agent-env state folder its computers are kept in. Give each framework its own state:
+  computers composed by another framework aren't composed again until agentenv-framework#502 is released.
+
 **Publish.** Then rebuild the tables, figures, hero, web videos, card and Space from every trial the dataset holds,
 on one of the workers, which has ffmpeg and room for the recordings:
 

@@ -4,6 +4,8 @@ error or a failed setup, and recorded as missing once its re-runs are spent; and
 that changes a score."""
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -213,3 +215,131 @@ def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_d
 
 def test_setup_and_health_check_failures_are_re_run_twice_before_a_trial_is_missing(worker):
     assert worker.LIMITS == {"rate": 6, "server": 3, "setup": 2}
+
+
+@pytest.fixture
+def board(monkeypatch):
+    """board.py with a stand-in for common, whose ssm records each script and answers from ``board.common.replies``:
+    by instance, a reply, a function of the script, or an exception to raise."""
+    common = types.ModuleType("common")
+    common.ROOT, common.scripts, common.replies = ROOT, [], {}
+
+    def ssm(instance, script, timeout=300, os_type="linux"):
+        common.scripts.append((instance, script))
+        reply = common.replies[instance]
+        if isinstance(reply, BaseException):
+            raise reply
+        return reply(script) if callable(reply) else reply
+    common.ssm = ssm
+    monkeypatch.setitem(sys.modules, "common", common)
+    monkeypatch.syspath_prepend(str(ROOT / "tools" / "fleet"))
+    loaded = _module(ROOT / "tools" / "fleet" / "board.py")
+    loaded.common = common
+    return loaded
+
+
+def _worker(board, run, computer, n):
+    return board.Worker(f"{run}/{computer}", run, "m", computer, [f"{computer}-stem|t{i}|1" for i in range(n)])
+
+
+def test_a_board_keeps_each_computers_workers_on_one_host_and_splits_a_computer_only_past_a_hosts_share(board):
+    workers = [_worker(board, "sonnet", "lab", 20), _worker(board, "haiku", "lab", 20),
+               *(_worker(board, "sonnet", computer, 10) for computer in ("s02", "s03", "s04"))]
+    hosts = board.assign(workers, [board.Host("b4", "i-4"), board.Host("b5", "i-5")])
+
+    assert {h.name: [w.id for w in h.workers] for h in hosts} == {
+        "b4": ["sonnet/lab", "haiku/lab"], "b5": ["sonnet/s02", "sonnet/s03", "sonnet/s04"]}
+    labs = [_worker(board, run, "lab", 35) for run in ("a", "b", "c", "d")]
+    split = board.assign([*labs, _worker(board, "e", "s02", 10)], [board.Host("b4", "i-4"), board.Host("b5", "i-5")])
+    assert [([w.id for w in h.workers], h.load) for h in split] == [(["a/lab", "b/lab", "e/s02"], 80),
+                                                                    (["c/lab", "d/lab"], 70)]
+
+
+def test_a_boards_runs_are_planned_as_plan_py_plans_them_each_worker_one_computer(board):
+    workers, runs = board.planned({"per": 35, "run": [
+        {"name": "mh", "model": "m", "trials": "evals/macos-macos-harness-benchlab-trials.txt"}]})
+
+    assert [(w.id, w.computer, len(w.specs)) for w in workers] == [
+        ("mh/01", "desktop-benchlab-macos-macos-harness", 35), ("mh/02", "desktop-benchlab-macos-macos-harness", 35)]
+    assert runs["mh"] == workers[0].specs + workers[1].specs and len(runs["mh"]) == 70
+
+
+def _peek(running, digest="", ended=0, framework=None):
+    return (f"running={int(running)}\ndigest={digest}\nended={ended}\n"
+            + (f"framework={framework}\n" if framework else "") + "log=last line\n")
+
+
+def _runner(board, tmp_path, monkeypatch, hosts, started=None, **settings):
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        out = started.pop(0) if started else "started"
+        return types.SimpleNamespace(returncode=0, stdout=out + "\n", stderr="")
+    monkeypatch.setattr(board.subprocess, "run", run)
+    monkeypatch.setattr(board.time, "time", lambda: 1000.0)
+    runner = board.Runner({"os": "macos", **settings}, hosts, tmp_path, tmp_path / "b.state.json", tmp_path / "b.log")
+    return runner, calls
+
+
+def test_a_host_runs_its_workers_one_after_another_and_never_starts_one_twice(board, tmp_path, monkeypatch):
+    first, second = _worker(board, "r", "lab", 2), _worker(board, "r", "s02", 1)
+    host = board.Host("b4", "i-4", workers=[first, second])
+    runner, calls = _runner(board, tmp_path, monkeypatch, [host])
+    replies = board.common.replies
+
+    replies["i-4"] = _peek(False)
+    runner.poll(host)
+    replies["i-4"] = _peek(True, first.digest, 1)
+    runner.poll(host)
+    again = board.Runner(runner.board, [host], tmp_path, runner.state_path, runner.log)
+    again.poll(host)
+    replies["i-4"] = _peek(False, first.digest, 2)
+    again.poll(host)
+
+    assert [argv[2:5] for argv in calls] == [["i-4", "r", "m"], ["i-4", "r", "m"]]
+    assert [a[-1] for a in calls] == ["--fresh", "--fresh"] and calls[1][5].endswith("r--s02.txt")
+    state = json.loads((tmp_path / "b.state.json").read_text())
+    assert (state["r/lab"]["status"], state["r/s02"]["status"]) == ("done", "started")
+    assert "b4 ended r/lab: 2 trials; last line" in (tmp_path / "b.log").read_text()
+
+
+def test_an_unreachable_host_and_a_failed_start_drop_nothing_and_a_short_worker_resumes_then_fails(
+        board, tmp_path, monkeypatch):
+    worker = _worker(board, "r", "lab", 3)
+    host = board.Host("b4", "i-4", workers=[worker])
+    runner, calls = _runner(board, tmp_path, monkeypatch, [host], started=["Error: SSM throttled", "started"])
+    replies = board.common.replies
+
+    replies["i-4"] = SystemExit("i-4: Failed: could not connect")
+    runner.poll(host)
+    replies["i-4"] = _peek(False)
+    runner.poll(host)
+    runner.poll(host)
+    for ended in (1, 2, 2):
+        replies["i-4"] = _peek(False, worker.digest, ended)
+        runner.poll(host)
+
+    log = (tmp_path / "b.log").read_text()
+    assert "b4 couldn't be asked: i-4: Failed: could not connect" in log
+    assert "b4 couldn't start r/lab: ['Error: SSM throttled']; trying again" in log
+    assert [a[-1] for a in calls] == ["--fresh", "--fresh", "macos", "macos"]
+    assert json.loads((tmp_path / "b.state.json").read_text())["r/lab"]["status"] == "failed"
+    assert "b4 r/lab failed: 2 of 3 trials" in log
+
+
+def test_an_idle_host_moves_to_its_framework_pin_before_its_next_worker(board, tmp_path, monkeypatch):
+    worker = _worker(board, "r", "lab", 1)
+    host = board.Host("b4", "i-4", framework="e1afb200", workers=[worker])
+    runner, calls = _runner(board, tmp_path, monkeypatch, [host], venv="~/b1/venv-ae", framework_checkout="~/b1/ae")
+    pinned = "e1afb200aaaabbbbccccddddeeeeffff00001111"
+    board.common.replies["i-4"] = lambda script: (pinned + "\n" if "git checkout" in script
+                                                  else _peek(False, framework="bc0c9d67" + "0" * 32))
+
+    runner.poll(host)
+    board.common.replies["i-4"] = _peek(False, framework=pinned)
+    runner.poll(host)
+
+    assert any("git checkout -q -f e1afb200" in script for _, script in board.common.scripts)
+    assert host.framework == pinned and len(calls) == 1
+    assert "b4 pinned to e1afb200aaaa" in (tmp_path / "b.log").read_text()

@@ -1,0 +1,33 @@
+# A board for board.py: copy it, name your hosts, and run `python tools/fleet/board.py my.toml --plan` to see who runs
+# what, then without --plan to run it. Paths on the hosts may use ~ and $HOME; `trials` and `taskpack` are under the
+# bench's root. Each run is planned as plan.py plans its trial list, at most `per` trials a worker.
+os = "macos"
+per = 35
+# Optional: what start.py otherwise takes from FLEET_VENV, FLEET_BENCH (or tools/fleet/fleet.env).
+venv = "~/venv"
+bench = "~/bench"
+# Needed where a host pins a framework: the framework checkout the venv installs editable.
+framework_checkout = "~/agentenv-framework"
+# Optional: a task pack fetched once (`tar czf taskpack.tgz -C artifacts taskpack`), shipped to each worker.
+taskpack = "taskpack.tgz"
+
+[[run]]
+name = "agent-desktop-sonnet-5-5-2026-11-05"
+model = "anthropic/claude-sonnet-5-5"
+trials = "evals/macos-agent-desktop-bench-v2-trials.txt"
+
+[[run]]
+name = "agent-desktop-haiku-5-5-2026-11-05"
+model = "anthropic/claude-haiku-5-5"
+trials = "evals/macos-agent-desktop-benchlab-trials.txt"
+
+[[host]]
+name = "mac-1"
+instance = "i-0123456789abcdef0"
+# Optional: the framework commit the host's checkout is moved to while it runs nothing, and agent-env's state there.
+framework = "e1afb200"
+state = "$HOME/.local/state-e1afb200"
+
+[[host]]
+name = "mac-2"
+instance = "i-0fedcba9876543210"
