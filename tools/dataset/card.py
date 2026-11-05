@@ -117,8 +117,9 @@ def _drivers(out, catalog):
     return f"""### Drivers
 
 The same tasks through other computer-use drivers, with the OS, the model, the tasks, their seeds and the grade held
-fixed. Each driver gives the agent its own tools (below), and each also serves the same neutral `computer_*` tools to
-the grader and the recordings, which the agents in these runs don't see.
+fixed. Each driver gives the agent its own tools (below), and each also serves AgentEnv's `computer_*` tools, which the
+grader and the recordings use. agent-desktop's and macos-harness's agents don't see those. cua-driver's macOS runs here
+also offered its agents seven of them beside its own 62 tools, and its agents made some of their calls through them.
 
 {figures}
 

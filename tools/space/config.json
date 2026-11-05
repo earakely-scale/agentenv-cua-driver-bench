@@ -77,12 +77,12 @@
   "drivers": {
     "cua-driver": {
       "name": "cua-driver",
-      "detail": "trycua's cua-driver 0.38.0, through its own MCP server's 62 tools (CuaDriver.app)",
+      "detail": "trycua's cua-driver 0.38.0, through its own MCP server's 62 tools (CuaDriver.app); on macOS so far also seven of AgentEnv's computer_* tools",
       "slot": 2
     },
     "agent-desktop": {
       "name": "agent-desktop",
-      "detail": "Vercel's agent-desktop 1.2.0, through its own MCP server's 67 desktop_* tools; headed in the foreground, headless in the background",
+      "detail": "Vercel Labs' agent-desktop 1.2.0, through its own MCP server's 67 desktop_* tools; headed in the foreground, headless in the background",
       "slot": 6
     },
     "macos-harness": {

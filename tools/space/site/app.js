@@ -235,8 +235,9 @@ function driversSection() {
       h("h3", {}, h("span", { class: "dot" }), d.name),
       h("p", {}, d.detail || ""),
       h("div", { class: "apps" }, osesOf(d.id).map((o) => h("span", { class: "app" }, o.name)))))),
-    h("p", { class: "dnote" }, "Every driver also serves the same neutral ", h("code", {}, "computer_*"),
-      " tools to the grader and the recordings, which the agents in these runs don't see."),
+    h("p", { class: "dnote" }, "Every driver also serves AgentEnv's ", h("code", {}, "computer_*"),
+      " tools, which the grader and the recordings use. agent-desktop's and macos-harness's agents don't see them; ",
+      "cua-driver's macOS runs here also offered its agents seven of them beside its own 62 tools."),
     figures(CAT.driver_figures, (f) => (f.endsWith("task-score") ? "Task score by driver" : "Full pass by driver")),
     compareView());
 }

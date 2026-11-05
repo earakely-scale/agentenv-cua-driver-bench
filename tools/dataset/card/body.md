@@ -40,7 +40,7 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    On macOS (`tasks/macos-*.json`): Cua's macOS 26 VM bundle at 1920x1080, run by Lume on an EC2 Mac (mac2-m2.metal),
    with cua-driver, the task's apps as trycua's macOS descriptors run them, and trycua's own BenchSentinel. The
    drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`) are those
-   with Vercel's agent-desktop or browser-use's macOS harness in cua-driver's place, and nothing else changed.
+   with Vercel Labs' agent-desktop or browser-use's macOS harness in cua-driver's place, and nothing else changed.
 2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver as its
    only MCP server, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns and
    360 seconds.

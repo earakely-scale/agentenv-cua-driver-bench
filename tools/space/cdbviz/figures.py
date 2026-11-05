@@ -97,6 +97,10 @@ def spread(items, gap):
     return items
 
 
+#: The room between a side label and its point, for the leader to a point the label had to leave.
+LEADER = 14
+
+
 def label_h(s, label, note):
     return (s["os"] + 12 if label else 0) + (s["sub"] + 6 if label and note else 0)
 
@@ -115,7 +119,7 @@ def panel(svg, x0, y0, pw, ph, series, conds, theme, s, label=None, note=None):
     plot_top, plot_bot = top + (s["val"] * 0.5 + 6 if side else s["pad_top"]), y0 + ph - s["xlab"]
     name_w = max([width(sr["name"], 600, s["name"]) for sr in series] + [60])
     name_off = max(s["dot"] + s["end_gap"], val_w / 2 + 6)
-    left = val_w + s["dot"] + 9 if side else s["gut"]
+    left = val_w + s["dot"] + LEADER + 7 if side else s["gut"]
     right = (s["dot"] + val_w + 16 + name_w if side else name_w + name_off - s["dot"]) + s["gut2"]
     xs = [x0 + left + i * (pw - left - right) / max(1, len(conds) - 1) for i in range(len(conds))]
     y = lambda v: plot_bot - v * (plot_bot - plot_top)
@@ -218,10 +222,15 @@ def gloss_lines(conds, xs, s):
 
 
 def side_labels(svg, s, firsts, ends, val_w, halo):
-    """The first condition's values right-aligned left of their points; the last's in a column right of theirs, each
+    """The first condition's values in a column left of their points; the last's in a column right of theirs, each
     before its line's name. Both spread apart in order, and a leader goes to any point its label had to leave."""
-    for it in spread([{**it, "y": it["y"] + s["val"] * 0.36} for it in sides(firsts, 2, float("inf"))], s["val"] + 3):
-        svg.text(it["x"] - s["dot"] - 7, it["y"], pct(it["v"]), s["val"], 700, "ink", "end", halo, num=True)
+    for it in spread([{**it, "dot": it["y"], "y": it["y"] + s["val"] * 0.36} for it in sides(firsts, 2, float("inf"))],
+                     s["val"] + 3):
+        vx = it["x"] - s["dot"] - LEADER - 3
+        if abs(it["y"] - s["val"] * 0.36 - it["dot"]) > 3:
+            svg.add(f'<path d="M{vx + 4:.1f},{it["y"] - s["val"] * 0.36:.1f} L{it["x"] - s["dot"] - 3:.1f},{it["dot"]:.1f}" '
+                    f'stroke="{svg.t["ink3"]}" stroke-width="1" fill="none"/>')
+        svg.text(vx, it["y"], pct(it["v"]), s["val"], 700, "ink", "end", halo, num=True)
     size = max(s["val"], s["name"])
     for e in spread([{**e, "y": e["dot"] + size * 0.36} for e in ends], size + 5):
         vx, text = e["x"] + s["dot"] + 8 + val_w, pct(e["v"])
@@ -345,7 +354,7 @@ def specs(cat):
     runs = sorted({p["n"] for r in board for p in r["tasks"].values()} or {1})
     out = {}
     for key, metric, title in (("task-score", "score", "Task score"), ("full-pass", "pass", "Full pass")):
-        panels, used, ci_any = [], set(), False
+        panels, used, counts, ci_any = [], set(), set(), False
         for o in cat["oses"]:
             series = []
             for mid, m in models.items():
@@ -362,6 +371,7 @@ def specs(cat):
                         continue
                     ts = [t for t in order if t in (common or rows[c]["tasks"])]
                     used |= set(ts)
+                    counts.add(len(ts))
                     xs = [rows[c]["tasks"][t][metric] for t in ts if rows[c]["tasks"][t][metric] is not None]
                     vals.append(sum(xs) / len(xs) if xs else None)
                     cis.append(boot_ci(xs) if len(xs) >= 3 else None)
@@ -370,7 +380,8 @@ def specs(cat):
             if series:
                 panels.append({"label": o["name"], "series": series})
         span = catalog.ranges([short[t] for t in order if t in used])
-        n_tasks = len(used)
+        n_tasks = (f"{min(counts)}" if len(counts) == 1 else f"the {min(counts)}–{max(counts)}") if counts else "0"
+        many = max(counts, default=0) != 1
         via = next((d["name"] for d in cat["drivers"] if d["id"] == cat["driver"]), cat["driver"])
         if key == "task-score":
             sub = (f"trycua's evaluator (weighted checks), mean over {span}, all through {via}. The drop is the "
@@ -380,7 +391,7 @@ def specs(cat):
                    "only, and in the background the user undisturbed.")
         nrun = f"{runs[0]}" if len(runs) == 1 else f"{runs[0]}–{runs[-1]}"
         foot = (f"n = {nrun} run{'s' if runs[-1] != 1 else ''} per task and condition; each point averages {n_tasks} "
-                f"task{'s' if n_tasks != 1 else ''} run in both conditions. "
+                f"task{'s' if many else ''} its model ran on that OS in both conditions. "
                 + ("Whiskers: 95% bootstrap interval over tasks. " if ci_any else "Too few tasks for an interval. ")
                 + " · ".join(o["name"] + (f" ({o['detail'].split(' · ')[0]})" if o.get("detail") else "") for o in cat["oses"])
                 + ". Tasks by trycua's Cua Driver Bench, run on AgentEnv; not trycua's official results.")
