@@ -1,7 +1,7 @@
 ## The tasks
 
 trycua's Bench v2: ten GUI-only tasks in three groups. The multi-app tasks use their task pack's own Electron apps
-(Calc and GnuCash are Ubuntu's); the precision and interruption tasks run in BenchLab, trycua's test app, in a mode
+(Calc and GnuCash are Ubuntu's on Linux; on macOS, LibreOffice 25.8 and GnuCash 5.17 for Apple silicon); the precision and interruption tasks run in BenchLab, trycua's test app, in a mode
 and with a seed of their own for each run: on Linux the GTK version of their Linux port, on macOS their own app, built
 from their Swift sources at the pinned commit.
 
@@ -38,7 +38,7 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
 1. Deploy the task's computer: Ubuntu 24.04 on Xvfb at 1920x1080 with the xfwm4 window manager, AgentEnv's
    computer-use driver (trycua's `cua-driver`), the task's apps and the bench's sentinel (the "User activity" window).
    On macOS (`tasks/macos-*.json`): Cua's macOS 26 VM bundle at 1920x1080, run by Lume on an EC2 Mac (mac2-m2.metal),
-   with cua-driver, BenchLab and trycua's own BenchSentinel.
+   with cua-driver, the task's apps as trycua's macOS descriptors run them, and trycua's own BenchSentinel.
 2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver as its
    only MCP server, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns and
    360 seconds.
@@ -97,8 +97,8 @@ runs/<os>/<run>/<trial>/
 - Few trials per cell: trycua's schedule runs each task 5 times per condition, and a cell's rate rests on those 5.
   The pilot run `sonnet-4-5-2026-11-02` covers only the three multi-app tasks, once per condition, and its prompts
   lack trycua's closing line with the time and turn limits, which later runs have.
-- **macOS covers the seven BenchLab tasks, with one model.** The three multi-app tasks (G02 to G04) aren't on macOS
-  yet, and Claude Sonnet 5.5 is the only model run there.
+- **On macOS, Claude Haiku 5.5 ran only the seven BenchLab tasks**, and Sonnet 5.5's row joins two runs: the
+  BenchLab tasks on PR #498's head, the multi-app tasks on the release that shipped it, 0.9.1443.
 - On Linux the driver can click, type and scroll only into the focused window for Chromium, Electron and
   LibreOffice Calc. In the background it has the accessibility (AT-SPI) actions, menus and the clipboard, so many
   background moves are refused and the agent must find another way. On macOS, trycua's home OS, it delivers input to
