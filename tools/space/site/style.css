@@ -142,11 +142,13 @@ button, select { font: inherit; color: inherit; }
 .pc.ok { background: var(--good-soft); color: var(--good-ink); }
 .pc.mid { background: var(--user-soft); color: var(--user-ink); }
 .pc.no { background: var(--bad-soft); color: var(--bad-ink); }
+.pc.na { background: var(--sunken); color: var(--ink-3); }
 a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
 .pips { display: inline-flex; gap: 3px; }
 .pip { width: 11px; height: 11px; border-radius: 3px; display: block; }
 .pip.ok { background: var(--good); }
 .pip.no { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--bad) 70%, transparent); }
+.pip.na { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-4); }
 .pip:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
 .sc { display: inline-flex; flex: 1 1 auto; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .sc .bar { flex: 0 1 56px; min-width: 18px; height: 5px; margin: 0; border-radius: 3px; background: var(--sunken); overflow: hidden; }
@@ -205,6 +207,7 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
 .verdict.pass { background: var(--good); color: #fff; }
 .verdict.some { background: var(--user-soft); color: var(--user-ink); }
 .verdict.fail { background: var(--bad-soft); color: var(--bad-ink); }
+.verdict.na { background: var(--sunken); color: var(--ink-3); }
 .runs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .runs .verdict { margin-right: 2px; }
 .run { display: inline-flex; align-items: baseline; gap: 4px; text-decoration: none; font-family: var(--mono); font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface); }
@@ -301,7 +304,7 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
 .endcard .card h2 { margin: 0 0 3px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; }
 .endcard .vline { display: flex; align-items: center; gap: 12px; margin: 2px 0 14px; }
 .endcard .vline .big { font-size: 34px; font-weight: 850; letter-spacing: -.03em; }
-.endcard .vline .big.pass { color: var(--good-ink); } .endcard .vline .big.fail { color: var(--bad-ink); }
+.endcard .vline .big.pass { color: var(--good-ink); } .endcard .vline .big.fail { color: var(--bad-ink); } .endcard .vline .big.na { color: var(--ink-3); }
 .endcard .vline .why { color: var(--ink-2); font-size: 14px; line-height: 1.4; }
 .halves { display: grid; gap: 7px; }
 .half { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }

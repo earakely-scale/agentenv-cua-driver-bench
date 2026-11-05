@@ -81,7 +81,7 @@ The A22 criteria:
 ## Dataset structure
 
 ```
-results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, cost, turns, paths
+results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, whether it's scored, cost, turns, paths
 results/calls.parquet        one row per tool call: when it was issued and answered on the recording's clock, its input, its result
 tasks/tasks.parquet          one row per trial task: the prompt, the system prompt, the built-in tools, limits, the task file
 runs/<os>/<run>/<trial>/
@@ -119,8 +119,11 @@ runs/<os>/<run>/<trial>/
   IR-02's banner is drawn inside BenchLab's window, so it can pass.
 - trycua's text is kept as written: the BenchLab briefs say BenchLab "is already open on your Mac", and MB-10's
   brief names an "Actions" strip that their Linux BenchLab labels "Hover here to reveal actions".
-- MB-09 to MB-11 need a real drag, hover or resting pointer, which always moves the user's pointer, so in the
-  background condition they can't keep the user undisturbed; trycua's own coverage notes say so.
+- MB-10's and MB-11's background trials are kept with their grades but not scored, our call rather than trycua's,
+  whose task list runs both conditions: every hover BenchLab saw in these runs moved the user's pointer, and on macOS
+  a tooltip shows only for the app in front, so in the background no driver here can pass them.
+  MB-09 is scored in both conditions, though in the background its drag keeps the user undisturbed only through a
+  driver that drags without moving the user's pointer.
 - Claude Code's `num_turns` counts tool round trips, across a context compaction too, so it passes 45 when the model
   makes several calls in one message; the 45-turn limit holds on `model_calls`, the model's distinct messages.
 

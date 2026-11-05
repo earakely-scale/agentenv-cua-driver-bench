@@ -482,13 +482,23 @@
       "os": null,
       "condition": "background",
       "tasks": [
-        "mb-09",
-        "mb-10",
-        "mb-11"
+        "mb-09"
       ],
       "mark": "§",
       "short": "Needs the pointer",
-      "reason": "A real drag, hover or resting pointer moves the user's pointer, so these tasks can't keep the user undisturbed in the background, as trycua's coverage notes say."
+      "reason": "A real drag moves the user's pointer, so in the background the task keeps the user undisturbed only through a driver that drags without it."
+    },
+    {
+      "os": null,
+      "condition": "background",
+      "tasks": [
+        "mb-10",
+        "mb-11"
+      ],
+      "mark": "¶",
+      "short": "Not scored in the background",
+      "reason": "Our call, not trycua's, whose task list runs both conditions: every hover BenchLab saw in these runs moved the user's pointer, and on macOS a tooltip shows only for the app in front, so in the background no driver here can pass them. Their background trials stay in the dataset with their grades, outside every total.",
+      "unscored": true
     }
   ]
 }

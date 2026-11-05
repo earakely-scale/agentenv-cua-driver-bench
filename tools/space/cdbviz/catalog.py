@@ -26,12 +26,18 @@ def run_order(m):
     return (m["run_index"] if m.get("run_index") is not None else 10**6, m.get("started_at") or "", m["uid"])
 
 
+def unscored(cat, os_, condition, task):
+    """Whether the task's trials in ``condition`` on ``os_`` aren't scored, as their caveat says: kept and shown, but in
+    no total, figure or comparison."""
+    return bool((caveat(cat, os_, condition, task) or {}).get("unscored"))
+
+
 def board(metas, cfg, missing=()):
-    """A row per OS, driver, model and condition; ``missing`` counts toward the row whose runs they're of, a run being
-    one model's on one driver, and a row with any is incomplete."""
+    """A row per OS, driver, model and condition, of the trials it scores; ``missing`` counts toward the row whose runs
+    they're of, a run being one model's on one driver, and a row with any is incomplete."""
     cells = defaultdict(list)
     for m in metas:
-        if on_board(m["model"], cfg):
+        if on_board(m["model"], cfg) and not unscored(cfg, m["os"], m["condition"], m["task"]):
             cells[(m["os"], m["driver"], m["model"], m["condition"])].append(m)
     rows = []
     for (os_, driver, model, cond), ms in cells.items():
@@ -111,16 +117,16 @@ def build(metas, cfg, hero, files, missing=()):
         "trials": [{**m, "key": ks[m["uid"]][0], "nth": ks[m["uid"]][1], "of": ks[m["uid"]][2], **files[m["uid"]]}
                    for m in trials],
         "board": rows,
-        "comparisons": comparisons(rows, oses, board_models, drivers, tasks),
+        "comparisons": comparisons(rows, oses, board_models, drivers, tasks, cfg),
         "missing": list(missing),
         "caveats": cfg.get("caveats") or [],
     }
 
 
-def comparisons(rows, oses, models, drivers, tasks):
+def comparisons(rows, oses, models, drivers, tasks, cfg):
     """Each OS and model that two drivers or more ran in both conditions, over the tasks every one of them ran in both,
-    so that the drivers figures, the Space's comparison and the card's table each compare like with like; an OS's
-    widest first."""
+    a task scored in one condition only counting in that one, so that the drivers figures, the Space's comparison and
+    the card's table each compare like with like; an OS's widest first."""
     by = defaultdict(dict)
     for r in rows:
         by[(r["os"], r["model"], r["driver"])][r["condition"]] = r
@@ -129,7 +135,8 @@ def comparisons(rows, oses, models, drivers, tasks):
         for model in models:
             ran = [d for d in drivers if all(c in by.get((os_, model, d), {}) for c in CONDITIONS)]
             sets = [set(by[(os_, model, d)][c]["tasks"]) for d in ran for c in CONDITIONS]
-            common = [t for t in tasks if all(t in s for s in sets)]
+            common = [t for t in tasks if any(t in s for s in sets) and all(
+                t in by[(os_, model, d)][c]["tasks"] or unscored(cfg, os_, c, t) for d in ran for c in CONDITIONS)]
             if len(ran) < 2 or not common:
                 continue
             out.append({"os": os_, "model": model, "tasks": common, "of": len(set().union(*sets)),
@@ -139,7 +146,7 @@ def comparisons(rows, oses, models, drivers, tasks):
 
 
 def summary(row, tasks):
-    per = [row["tasks"][t] for t in tasks]
+    per = [row["tasks"][t] for t in tasks if t in row["tasks"]]
     return {"score": mean([p["score"] for p in per]), "pass": mean([p["pass"] for p in per]),
             "passed": sum(p["passed"] for p in per), "n": sum(p["n"] for p in per), "missing": row["missing"]}
 
@@ -196,7 +203,8 @@ def results_md(cat):
             cv = caveat(cat, r["os"], r["condition"], t)
             if cv and cv not in used:
                 used.append(cv)
-            cells.append("–" if not p else f"{pct(p['score'])} · {p['passed']}/{p['n']}{cv['mark'] if cv else ''}")
+            cells.append(f"not scored{cv['mark']}" if cv and cv.get("unscored") else "–" if not p
+                         else f"{pct(p['score'])} · {p['passed']}/{p['n']}{cv['mark'] if cv else ''}")
         lost = f" (incomplete: {r['missing']} missing)" if r.get("missing") else ""
         lines.append(f"| {osn.get(r['os'], r['os'])} | {names.get(r['model'], r['model'])}{lost} | "
                      f"{drivers[r['driver']][1]} | {r['condition']} | "
@@ -240,7 +248,9 @@ def drivers_md(cat):
     spans = "; ".join(f"{names[c['model']]} on {osn[c['os']]}, {ranges([probes[t] for t in c['tasks']])}"
                       + (f" (the {len(c['tasks'])} of {c['of']} every driver has finished)" if len(c["tasks"]) < c["of"]
                          else "") for c in cat["comparisons"])
-    lines += ["", f"Each model's rows average the same tasks, the ones every driver ran in both conditions: {spans}. "
+    off = any(unscored(cat, c["os"], cond, t) for c in cat["comparisons"] for cond in CONDITIONS for t in c["tasks"])
+    lines += ["", f"Each model's rows average the same tasks, the ones every driver ran in both conditions"
+              f"{', the background less its unscored ones' if off else ''}: {spans}. "
               "The OS, the model, the tasks, their seeds and the grade are the same; only the computer-use driver "
               "changes. In bold, the best of a model's drivers in each condition; n counts the trials."]
     lines += [""] + [f"- **{d['name']}**: {escaped(d['detail'])}" for d in cat["drivers"] if d.get("detail")]

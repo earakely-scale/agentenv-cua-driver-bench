@@ -362,14 +362,15 @@ def specs(cat):
                 if not rows:
                     continue
                 sets = [set(rows[c]["tasks"]) for c in cids if c in rows]
-                common = set.intersection(*sets) if len(sets) == len(cids) and sets else set()
+                common = {t for t in set().union(*sets) if all(t in rows[c]["tasks"] or catalog.unscored(
+                    cat, o["id"], c, t) for c in cids)} if len(sets) == len(cids) and sets else set()
                 vals, cis = [], []
                 for c in cids:
                     if c not in rows:
                         vals.append(None)
                         cis.append(None)
                         continue
-                    ts = [t for t in order if t in (common or rows[c]["tasks"])]
+                    ts = [t for t in order if t in (common or rows[c]["tasks"]) and t in rows[c]["tasks"]]
                     used |= set(ts)
                     counts.add(len(ts))
                     xs = [rows[c]["tasks"][t][metric] for t in ts if rows[c]["tasks"][t][metric] is not None]
@@ -390,8 +391,10 @@ def specs(cat):
             sub = (f"Share of trials of {span}, all through {via}, where every half of the grade held: the task, GUI "
                    "only, and in the background the user undisturbed.")
         nrun = f"{runs[0]}" if len(runs) == 1 else f"{runs[0]}–{runs[-1]}"
+        off = any(catalog.unscored(cat, o["id"], c, t) for o in cat["oses"] for c in cids for t in used)
         foot = (f"n = {nrun} run{'s' if runs[-1] != 1 else ''} per task and condition; each point averages {n_tasks} "
-                f"task{'s' if many else ''} its model ran on that OS in both conditions. "
+                f"task{'s' if many else ''} its model ran on that OS in both conditions"
+                + (", less the background's unscored ones. " if off else ". ")
                 + ("Whiskers: 95% bootstrap interval over tasks. " if ci_any else "Too few tasks for an interval. ")
                 + " · ".join(o["name"] + (f" ({o['detail'].split(' · ')[0]})" if o.get("detail") else "") for o in cat["oses"])
                 + ". Tasks by trycua's Cua Driver Bench, run on AgentEnv; not trycua's official results.")

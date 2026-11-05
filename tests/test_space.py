@@ -118,6 +118,27 @@ def test_a_comparison_holds_the_os_and_model_and_counts_only_the_tasks_every_dri
     assert macos["agent-desktop"]["background"]["pass"] == 1.0 and macos["cua-driver"]["background"]["score"] == 0.5
 
 
+def test_a_task_the_config_doesnt_score_in_the_background_counts_in_the_foreground_alone(space):
+    catalog = space("catalog")
+    cfg = {**CONFIG, "caveats": [{"os": None, "condition": "background", "tasks": ["mb-10"], "mark": "¶",
+                                  "short": "Not scored in the background", "reason": "Why.", "unscored": True}]}
+    metas = [m for driver in ("cua-driver", "agent-desktop") for m in _cells(driver, [
+        ("ir-01", "foreground", [(True, 1.0)]), ("ir-01", "background", [(False, 0.5)]),
+        ("mb-10", "foreground", [(True, 1.0)]), ("mb-10", "background", [(False, 0.0)])])]
+    cat = _catalog(space, metas, cfg)
+
+    rows = {(r["driver"], r["condition"]): (r["passed"], r["n_trials"], set(r["tasks"])) for r in cat["board"]}
+    [comparison] = cat["comparisons"]
+    cua = comparison["drivers"][0]
+
+    assert rows[("cua-driver", "foreground")] == (2, 2, {"ir-01", "mb-10"})
+    assert rows[("cua-driver", "background")] == (0, 1, {"ir-01"})
+    assert set(comparison["tasks"]) == {"ir-01", "mb-10"}
+    assert (cua["foreground"]["n"], cua["background"]["n"], cua["background"]["score"]) == (2, 1, 0.5)
+    assert "not scored¶" in catalog.results_md(cat) and "¶ Not scored in the background: Why." in catalog.results_md(cat)
+    assert catalog.unscored(cfg, "linux", "background", "mb-10") and not catalog.unscored(cfg, "macos", "foreground", "mb-10")
+
+
 def test_the_card_tables_name_each_rows_driver_and_bold_a_models_best_driver(space):
     catalog = space("catalog")
     metas = (_cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)] * 2), ("ir-01", "background", [(False, 0.5)] * 2)])

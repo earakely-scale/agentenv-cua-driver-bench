@@ -145,6 +145,7 @@ function resultsNote() {
 }
 
 function verdict(t) {
+  if (unscored(t.os, t.condition, t.task)) return h("span", { class: "verdict na" }, "Not scored");
   return h("span", { class: `verdict ${t.passed ? "pass" : "fail"}` }, t.passed ? "✓ Pass" : "✗ Fail");
 }
 
@@ -430,13 +431,14 @@ function compareGrid(c) {
       const runs = cellRuns(c, d.id, task.id, k.id);
       return runs.length ? { runs, k: runs.filter((t) => t.passed).length, n: runs.length, score: meanOf(runs.map((t) => t.grade?.task?.score)) } : null;
     })]));
-    const leads = Object.fromEntries(conds.map((k) => [k.id, rank(results[k.id])]));
+    const off = Object.fromEntries(conds.map((k) => [k.id, unscored(c.os, k.id, task.id)]));
+    const leads = Object.fromEntries(conds.map((k) => [k.id, off[k.id] ? results[k.id].map(() => false) : rank(results[k.id])]));
     c.drivers.forEach((d, i) => {
       const first = i === 0 ? " first" : "";
       grid.append(h("div", { class: `cd${first}` }, driverDot(d.id), h("span", {}, driverName(d.id))));
       for (const k of conds) {
         const lost = missingOf(d.id, c.os, task.id, k.id, [c.model]);
-        grid.append(cmpCell(results[k.id][i], leads[k.id][i], lost, d.id, first));
+        grid.append(cmpCell(results[k.id][i], leads[k.id][i], lost, d.id, first, off[k.id]));
       }
     });
   }
@@ -444,17 +446,19 @@ function compareGrid(c) {
   return grid;
 }
 
-function cmpCell(r, lead, lost, driver, first) {
+function cmpCell(r, lead, lost, driver, first, off) {
   const style = { "--dc": `var(--s${(DRIVERS[driver]?.slot ?? 0) % 8})` };
   if (!r) return h("div", { class: `cc empty${first}`, style }, lost ? `${lost} missing` : "Not run");
   const rep = r.runs.slice().sort((a, b) => (b.grade?.task?.score ?? -1) - (a.grade?.task?.score ?? -1))[0];
   const runName = (t) => (t.run_index != null ? `Run ${t.run_index}` : `#${t.nth}`);
   return h("div", { class: `cc${lead ? " lead" : ""}${first}`, style },
-    h("a", { class: `pc ${tone(r.k, r.n)}`, href: hashOf(rep), title: `${r.k} of ${r.n} runs pass. Replay ${r.n > 1 ? "the best run, " : ""}${runName(rep).toLowerCase()}` },
-      h("b", {}, `${r.k}/${r.n}`), h("span", {}, "pass")),
-    h("span", { class: "pips" }, r.runs.map((t) => h("a", { class: `pip ${t.passed ? "ok" : "no"}`, href: hashOf(t),
-      title: `${runName(t)}: ${t.passed ? "pass" : "fail"}, ${pct(t.grade?.task?.score)} task score`,
-      "aria-label": `${runName(t)}, ${t.passed ? "pass" : "fail"}, ${pct(t.grade?.task?.score)} task score: replay` }))),
+    off ? h("a", { class: "pc na", href: hashOf(rep), title: `Not scored. Replay ${r.n > 1 ? "the best run, " : ""}${runName(rep).toLowerCase()}` },
+      h("span", {}, "not scored"))
+      : h("a", { class: `pc ${tone(r.k, r.n)}`, href: hashOf(rep), title: `${r.k} of ${r.n} runs pass. Replay ${r.n > 1 ? "the best run, " : ""}${runName(rep).toLowerCase()}` },
+        h("b", {}, `${r.k}/${r.n}`), h("span", {}, "pass")),
+    h("span", { class: "pips" }, r.runs.map((t) => h("a", { class: `pip ${off ? "na" : t.passed ? "ok" : "no"}`, href: hashOf(t),
+      title: `${runName(t)}: ${off ? "not scored" : t.passed ? "pass" : "fail"}, ${pct(t.grade?.task?.score)} task score`,
+      "aria-label": `${runName(t)}, ${off ? "not scored" : t.passed ? "pass" : "fail"}, ${pct(t.grade?.task?.score)} task score: replay` }))),
     h("span", { class: "sc", title: "Mean task score" }, h("span", { class: "bar" }, h("i", { style: { width: pct(r.score ?? 0) } })), h("b", {}, pct(r.score))),
     lead ? h("span", { class: "lead-tag" }, "Best") : null,
     lost ? h("span", { class: "miss", title: `${lost} trial${lost > 1 ? "s" : ""} missing: infrastructure cut ${lost > 1 ? "them" : "it"} short past the re-runs` }, `+${lost} missing`) : null);
@@ -465,7 +469,8 @@ function totalsRows(c, conds) {
   const out = [h("div", { class: "ct total", style: { gridRow: `span ${c.drivers.length}` } },
     h("div", { class: "probe" }, "Totals"),
     h("h3", {}, c.tasks.length < c.of ? `The ${c.tasks.length} tasks every driver ran` : `All ${c.tasks.length} tasks`),
-    h("p", { class: "ct-note" }, "Full pass and mean task score over the same tasks, so the rows compare like with like."))];
+    h("p", { class: "ct-note" }, "Full pass and mean task score over the same tasks, so the rows compare like with like."
+      + (conds.some((k) => c.tasks.some((t) => unscored(c.os, k.id, t))) ? " A condition's totals leave out the tasks it doesn't score." : "")))];
   const leads = Object.fromEntries(conds.map((k) => [k.id, rank(c.drivers.map((d) => ({ k: d[k.id].passed, n: d[k.id].n, score: d[k.id].score })))]));
   c.drivers.forEach((d, i) => {
     const first = i === 0 ? " first" : "";
@@ -509,6 +514,7 @@ function cellBlock(runs, multi) {
   const bg = runs[0].condition === "background";
   const passed = runs.filter((t) => t.passed).length;
   const one = runs.length === 1;
+  const off = unscored(runs[0].os, runs[0].condition, runs[0].task);
   const bdg = (r, label) => {
     if (!r) return badge(null, label);
     if (one) return badge(r.k === 1, label);
@@ -527,7 +533,8 @@ function cellBlock(runs, multi) {
         bdg(rate(runs, (t) => t.grade?.gui_only?.result), "GUI only"),
         bg && bdg(rate(runs, (t) => t.grade?.user_undisturbed ? t.grade.user_undisturbed.result : null), "User undisturbed")),
       one ? verdict(runs[0]) : h("div", { class: "runs" },
-        h("span", { class: `verdict ${passed ? (passed === runs.length ? "pass" : "some") : "fail"}` }, `${passed}/${runs.length} pass`),
+        off ? h("span", { class: "verdict na" }, "Not scored")
+          : h("span", { class: `verdict ${passed ? (passed === runs.length ? "pass" : "some") : "fail"}` }, `${passed}/${runs.length} pass`),
         runs.map((t) => h("a", { class: `run ${t.passed ? "ok" : "no"}`, href: hashOf(t), title: `Run ${t.run_index ?? t.nth}${t.seed != null ? ` · seed ${t.seed}` : ""}: ${pct(t.grade?.task?.score)} task score, ${t.passed ? "pass" : "fail"}` },
           t.run_index != null ? `r${t.run_index}` : `#${t.nth}`, h("i", {}, pct(t.grade?.task?.score)))))));
 }
@@ -679,10 +686,15 @@ function caveatOf(os, condition, task) {
   return (CAT.caveats || []).find((cv) => (cv.os == null || cv.os === os) && cv.condition === condition && cv.tasks.includes(task));
 }
 
+function unscored(os, condition, task) {
+  return !!caveatOf(os, condition, task)?.unscored;
+}
+
 function whyLine(t) {
   const g = t.grade || {};
-  if (t.passed) return "Every half held.";
   const cv = caveatOf(t.os, t.condition, t.task);
+  if (cv?.unscored) return `${cv.short}: ${cv.reason}`;
+  if (t.passed) return "Every half held.";
   if (cv && g.task?.result && (!g.gui_only || g.gui_only.result)) return `The task was done in the GUI, but the user was disturbed. ${cv.short}: ${cv.reason}`;
   const why = [];
   if (g.task && !g.task.result) why.push("the task checks failed");
@@ -993,7 +1005,8 @@ function createPlayer(root, trial, tl) {
     if (trial.condition === "background") halves.push(["User undisturbed", u ? u.result : null, u ? (broken.length ? `broken: ${broken.map((c) => c.short).join(", ")}` : "all eight criteria held") : "not graded", u ? `${8 - broken.length} of 8 held` : ""]);
     const card = h("div", { class: "card" },
       h("h2", {}, "The grade"),
-      h("div", { class: "vline" }, h("span", { class: `big ${trial.passed ? "pass" : "fail"}` }, trial.passed ? "Pass" : "Fail"), h("span", { class: "why" }, whyLine(trial))),
+      h("div", { class: "vline" }, (unscored(trial.os, trial.condition, trial.task) ? h("span", { class: "big na" }, "Not scored")
+        : h("span", { class: `big ${trial.passed ? "pass" : "fail"}` }, trial.passed ? "Pass" : "Fail")), h("span", { class: "why" }, whyLine(trial))),
       h("div", { class: "halves" }, halves.map(([name, ok, sub, val]) => h("div", { class: "half" },
         h("span", { class: `ic ${ok == null ? "na" : ok ? "ok" : "no"}` }, ok == null ? "–" : ok ? "✓" : "✗"),
         h("div", {}, h("b", {}, name), h("span", {}, sub)), h("em", {}, val)))),
