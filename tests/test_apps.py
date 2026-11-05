@@ -128,7 +128,8 @@ def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node_with_elect
     chrome = {"id": "browser", "command": [bench_app.MAC_CHROME, "--no-first-run", "http://127.0.0.1:4184/"]}
     assert bench_app._command(electron, values) == [
         str(bench_app.HERE / "runtime/apps/Copperfield Mail.app/Contents/MacOS/Electron"), ".", "--surface=mail",
-        "--workspace=/home/user/cdb-s02", "--user-data-dir=/home/user/cdb-s02/.runtime/electron-mail"]
+        "--workspace=/home/user/cdb-s02", "--user-data-dir=/home/user/cdb-s02/.runtime/electron-mail",
+        "--use-mock-keychain"]
     assert bench_app._command(chrome, values) == [str(bench_app.MAC_CHROMIUM), "--no-first-run", "http://127.0.0.1:4184/"]
     assert bench_app.MAC_CHROMIUM.relative_to(bench_app.HERE).as_posix() == (
         "runtime/chromium/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")

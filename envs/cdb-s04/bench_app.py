@@ -294,11 +294,13 @@ def _command(app: dict, values: dict[str, str]) -> list[str]:
     electron``, ``node`` and ``google-chrome``. Electron and Chromium run without Chromium's sandbox, which a container
     can't give them, Electron with its own profile under the workspace's runtime folder and Chromium without /dev/shm,
     which no computer sizes, and with its own window class. On macOS Electron runs sandboxed from the app's own bundle,
-    and Chrome for Testing in place of Google Chrome."""
+    on Chromium's mock keychain, since a bundle signed ad hoc would ask for the keychain item another app made, and
+    Chrome for Testing in place of Google Chrome."""
     argv = [_sub(arg, values) for arg in app["command"]]
     if argv[:2] == ["npx", "electron"] and MACOS:
         profile = Path(values["${workspace}"]) / ".runtime" / f"electron-{app['id']}"
-        return [str(_bundle(app) / "Contents" / "MacOS" / "Electron"), *argv[2:], f"--user-data-dir={profile}"]
+        return [str(_bundle(app) / "Contents" / "MacOS" / "Electron"), *argv[2:], f"--user-data-dir={profile}",
+                "--use-mock-keychain"]
     if argv[0] == MAC_CHROME:
         return [str(MAC_CHROMIUM), *argv[1:]]
     if argv[:2] == ["npx", "electron"]:
