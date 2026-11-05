@@ -4,24 +4,40 @@ builds the task's workspace in the session user's home with the task's ``reset/s
 ``reset/verify.py``. Run as a script, it is the app's launch: it opens the task's windows as the task's
 ``platform/launch.linux.json`` says, on that workspace, and stays while they run, so stopping the app stops them all. On
 macOS it follows the task's ``platform/launch.macos.json`` with the macOS builds of the same apps, and finds and places
-the windows through the computer's cua-driver daemon, as trycua's runner does through its own."""
+the windows through the Accessibility API, which the app's own interpreter is granted, whichever driver the computer
+has."""
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import plistlib
 import re
-import socket
 import subprocess
 import sys
 import time
 import urllib.request
-import uuid
 from pathlib import Path
 
 from agentenv_protocol.computer import (ComputerAppEnvironment, Download, Launch, Packages, Ready, RunScript,
                                         install_step, ready_check)
 from pydantic import BaseModel
+
+if sys.platform == "darwin":
+    import objc
+    from ApplicationServices import (AXUIElementCopyAttributeValue, AXUIElementCreateApplication,
+                                     AXUIElementSetAttributeValue, AXUIElementSetMessagingTimeout, AXValueCreate,
+                                     AXValueGetValue, kAXPositionAttribute, kAXSizeAttribute, kAXTitleAttribute,
+                                     kAXValueCGPointType, kAXValueCGSizeType, kAXWindowsAttribute)
+    from Quartz import (CGPoint, CGSize, CGWindowListCopyWindowInfo, kCGNullWindowID, kCGWindowLayer,
+                        kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly, kCGWindowNumber,
+                        kCGWindowOwnerPID)
+
+    #: The Accessibility API's call for the window server's number of a window, private, as yabai and Hammerspoon
+    #: call it: what ties a window the API names to one the window server shows.
+    _WINDOW_NUMBER = ctypes.CDLL("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")[
+        "_AXUIElementGetWindow"]
+    _WINDOW_NUMBER.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
 
 HERE = Path(__file__).resolve().parent
 TASK = HERE / "task"
@@ -95,9 +111,11 @@ MAC_ELECTRON = RUNTIME / "electron" / "Electron.app" / "Contents" / "MacOS" / "E
 MAC_CHROMIUM = (RUNTIME / "chromium" / "Google Chrome for Testing.app" / "Contents" / "MacOS"
                 / "Google Chrome for Testing")
 MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-#: cua-driver's daemon in a macOS computer, its socket.
-CUA_DRIVER = Path("/tmp/agentenv-cua-driver.sock")
-_SESSION = uuid.uuid4().hex
+#: What the app's interpreter needs on macOS to find and place the windows, and the permission it's granted for it.
+MAC_REQUIREMENTS = "requirements-macos.txt"
+MAC_GRANTS = [{"executable": "venv/bin/python", "services": ["accessibility"]}]
+#: How long an app may take to answer the Accessibility API before it's passed over for that look.
+_AX_TIMEOUT_S = 2.0
 _LAUNCH_TIMEOUT_S = 180
 _PLACE_TIMEOUT_S = 90
 
@@ -132,15 +150,18 @@ def install(*, workspace: str, first_window: str, apt: list[str] = (), node: boo
 class MacOS(BaseModel):
     """How a macOS computer installs the app, as agent-env's ``[install.macos]`` takes it."""
 
+    python: str
     downloads: list[Download]
     run: list[RunScript]
+    grants: list[dict]
 
 
 def macos(*, workspace: str, calc: bool = False, gnucash: bool = False, node: bool = False,
           browser: bool = False) -> dict:
     """The ``@install("macos", ...)`` of a task's app: the task's files, Electron, and what else its macOS descriptor
-    runs (LibreOffice, GnuCash, Node, Chrome for Testing), its ``workspace`` folder of the home as its data, and a
-    launch that's ready once each of its windows shows (``windows``)."""
+    runs (LibreOffice, GnuCash, Node, Chrome for Testing), PyObjC with Accessibility for its interpreter, its
+    ``workspace`` folder of the home as its data, and a launch that's ready once each of its windows shows
+    (``windows``)."""
     files = json.loads((HERE / "files.json").read_text(encoding="utf-8"))["files"]
     downloads = [Download(url=f["url"], sha256=f["sha256"], to=f"task/{f['path']}") for f in files]
     downloads.append(Download(url=f"https://github.com/electron/electron/releases/download/v{ELECTRON}/"
@@ -156,7 +177,8 @@ def macos(*, workspace: str, calc: bool = False, gnucash: bool = False, node: bo
     for wanted, (url, sha256), name in ((calc, LIBREOFFICE_DMG, "LibreOffice"), (gnucash, GNUCASH_DMG, "Gnucash")):
         if wanted:
             downloads.append(Download(url=url, sha256=sha256, to=f"runtime/{name}.dmg"))
-    return dict(spec=MacOS(downloads=downloads, run=[RunScript(script="install-macos.sh", scope="session")]),
+    return dict(spec=MacOS(python=MAC_REQUIREMENTS, downloads=downloads,
+                           run=[RunScript(script="install-macos.sh", scope="session")], grants=MAC_GRANTS),
                 paths=[workspace], launch=Launch(at="boot", command=["venv/bin/python", "bench_app.py"]))
 
 
@@ -348,27 +370,52 @@ def claimed(windows: list[dict]) -> list[list[str]]:
 
 
 def _search(window: dict) -> list[str]:
-    """The ids of the shown windows ``window`` matches: X's, or on macOS cua-driver's, as ``<pid>:<window id>``."""
+    """The ids of the shown windows ``window`` matches: X's, or on macOS ``<pid>:<window number>``."""
     if MACOS:
-        return [f"{shown['pid']}:{shown['window_id']}" for shown in _driver("list_windows").get("windows", [])
-                if (shown.get("title") == window["title"] if "title" in window
-                    else window["title_contains"] in (shown.get("title") or ""))]
+        return [wid for wid, title, _ in _shown()
+                if (title == window["title"] if "title" in window else window["title_contains"] in title)]
     return subprocess.run(["xdotool", "search", "--onlyvisible", "--name", _title(window)],
                           capture_output=True, text=True).stdout.split()
 
 
-def _driver(tool: str, **args) -> dict:
-    """cua-driver's ``tool`` called on the computer's daemon, as trycua's runner calls its own; its structured
-    result."""
-    with socket.socket(socket.AF_UNIX) as connection:
-        connection.settimeout(30)
-        connection.connect(str(CUA_DRIVER))
-        connection.sendall((json.dumps({"method": "call", "name": tool, "args": args, "session_id": _SESSION}) + "\n")
-                           .encode())
-        reply = json.loads(connection.makefile("rb").readline())
-    if not reply.get("ok") or reply["result"].get("isError"):
-        raise RuntimeError(f"cua-driver {tool}: {reply.get('error') or reply['result'].get('content')}")
-    return reply["result"].get("structuredContent") or {}
+def _shown() -> list[tuple[str, str, object]]:
+    """The windows on screen on macOS, each its id, ``<pid>:<window number>``, its title and its element: those the
+    window server shows, each found and named through the Accessibility API."""
+    on_screen = {(info[kCGWindowOwnerPID], info[kCGWindowNumber]) for info in CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID)
+        if info.get(kCGWindowLayer) == 0}
+    found = []
+    for pid in sorted({pid for pid, _ in on_screen}):
+        app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, _AX_TIMEOUT_S)
+        error, windows = AXUIElementCopyAttributeValue(app, kAXWindowsAttribute, None)
+        for element in windows if not error and windows else ():
+            number = ctypes.c_uint32()
+            if _WINDOW_NUMBER(objc.pyobjc_id(element), ctypes.byref(number)) or (pid, number.value) not in on_screen:
+                continue
+            error, title = AXUIElementCopyAttributeValue(element, kAXTitleAttribute, None)
+            found.append((f"{pid}:{number.value}", "" if error else str(title or ""), element))
+    return found
+
+
+def _frame(element: object) -> tuple[int, int, int, int]:
+    """A macOS window's place and size, as the Accessibility API gives them."""
+    found = []
+    for attribute, kind in ((kAXPositionAttribute, kAXValueCGPointType), (kAXSizeAttribute, kAXValueCGSizeType)):
+        error, value = AXUIElementCopyAttributeValue(element, attribute, None)
+        ok, struct = (False, None) if error else AXValueGetValue(value, kind, None)
+        if not ok:
+            raise ValueError(f"the window has no {attribute}")
+        found.append(struct)
+    point, size = found
+    return int(point.x), int(point.y), int(size.width), int(size.height)
+
+
+def _set_frame(element: object, bounds: dict) -> None:
+    AXUIElementSetAttributeValue(element, kAXPositionAttribute,
+                                 AXValueCreate(kAXValueCGPointType, CGPoint(bounds["x"], bounds["y"])))
+    AXUIElementSetAttributeValue(element, kAXSizeAttribute,
+                                 AXValueCreate(kAXValueCGSizeType, CGSize(bounds["width"], bounds["height"])))
 
 
 def _place(windows: list[dict]) -> None:
@@ -391,12 +438,8 @@ def _place(windows: list[dict]) -> None:
 
 def _move(wid: str, bounds: dict) -> None:
     if MACOS:
-        pid, window_id = map(int, wid.split(":"))
-        try:
-            _driver("set_window_frame", pid=pid, window_id=window_id, x=bounds["x"], y=bounds["y"],
-                    width=bounds["width"], height=bounds["height"])
-        except RuntimeError:
-            pass
+        for element in [element for shown, _, element in _shown() if shown == wid]:
+            _set_frame(element, bounds)
         return
     subprocess.run(["wmctrl", "-ir", f"0x{int(wid):x}", "-b", "remove,maximized_vert,maximized_horz"],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -409,15 +452,12 @@ def _at(wid: str, bounds: dict) -> bool:
     """Whether the window has the bounds' size, and its frame their place, give or take the window manager's frame."""
     try:
         if MACOS:
-            pid, window_id = map(int, wid.split(":"))
-            frame = next(shown["bounds"] for shown in _driver("list_windows").get("windows", [])
-                         if (shown["pid"], shown["window_id"]) == (pid, window_id))
-            x, y, width, height = (int(frame[key]) for key in ("x", "y", "width", "height"))
+            x, y, width, height = next(_frame(element) for shown, _, element in _shown() if shown == wid)
         else:
             geometry = dict(line.split("=", 1) for line in subprocess.run(
                 ["xdotool", "getwindowgeometry", "--shell", wid], capture_output=True, text=True).stdout.split())
             x, y, width, height = (int(geometry[key]) for key in ("X", "Y", "WIDTH", "HEIGHT"))
-    except (KeyError, ValueError, StopIteration, RuntimeError):
+    except (KeyError, ValueError, StopIteration):
         return False
     return (abs(width - bounds["width"]) <= 8 and abs(height - bounds["height"]) <= 8
             and abs(x - bounds["x"]) <= 40 and abs(y - bounds["y"]) <= 60)
