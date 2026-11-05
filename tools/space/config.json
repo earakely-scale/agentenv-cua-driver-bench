@@ -88,7 +88,7 @@
     },
     "macos-harness": {
       "name": "macos-harness",
-      "detail": "browser-use's macOS harness 0.2.1, its 11 commands through one tool that runs a list of them, as its skill chains them",
+      "detail": "browser-use's macOS harness 0.2.1, its 11 commands through one tool that runs a list of them, as its skill chains them; in these runs its skill reached the agent as server instructions, which Claude Code cuts at 4,096 characters, so the agent saw its first part only (fixed in agentenv-framework #501; a re-run follows)",
       "slot": 3
     }
   },
