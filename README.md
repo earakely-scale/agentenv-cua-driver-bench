@@ -35,6 +35,7 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 | `evals/foreground.toml`, `evals/background.toml` | Bench v2's task files in one condition each. |
 | `tools/fleet/` | Runs the trials on a fleet of EC2 VMs, each trial exported and uploaded to the dataset as it finishes (below). |
 | `tools/dataset/` | The dataset's exporter, tables, card and licences, and `publish.sh`, which rebuilds and uploads them (below). |
+| `tools/bundle/` | `publish.py`, which publishes the bench as a bundle on the Hugging Face Hub, [earakely-scale/cua-driver-bench](https://huggingface.co/datasets/earakely-scale/cua-driver-bench), for `agent-env run hf://earakely-scale/cua-driver-bench`, with trycua's task pack in it, and its card. |
 | `tools/space/` | The replay Space, the card's hero GIF and figures, and each trial's web video, from a folder of trials (below). |
 | `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, of the grade, of the fleet's plan and gates, of the dataset's pricing, timelines, tables and card, and of the Space's catalog and figures per driver, offline. |
 
@@ -343,6 +344,11 @@ with them as `artifacts/taskpack/LICENSE`. This repo holds no copy of them:
 
 The tool uses GitHub's API, which allows few calls without a token; set `GITHUB_TOKEN` if you run it often.
 
+The bench's bundle on the Hugging Face Hub, [earakely-scale/cua-driver-bench](https://huggingface.co/datasets/earakely-scale/cua-driver-bench),
+does carry the task pack, with its licence beside it, so that `agent-env run hf://earakely-scale/cua-driver-bench`
+needs no fetch: `python tools/bundle/publish.py` checks the pack against the lock and publishes it with the bundle's
+committed files, at the bench's commit.
+
 ## Tests
 
 ```bash
@@ -358,4 +364,5 @@ The sentinel's tests need tkinter.
 This repo's own files are under the Apache License 2.0 (`LICENSE`). trycua's files, fetched into
 `artifacts/taskpack/`, stay under theirs, as do the briefs and system prompt the trials quote. The Space's fonts, Inter
 and JetBrains Mono (`tools/space/fonts/`), are under the SIL Open Font License, which travels with them.
-`tools/dataset/LICENSE.md` and `licenses/` are the published dataset's licence files.
+`tools/dataset/LICENSE.md` and `licenses/` are the published dataset's licence files, and `tools/bundle/LICENSE.md`
+the Hub bundle's.
