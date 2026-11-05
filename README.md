@@ -36,7 +36,7 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 | `tools/fleet/` | Runs the trials on a fleet of EC2 VMs, each trial exported and uploaded to the dataset as it finishes (below). |
 | `tools/dataset/` | The dataset's exporter, tables, card and licences, and `publish.sh`, which rebuilds and uploads them (below). |
 | `tools/space/` | The replay Space, the card's hero GIF and figures, and each trial's web video, from a folder of trials (below). |
-| `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, of the grade, of the fleet's plan and gates, and of the dataset's pricing, timelines and tables, offline. |
+| `tests/` | Tests of the fetch tool, of the apps as a computer reads them, of the sentinel and the guard on a fake desktop, of the grade, of the fleet's plan and gates, of the dataset's pricing, timelines, tables and card, and of the Space's catalog and figures per driver, offline. |
 
 ## Run it
 
@@ -289,15 +289,20 @@ python tools/fleet/hfjob.py <instance> tools/dataset/publish.sh --pull --wait
 - and uploads them all.
 
 The card is `tools/dataset/card/README.md` with its slots filled: the latest run's summary (`card/summary.md`, written
-by hand for each run), the hero and its caption, the figures, the results, and `card/body.md`.
+by hand for each run), the hero and its caption, the figures, the results, the drivers comparison once two drivers ran
+one OS and model (`drivers.md` and the drivers figures), and `card/body.md`.
 
-**Another model or OS.** A new run is a new run id, so its trials go beside the others under `runs/<os>/<run>/`, and
-`publish.sh` puts them on the board.
+**Another model, OS or driver.** A new run is a new run id, so its trials go beside the others under
+`runs/<os>/<run>/`, and `publish.sh` puts them on the board.
 
 - Give the model's name and price to `tools/space/config.json` (`models`) and to `tools/dataset/export.py`
   (`PRICES`, or `TIERED` for a price that depends on the prompt's size).
 - Write the run's `summary.md`.
 - A new OS adds its name to `config.json` (`oses`), and any cells that can't pass there to `caveats`.
+- A new driver adds its name, what it is and its colour's slot in the figures' palette to `config.json` (`drivers`),
+  and its trials name it in `trial.json` (`driver`); a trial that names none ran on cua-driver. The board's grid shows
+  one driver at a time, and the drivers figures and comparison set the drivers of each OS and model side by side, over
+  the tasks all of them ran in both conditions.
 
 `tools/space/checks/` holds the headless screenshots used to check the Space in light and dark, at desktop and phone
 widths (`npm install`, then `node shoot.mjs jobs.json`), and a static server that serves byte ranges, so videos seek

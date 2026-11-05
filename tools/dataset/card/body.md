@@ -38,7 +38,9 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
 1. Deploy the task's computer: Ubuntu 24.04 on Xvfb at 1920x1080 with the xfwm4 window manager, AgentEnv's
    computer-use driver (trycua's `cua-driver`), the task's apps and the bench's sentinel (the "User activity" window).
    On macOS (`tasks/macos-*.json`): Cua's macOS 26 VM bundle at 1920x1080, run by Lume on an EC2 Mac (mac2-m2.metal),
-   with cua-driver, the task's apps as trycua's macOS descriptors run them, and trycua's own BenchSentinel.
+   with cua-driver, the task's apps as trycua's macOS descriptors run them, and trycua's own BenchSentinel. The
+   drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`) are those
+   with Vercel's agent-desktop or browser-use's macOS harness in cua-driver's place, and nothing else changed.
 2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver as its
    only MCP server, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns and
    360 seconds.
@@ -79,7 +81,7 @@ The A22 criteria:
 ## Dataset structure
 
 ```
-results/trials.parquet       one row per trial: model, harness, condition, every half of the grade, A22 criteria, cost, turns, paths
+results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, cost, turns, paths
 results/calls.parquet        one row per tool call: when it was issued and answered on the recording's clock, its input, its result
 tasks/tasks.parquet          one row per trial task: the prompt, the system prompt, the built-in tools, limits, the task file
 runs/<os>/<run>/<trial>/

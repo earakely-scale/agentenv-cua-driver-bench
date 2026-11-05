@@ -1,7 +1,7 @@
-"""The dataset's exporter and tables, offline: a trial's cost at list price from the tokens its trajectory reports (a
-flat price from the totals, a tiered one call by call, the calls' own counts when the run was cut off before Claude
-Code's result), its timeline on the recording's clock, and the rows the tables take from a trial folder and a task
-file."""
+"""The dataset's exporter, tables and card, offline: a trial's cost at list price from the tokens its trajectory reports
+(a flat price from the totals, a tiered one call by call, the calls' own counts when the run was cut off before Claude
+Code's result), its timeline on the recording's clock, the rows the tables take from a trial folder and a task file,
+and the card's runs with their drivers, its drivers section and its hero's link."""
 import importlib.util
 import json
 from datetime import datetime, timezone
@@ -146,23 +146,52 @@ def test_a_board_row_and_a_card_run_with_a_missing_trial_are_labelled_incomplete
     (folder / "missing.json").write_text(json.dumps({
         "name": folder.name, "task_file": "ir-02-r2-background", "run_index": 2, "os": "macos", "status": "missing",
         "kind": "setup", "harness_errors": {"rate": 0, "server": 0, "setup": 3}, "instance": "i-2", "exit": 1}))
-    graded = {"os": "macos", "model": "m", "condition": "background", "task": "ir-02", "run": "m-run", "run_index": 1,
-              "uid": "u1", "passed": True, "grade": {"task": {"score": 1.0}}}
+    graded = {"os": "macos", "driver": "cua-driver", "model": "m", "condition": "background", "task": "ir-02",
+              "run": "m-run", "run_index": 1, "uid": "u1", "passed": True, "grade": {"task": {"score": 1.0}}}
 
     missing = trials.discover_missing(tmp_path)
     rows = catalog.board([graded, {**graded, "model": "n", "run": "n-run", "uid": "u2"}], {}, missing)
     table = catalog.results_md({"tasks": [{"id": "ir-02", "probe": "IR-02"}], "models": [], "board": rows,
-                                "oses": [{"id": "macos", "name": "macOS"}]})
+                                "oses": [{"id": "macos", "name": "macOS"}],
+                                "drivers": [{"id": "cua-driver", "name": "cua-driver"}]})
     (tmp_path / "results.md").write_text(table)
     runs = card._results(tmp_path, tables.pd.DataFrame([{
-        "run": "m-run", "model": "m", "trial_id": "ir-02-r1-background", "passed": True, "task_score": 1.0,
-        "cost_usd": 0.5, "harness_version": "2.1", "gui_only": True, "user_undisturbed": True, "tool_calls": 9}]),
-        tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M"})
+        "run": "m-run", "os": "macos", "model": "m", "driver": "cua-driver", "trial_id": "ir-02-r1-background",
+        "passed": True, "task_score": 1.0, "cost_usd": 0.5, "harness_version": "2.1", "gui_only": True,
+        "user_undisturbed": True, "tool_calls": 9}]), tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M"})
 
-    assert missing == [{"os": "macos", "run": "m-run", "name": folder.name, "task": "ir-02", "condition": "background"}]
+    assert missing == [{"os": "macos", "driver": "cua-driver", "run": "m-run", "name": folder.name, "task": "ir-02",
+                        "condition": "background"}]
     assert {row["model"]: row["missing"] for row in rows} == {"m": 1, "n": 0}
-    assert "| m (incomplete: 1 missing) | background |" in table and "isn't ranked" in table
-    assert "| `m-run` | M | Claude Code 2.1 | 1 | **1, incomplete** | 1 | 1.00 | $0.50 |" in runs
+    assert "| m (incomplete: 1 missing) | cua-driver | background |" in table and "isn't ranked" in table
+    assert "| `m-run` | M | cua-driver | Claude Code 2.1 | 1 | **1, incomplete** | 1 | 1.00 | $0.50 |" in runs
+    assert "| ir-02-r1-background | macos | m | cua-driver | 1.00 |" in runs
+
+
+def test_the_cards_drivers_section_holds_the_drivers_figures_and_table_and_is_left_out_without_them(tables, tmp_path):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+
+    assert card._drivers(tmp_path, {"driver_figures": []}) == ""
+    (tmp_path / "drivers.md").write_text("")
+    assert card._drivers(tmp_path, {"driver_figures": []}) == ""
+    (tmp_path / "drivers.md").write_text("| OS | Model | Driver |\n")
+    section = card._drivers(tmp_path, {"driver_figures": ["drivers-full-pass"]})
+    assert section.startswith("### Drivers") and "assets/figures/drivers-full-pass-dark.svg" in section
+    assert "drivers-task-score" not in section and section.endswith("| OS | Model | Driver |")
+
+
+@pytest.mark.parametrize(("driver", "lead"), [("cua-driver", ""), ("agent-desktop", "agent-desktop/")])
+def test_the_heros_link_names_its_driver_first_unless_it_is_cua_driver(tables, driver, lead):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+    row = {"trial_id": "ir-02-r3-background", "run": "a-run", "os": "macos", "driver": driver, "task": "ir-02",
+           "probe": "IR-02", "title": "Apply", "condition": "background", "model": "anthropic/claude-haiku-5-5",
+           "run_index": 3, "tool_calls": 9, "model_calls": 8, "tool_errors": 0, "gui_only": True,
+           "user_undisturbed": True, "agent_error": None, "task_score": 1.0, "passed": True,
+           **{f"a22_{key}": True for key in tables.CRITERIA}}
+
+    hero = card._hero({"hero": "macos--a-run--ir-02-r3-background", "models": []}, tables.pd.DataFrame([row]))
+
+    assert f"#/{lead}macos/ir-02/background/anthropic%2Fclaude-haiku-5-5/r3)" in hero
 
 
 def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables):

@@ -1,4 +1,5 @@
-"""build.py DATA_DIR OUT_DIR: the Space, the hero GIF and still, and the results figures, from a folder of trials.
+"""build.py DATA_DIR OUT_DIR: the Space, the hero GIF and still, the results and drivers figures, and the card's
+results.md and drivers.md tables, from a folder of trials.
 
 DATA_DIR is the dataset's root (holding runs/<os>/<run>/<trial>/), runs/ itself, or any folder of trial folders.
 Each trial's web copy is written next to its recording as web.mp4; the Space streams it from config media_base, or
@@ -107,10 +108,11 @@ def main():
             shutil.rmtree(stale)
     media.copy_tree(HERE / "site", space)
     shutil.copytree(HERE / "fonts" / "web", space / "fonts", dirs_exist_ok=True)
+    cat.update(figures.write_all(cat, [assets, space / "figures"]))
     (data / "catalog.json").write_text(json.dumps(cat, separators=(",", ":"), ensure_ascii=False))
-    names = figures.write_all(cat, [assets, space / "figures"])
     (args.out / "results.md").write_text(catalog.results_md(cat))
-    print(f"figures: {len(names)} SVGs in {assets}")
+    (args.out / "drivers.md").write_text(catalog.drivers_md(cat))
+    print(f"figures: {4 * (len(cat['figures']) + len(cat['driver_figures']))} SVGs in {assets}")
     if hero_uid and not args.no_gif:
         t = next(x for x in loaded if x["meta"]["uid"] == hero_uid)
         gif, still = hero.render(t, cat, cfg, assets)

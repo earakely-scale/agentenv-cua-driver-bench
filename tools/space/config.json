@@ -74,6 +74,23 @@
       "board": false
     }
   },
+  "drivers": {
+    "cua-driver": {
+      "name": "cua-driver",
+      "detail": "trycua's cua-driver 0.38.0, through its own MCP server's 62 tools (CuaDriver.app)",
+      "slot": 2
+    },
+    "agent-desktop": {
+      "name": "agent-desktop",
+      "detail": "Vercel's agent-desktop 1.2.0, through its own MCP server's 67 desktop_* tools; headed in the foreground, headless in the background",
+      "slot": 6
+    },
+    "macos-harness": {
+      "name": "macos-harness",
+      "detail": "browser-use's macOS harness 0.2.1, its 11 commands through one tool that runs a list of them, as its skill chains them",
+      "slot": 3
+    }
+  },
   "families": {
     "G": "Multi-app workflows",
     "MB": "Precision interactions",

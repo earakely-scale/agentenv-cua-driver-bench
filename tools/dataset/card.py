@@ -1,6 +1,7 @@
 """card.py OUT DATASET: the dataset's README in DATASET from the card template in card/ (front matter, intro, quick
-start, and the latest run's summary.md and body.md), what tools/space/build.py wrote to OUT (catalog, results table,
-hero, figures) and the runs in DATASET's tables; with the licence files, and the figures and hero under assets/."""
+start, and the latest run's summary.md and body.md), what tools/space/build.py wrote to OUT (catalog, results and
+drivers tables, hero, figures) and the runs in DATASET's tables; with the licence files, and the figures and hero under
+assets/."""
 import json
 import os
 import shutil
@@ -20,6 +21,13 @@ FIGURES = {
     "full-pass": "Line chart of the share of trials that pass every half of the grade, in the foreground and the "
                  "background condition, one line per model",
 }
+DRIVER_FIGURES = {
+    "drivers-task-score": "Line chart of the mean task score in the foreground and the background condition, a panel "
+                          "per OS and model, one line per computer-use driver",
+    "drivers-full-pass": "Line chart of the share of trials that pass every half of the grade in the foreground and "
+                         "the background condition, a panel per OS and model, one line per computer-use driver",
+}
+DRIVER = "cua-driver"
 
 
 def main():
@@ -36,6 +44,8 @@ def main():
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
     text = text.replace("{{RESULTS}}", _results(out, trials, missing, {m["id"]: m["name"] for m in catalog["models"]}))
+    drivers = _drivers(out, catalog)
+    text = text.replace("{{DRIVERS}}\n\n", f"{drivers}\n\n" if drivers else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
     (dataset / "README.md").write_text(text)
 
@@ -45,7 +55,8 @@ def _hero(catalog, trials):
     row = trials[(trials.trial_id == trial) & ((trials.run == run) | (run == ""))].iloc[0]
     model = _model(catalog, row.model)
     model_id = urllib.parse.quote(row.model, safe="")
-    link = f"{SPACE}#/{row.os}/{row.task}/{row.condition}/{model_id}/r{int(row.run_index)}"
+    lead = "" if row.driver == DRIVER else f"{row.driver}/"
+    link = f"{SPACE}#/{lead}{row.os}/{row.task}/{row.condition}/{model_id}/r{int(row.run_index)}"
     broken = ", ".join(k[4:] for k in row.index if k.startswith("a22_") and row[k] is False)
     user = "keeps the user undisturbed" if row.user_undisturbed else f"disturbs the user ({broken})"
     ended = "runs out of turns" if "maximum number of turns" in str(row.agent_error) else \
@@ -63,23 +74,23 @@ def _hero(catalog, trials):
 
 def _results(out, trials, missing, names):
     figures = "\n\n".join(_picture(name, alt) for name, alt in FIGURES.items())
-    runs = trials.groupby(["run", "model"], sort=False).agg(
+    runs = trials.groupby(["run", "model", "driver"], sort=False).agg(
         trials=("trial_id", "count"), passed=("passed", "sum"), task_score=("task_score", "mean"),
         cost=("cost_usd", "sum"), harness=("harness_version", "first")).reset_index()
     lost = missing.groupby("run").size()
     run_rows = "\n".join(
-        f"| `{r.run}` | {names.get(r.model, r.model)} | Claude Code {r.harness} | {r.trials} | "
+        f"| `{r.run}` | {names.get(r.model, r.model)} | {r.driver} | Claude Code {r.harness} | {r.trials} | "
         f"{_lost(lost.get(r.run, 0))} | {int(r.passed)} | {r.task_score:.2f} | ${r.cost:.2f} |" for r in runs.itertuples())
     per_trial = "\n".join(
-        f"| {t.trial_id} | {t.model.rsplit('/', 1)[-1]} | {t.task_score:.2f} | {_mark(t.gui_only)} | "
-        f"{_mark(t.user_undisturbed)} | {_mark(t.passed)} | {int(t.tool_calls)} | "
+        f"| {t.trial_id} | {t.os} | {t.model.rsplit('/', 1)[-1]} | {t.driver} | {t.task_score:.2f} | "
+        f"{_mark(t.gui_only)} | {_mark(t.user_undisturbed)} | {_mark(t.passed)} | {int(t.tool_calls)} | "
         f"{'' if pd.isna(t.cost_usd) else f'${t.cost_usd:.2f}'} |" for t in trials.itertuples())
     return f"""{figures}
 
 {(out / "results.md").read_text().strip()}
 
-| Run | Model | Harness | Trials | Missing | Passed | Mean task score | Cost |
-|---|---|---|---:|---:|---:|---:|---:|
+| Run | Model | Driver | Harness | Trials | Missing | Passed | Mean task score | Cost |
+|---|---|---|---|---:|---:|---:|---:|---:|
 {run_rows}
 
 Cost is at list price from the tokens each trial's trajectory reports (Claude Code's own figure is in
@@ -88,11 +99,30 @@ Cost is at list price from the tokens each trial's trajectory reports (Claude Co
 
 <details><summary>Every trial</summary>
 
-| Trial | Model | Task score | GUI only | User undisturbed | Passed | Tool calls | Cost |
-|---|---|---:|---|---|---|---:|---:|
+| Trial | OS | Model | Driver | Task score | GUI only | User undisturbed | Passed | Tool calls | Cost |
+|---|---|---|---|---:|---|---|---|---:|---:|
 {per_trial}
 
 </details>"""
+
+
+def _drivers(out, catalog):
+    """The drivers comparison under the results, its figures and table, when two drivers or more ran one OS and model:
+    nothing before then."""
+    path = out / "drivers.md"
+    table = path.read_text().strip() if path.exists() else ""
+    if not table:
+        return ""
+    figures = "\n\n".join(_picture(name, DRIVER_FIGURES[name]) for name in catalog.get("driver_figures") or [])
+    return f"""### Drivers
+
+The same tasks through other computer-use drivers, with the OS, the model, the tasks, their seeds and the grade held
+fixed. Each driver gives the agent its own tools (below), and each also serves the same neutral `computer_*` tools to
+the grader and the recordings, which the agents in these runs don't see.
+
+{figures}
+
+{table}"""
 
 
 def _lost(count):

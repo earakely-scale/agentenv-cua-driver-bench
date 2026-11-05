@@ -17,6 +17,23 @@ APP_NAMES = {"soffice": "LibreOffice", "libreoffice-calc": "LibreOffice Calc", "
              "chromium": "Chromium", "google-chrome": "Chromium", "chrome": "Chromium", "xfdesktop": "Desktop",
              SENTINEL_BID: "User activity", "benchsentinel": "User activity"}
 KEY_NAMES = {"\t": "⇥", "\n": "⏎", "\r": "⏎"}
+#: The lane's verbs for the other drivers' steps (see ``arm_steps``) and which of them only look.
+ARM_VERBS = {"snapshot": "Read window", "get_app_state": "Read window", "find": "Find", "get": "Read element",
+             "is": "Check element", "screenshot": "Screenshot", "list_apps": "List apps", "list_windows": "List windows",
+             "list_surfaces": "List surfaces", "skill": "Read skill", "skills_get": "Read skill", "help": "Read help",
+             "click": "Click", "mouse_click": "Click", "double_click": "Double-click", "triple_click": "Triple-click",
+             "right_click": "Right-click", "perform_secondary_action": "Secondary action", "type": "Type",
+             "type_text": "Type", "set_value": "Set value", "press": "Press", "press_key": "Press", "scroll": "Scroll",
+             "drag": "Drag", "hover": "Hover", "mouse_move": "Move pointer", "focus_window": "Focus window",
+             "wait": "Wait", "batch": "Run steps"}
+ARM_LOOKS = {"snapshot", "get_app_state", "find", "get", "is", "screenshot", "list_apps", "list_windows",
+             "list_surfaces", "list_displays", "list_notifications", "skill", "skills_get", "skills_list", "help",
+             "status", "version", "permissions"}
+#: The driver of a trial whose trial.json names none: the bench's first, which every trial before the macOS arms ran on.
+DRIVER = "cua-driver"
+#: A task file's stem: the OS but Linux, then the driver but cua-driver, as macos-agent-desktop-ir-01-r1-background.
+STEM = re.compile(r"^(?:macos-)?(?:(?P<driver>[a-z0-9-]+?)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d+)?"
+                  r"-(?P<condition>foreground|background)$")
 
 
 def discover(root):
@@ -25,13 +42,14 @@ def discover(root):
 
 def discover_missing(root):
     """Each trial whose re-runs were spent, from the runs/OS/RUN/NAME/missing.json the fleet's worker uploads: its OS,
-    run, task and condition."""
+    driver, run, task and condition."""
     out = []
     for path in sorted(Path(root).glob("runs/*/*/*/missing.json")):
         record = read_json(path)
-        condition = record["task_file"].rsplit("-", 1)[-1]
-        out.append({"os": record.get("os") or "linux", "run": path.parent.parent.name, "name": record["name"],
-                    "task": task_id({"task": record["task_file"]}, condition), "condition": condition})
+        stem = STEM.match(record["task_file"])
+        out.append({"os": record.get("os") or "linux", "driver": stem["driver"] or DRIVER,
+                    "run": path.parent.parent.name, "name": record["name"], "task": stem["task"],
+                    "condition": stem["condition"]})
     return out
 
 
@@ -285,7 +303,11 @@ class Desk:
         return self.on_screen(ox + x * s, oy + y * s)
 
 
-def kind_of(tool):
+def kind_of(tool, inp=None):
+    steps = arm_steps(tool, inp)
+    if steps is not None:
+        names = {name for name, _ in steps}
+        return "look" if names <= ARM_LOOKS else "wait" if names == {"wait"} else "act"
     if tool in SETUP_TOOLS:
         return "setup"
     if tool in WAIT_TOOLS:
@@ -293,6 +315,61 @@ def kind_of(tool):
     if tool in LOOK_TOOLS or tool.startswith(LOOK_PREFIXES):
         return "look"
     return "act"
+
+
+def arm_steps(tool, inp):
+    """Another driver's call as the steps it takes, each a name and its arguments: an agent-desktop tool less its
+    ``desktop_`` prefix, or its batch's commands, and the command lines macos-harness's one tool runs; None for
+    cua-driver's."""
+    inp = inp if isinstance(inp, dict) else {}
+    if tool == "desktop_batch":
+        batch = jparse(inp.get("commands_json")) or []
+        return [(str(c.get("command")), c.get("args") or {}) for c in batch if isinstance(c, dict)] or [("batch", {})]
+    if tool.startswith("desktop_"):
+        return [(tool.removeprefix("desktop_"), inp)]
+    if tool == "macos_harness":
+        steps = []
+        for line in inp.get("commands") or []:
+            if not isinstance(line, list) or not line:
+                continue
+            args, words = {}, [str(w) for w in line[1:]]
+            for k, word in enumerate(words):
+                if word.startswith("--"):
+                    nxt = words[k + 1] if k + 1 < len(words) else None
+                    args[word[2:]] = nxt if nxt is not None and not nxt.startswith("--") else True
+            steps.append((str(line[0]), args))
+        return steps or [("macos_harness", {})]
+    return None
+
+
+def arm_step(name, args):
+    """A step of another driver's as the lane says it: its verb, and the element, point or text it acts on."""
+    point = lambda a, b: f"({args[a]}, {args[b]})" if a in args and b in args else None
+    xy = lambda key: f"({args[key].replace(',', ', ')})" if isinstance(args.get(key), str) else None
+    ref = lambda key: f"element {args[key].rsplit(':', 1)[-1]}" if isinstance(args.get(key), str) else None
+    if args.get("help") is True:
+        return "Read help", humanize(name).lower()
+    if name == "drag":
+        start = xy("from_xy") or point("from_x", "from_y") or ref("from")
+        end = xy("to_xy") or point("to_x", "to_y") or ref("to")
+        obj = f"from {start} to {end}" if start and end else ""
+    elif args.get("text") is not None or args.get("value") is not None:
+        obj = f"“{show_text(str(args.get('text') if args.get('text') is not None else args.get('value')))}”"
+    elif args.get("keys") or args.get("key"):
+        obj = keys_text(args.get("keys") or args.get("key"))
+    elif args.get("ref_id") or args.get("element_index") is not None:
+        obj = f"element {str(args.get('ref_id') or args.get('element_index')).rsplit(':', 1)[-1]}"
+    elif xy("xy") or point("x", "y"):
+        obj = f"at {xy('xy') or point('x', 'y')}"
+    elif name == "scroll":
+        obj = " ".join(str(args[k]) for k in ("direction", "pages", "amount") if k in args)
+    elif name == "wait" and str(args.get("ms", "")).isdigit():
+        obj = f"{int(args['ms']) / 1000:g} s"
+    elif name == "find":
+        obj = clean(" ".join(str(args[k]) for k in ("role", "name", "text") if args.get(k)), 32)
+    else:
+        obj = ""
+    return ARM_VERBS.get(name) or humanize(name), obj
 
 
 def err_text(res):
@@ -324,6 +401,13 @@ def describe(call, res, desk):
     tool, inp = call["tool"], call.get("input") or {}
     if not isinstance(inp, dict):
         inp = {}
+    steps = arm_steps(tool, inp)
+    if steps is not None:
+        said = [arm_step(name, args) for name, args in steps]
+        verb, obj = said[0] if len(said) == 1 else (f"Run {len(said)} steps", " → ".join(
+            f"{v.lower()} {o}".strip() for v, o in said[:2]) + (f" → +{len(said) - 2} more" if len(said) > 2 else ""))
+        where = next((args["app"] for _, args in steps if isinstance(args.get("app"), str)), None)
+        return {"verb": verb, "obj": obj, "where": clean(where, 48) if where else None, "pt": None, "win": None}
     verb, obj, where, pt = humanize(tool), "", None, None
     wid, win = desk.window(inp.get("window_id"), inp.get("pid"))
     count = inp.get("count") or inp.get("clicks") or 1
@@ -511,7 +595,7 @@ def calls_of(timeline, results, cfg):
         d = describe(c, res, desk)
         out.append({
             "i": c["i"], "t0": rnd(c.get("t0")), "t1": rnd(c.get("t1")), "turn": c.get("turn"), "tool": c["tool"],
-            "server": c.get("server"), "kind": kind_of(c["tool"]), **d,
+            "server": c.get("server"), "kind": kind_of(c["tool"], c.get("input")), **d,
             "err": err_text(res) if c.get("error") else None, "img": bool(c.get("image")),
         })
         desk.learn(c, res)
@@ -712,8 +796,9 @@ def load(folder, cfg, data_dir=None):
     run_index = trial.get("run_index", int(m_run[1]) if m_run else None)
     meta = {
         "id": trial["trial_id"], "uid": uid, "rel": rel.as_posix(), "run_index": run_index, "seed": trial.get("seed"),
-        "os": trial.get("os") or "linux", "task": task, "probe": trial.get("probe"),
-        "condition": condition, "model": trial.get("model"), "model_name": model_name(trial.get("model") or "?", cfg),
+        "os": trial.get("os") or "linux", "driver": trial.get("driver") or DRIVER, "task": task,
+        "probe": trial.get("probe"), "condition": condition, "model": trial.get("model"),
+        "model_name": model_name(trial.get("model") or "?", cfg),
         "harness": trial.get("harness"), "harness_version": trial.get("harness_version"),
         "computer": trial.get("computer"), "started_at": trial.get("started_at"), "run": run,
         "duration": rnd(trial.get("duration_s"), 1), "cost": rnd(trial.get("cost_usd"), 2),
