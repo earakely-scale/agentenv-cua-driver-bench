@@ -84,7 +84,24 @@ def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_image_h
     monkeypatch.setattr(manifest, "_ec2", lambda item: "mac2-m2.metal")
     monkeypatch.setattr(manifest, "_checkout_commit", lambda name: "2d4ad6fe")
 
-    built = manifest.build(ROOT, "run-1", "macos", "anthropic/claude-sonnet-5-5", specs, policy, tmp_path, image)
+    store = tmp_path / "state" / "agent-env" / "document_store"
+    store.mkdir(parents=True)
+    base = {"id": "@local/agentenv-framework/computers/macos-26", "version": 1}
+    built_at = {"status": "ready", "image": "local:agentenv-computer-72b0", "key": "sha256:72b0",
+                "built_at": "2026-11-05T00:14:08+00:00", "probe": {"checks": {"passed": 49, "failed": 1}}}
+    envs = [{"id": f"@local/~/{ROOT.name}/desktop-s02", "version": version, "computer": base,
+             "metadata": {"composed": {"vm_bundle": {"arm64": {**built_at, "image": image_name}}}}}
+            for version, image_name in ((1, "local:agentenv-computer-0ld0"), (2, "local:agentenv-computer-72b0"))]
+    with manifest.sqlite3.connect(store / "local.db") as db:
+        db.execute("create table docs_envs (doc text)")
+        db.execute("create table docs_artifacts (doc text)")
+        db.executemany("insert into docs_envs values (?)", [(json.dumps(env),) for env in envs])
+        db.execute("insert into docs_artifacts values (?)", (json.dumps(
+            {**base, "type": "computer", "forms": {"vm_bundle": {"image": "ghcr.io/trycua/macos:26@sha256:7cb2"}}}),))
+    monkeypatch.setattr(manifest.Path, "home", lambda: ROOT.parent)
+
+    built = manifest.build(ROOT, "run-1", "macos", "anthropic/claude-sonnet-5-5", specs, policy, tmp_path, image,
+                           tmp_path / "state")
 
     lock = manifest.tomllib.loads((ROOT / "taskpack.lock.toml").read_text())
     assert built["task_pack"] == {"repo": "trycua/cua", "commit": lock["commit"], "sha256": lock["sha256"]}
@@ -97,6 +114,12 @@ def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_image_h
                                                                 {"width": 1920, "height": 1080})
     assert s02["tool_list_sha256"] == manifest.hashlib.sha256(b'{"tools": ["macos"]}').hexdigest()
     assert built["framework"]["commit"] == "2d4ad6fe"
+    assert s02["composed"] == {"vm_bundle/arm64": {
+        "image": "local:agentenv-computer-72b0", "key": "sha256:72b0", "built_at": "2026-11-05T00:14:08+00:00",
+        "base": "ghcr.io/trycua/macos:26@sha256:7cb2", "probe": {"passed": 49, "failed": 1}}}
+    assert built["computers"]["desktop-benchlab"]["composed"] is None
+    assert built["bench"]["commit"] == manifest.subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+                                                               capture_output=True, text=True).stdout.strip()
     assert built["seeds"] == {"mb-09-r4-background": {"benchlab": 539937}}
     assert (built["image"], built["host"]["instance_type"]) == (image, "mac2-m2.metal")
 

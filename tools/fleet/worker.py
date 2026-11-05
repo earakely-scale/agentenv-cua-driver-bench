@@ -57,6 +57,7 @@ def main():
         if (FLEET / "stop").exists():
             return
         _trial(api, run, stem, name, int(index), finished[0] if finished else None)
+    _upload_manifest(api, run, lines)
 
 
 def _trial(api, run, stem, name, index, finished):
@@ -134,10 +135,12 @@ def _upload(api, run, name):
 
 
 def _upload_manifest(api, run, lines):
-    """The run's manifest, written and uploaded once a worker starts; every worker of a run writes the same pins."""
+    """The run's manifest, written and uploaded once a worker starts, and again once its trials are done, when it knows
+    how the computers they booted were composed; every worker of a run writes the same pins."""
     OUT.mkdir(parents=True, exist_ok=True)
     built = manifest.build(BENCH, run, OS, os.environ.get("RUN_MODEL"), lines,
-                           {"setup_steps": list(SETUP_STEPS), "reruns": LIMITS}, manifest.installed_drivers())
+                           {"setup_steps": list(SETUP_STEPS), "reruns": LIMITS}, manifest.installed_drivers(),
+                           state=DB.parents[2])
     (OUT / "manifest.json").write_text(json.dumps(built, indent=1))
     api.upload_file(path_or_fileobj=str(OUT / "manifest.json"), path_in_repo=f"runs/{OS}/{run}/manifest.json",
                     repo_id=REPO, repo_type="dataset", commit_message=f"{run}: manifest")

@@ -1,14 +1,16 @@
-"""manifest.py BENCH RUN OS MODEL SPECS [--image FILE]: the manifest of a run, written beside its trials as
-runs/OS/RUN/manifest.json: every input that changes a score, pinned. That is the task pack and grader (trycua's commit
-and sha256), the framework installed, the model and agent, each computer with its driver and the sha256 of that
-driver's tool list, the image the computers boot (FILE, the JSON identity the image records, such as a macOS image's
-/etc/agentenv/image.json), the host, the limits, conditions and seeds the trials run under, and the policy that
-re-runs a trial infrastructure cut short. It refuses a framework older than FRAMEWORK_FLOOR."""
+"""manifest.py BENCH RUN OS MODEL SPECS [--image FILE] [--state DIR]: the manifest of a run, written beside its trials
+as runs/OS/RUN/manifest.json: every input that changes a score, pinned. That is the task pack and grader (trycua's
+commit and sha256), the bench's commit, the framework installed, the model and agent, each computer with its driver and
+the sha256 of that driver's tool list, and as agent-env's store at DIR records it composed, the image a deploy boots,
+its compose key and its base's pinned image; the image the computers boot (FILE, the JSON identity the image records,
+such as a macOS image's /etc/agentenv/image.json), the host, the limits, conditions and seeds the trials run under, and
+the policy that re-runs a trial infrastructure cut short. It refuses a framework older than FRAMEWORK_FLOOR."""
 import argparse
 import hashlib
 import json
 import platform
 import re
+import sqlite3
 import subprocess
 import tomllib
 import urllib.request
@@ -22,10 +24,11 @@ FRAMEWORK_FLOOR = (0, 9, 1412)
 
 
 def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], policy: dict,
-          drivers: Path | None, image: dict | None = None) -> dict:
+          drivers: Path | None, image: dict | None = None, state: Path | None = None) -> dict:
     """The manifest of ``run`` on ``os_type``: ``specs`` are its `stem|name|run` lines, ``policy`` the worker's setup
     steps and re-run limits, ``drivers`` the installed framework's driver folders (each with its mcp.json), ``image``
-    the identity of the image the computers boot, where it records one."""
+    the identity of the image the computers boot, where it records one, and ``state`` agent-env's state folder, whose
+    store records how each computer was composed."""
     framework = {name: _version(name) for name in ("agentenv-framework", "agentenv-framework-protocol")}
     _require_floor(framework["agentenv-framework"])
     if commit := _checkout_commit("agentenv-framework"):
@@ -40,11 +43,14 @@ def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], pol
         "os": os_type,
         "trials": len(specs),
         "task_pack": {"repo": lock["repo"], "commit": lock["commit"], "sha256": lock["sha256"]},
+        "bench": {"commit": subprocess.run(["git", "-C", str(bench), "rev-parse", "HEAD"], capture_output=True,
+                                           text=True).stdout.strip() or None},
         "framework": framework,
         "model": model,
         "agents": sorted({steps["agent"].get("a2a_agent_id") or "default" for steps in tasks.values()}),
         "builtin_tools": _distinct(steps["agent"].get("builtin_tools") for steps in tasks.values()),
-        "computers": {env: _computer(bench, env, drivers, os_type) for env in envs},
+        "computers": {env: {**_computer(bench, env, drivers, os_type), "composed": composed(state, bench, env)}
+                      for env in envs},
         "image": image,
         "host": {"platform": platform.platform(), "instance_type": _ec2("instance-type")},
         "limits": _distinct({"max_turns": steps["task"].get("max_turns"),
@@ -72,6 +78,32 @@ def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux
     return {"computer": spec.get("computer"), "driver": spec.get("driver"), "display": spec.get("display"),
             "apps": spec.get("apps", []),
             "tool_list_sha256": hashlib.sha256(tools.read_bytes()).hexdigest() if tools and tools.is_file() else None}
+
+
+def composed(state: Path | None, bench: Path, env: str) -> dict | None:
+    """``env``'s computer as agent-env's store in ``state`` records it composed, at its latest version: for each form
+    and arch, the image a deploy boots, its compose key, when it was built, its probe's counts, and the image of its
+    base, pinned by digest. None without a store, or before the env is composed."""
+    db = state / "agent-env" / "document_store" / "local.db" if state else None
+    if db is None or not db.exists():
+        return None
+    try:
+        env_id = f"@local/~/{bench.resolve().relative_to(Path.home().resolve()).as_posix()}/{env}"
+    except ValueError:
+        return None
+    with sqlite3.connect(db) as store:
+        records = [json.loads(doc) for (doc,) in store.execute("select doc from docs_envs")]
+        artifacts = [json.loads(doc) for (doc,) in store.execute("select doc from docs_artifacts")]
+    record = max((r for r in records if r.get("id") == env_id), key=lambda r: r.get("version") or 0, default=None)
+    if record is None or not (record.get("metadata") or {}).get("composed"):
+        return None
+    base = next((a for a in artifacts if (a.get("id"), a.get("version")) == (record["computer"]["id"],
+                                                                              record["computer"].get("version"))), {})
+    return {f"{form}/{arch}": {"image": built.get("image"), "key": built.get("key"), "built_at": built.get("built_at"),
+                               "base": ((base.get("forms") or {}).get(form) or {}).get("image"),
+                               "probe": (built.get("probe") or {}).get("checks")}
+            for form, arches in record["metadata"]["composed"].items() for arch, built in arches.items()
+            if built.get("status") == "ready"}
 
 
 def _seeds(env_step: dict) -> dict:
@@ -131,7 +163,8 @@ if __name__ == "__main__":
     for name in ("bench", "run", "os_type", "model", "specs"):
         parser.add_argument(name)
     parser.add_argument("--image", type=Path)
+    parser.add_argument("--state", type=Path)
     args = parser.parse_args()
     print(json.dumps(build(Path(args.bench), args.run, args.os_type, args.model, Path(args.specs).read_text().split(),
-                           {}, installed_drivers(), json.loads(args.image.read_text()) if args.image else None),
-                     indent=1))
+                           {}, installed_drivers(), json.loads(args.image.read_text()) if args.image else None,
+                           args.state), indent=1))
