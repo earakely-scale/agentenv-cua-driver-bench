@@ -74,11 +74,12 @@
       "board": false
     }
   },
-  "exclude_runs": ["macos/cua-driver-sonnet-5-5-2026-11-05", "macos/cua-driver-haiku-5-5-2026-11-05"],
+  "exclude_runs": ["macos/sonnet-5-5-2026-11-05",
+    "macos/sonnet-5-5-2026-11-05-multiapp", "macos/haiku-5-5-2026-11-05"],
   "drivers": {
     "cua-driver": {
       "name": "cua-driver",
-      "detail": "trycua's cua-driver 0.38.0, through its own MCP server's 62 tools (CuaDriver.app); on macOS so far also seven of AgentEnv's computer_* tools",
+      "detail": "trycua's cua-driver 0.38.0, through its own MCP server's 62 tools (CuaDriver.app)",
       "slot": 2
     },
     "agent-desktop": {
@@ -88,7 +89,7 @@
     },
     "macos-harness": {
       "name": "macos-harness",
-      "detail": "browser-use's macOS harness 0.2.1, its 11 commands through one tool that runs a list of them, as its skill chains them; in these runs its skill reached the agent as server instructions, which Claude Code cuts at 4,096 characters, so the agent saw its first part only (fixed in agentenv-framework #501; a re-run follows)",
+      "detail": "browser-use's macOS harness 0.2.1, its 11 commands through one tool that runs a list of them, as its skill chains them; the agent reads its skill through the tool, since Claude Code cuts a server's instructions at 4,096 characters",
       "slot": 3
     }
   },

@@ -122,8 +122,10 @@ def _drivers(out, catalog):
 
 The same tasks through other computer-use drivers, with the OS, the model, the tasks, their seeds and the grade held
 fixed. Each driver gives the agent its own tools (below), and each also serves AgentEnv's `computer_*` tools, which the
-grader and the recordings use. agent-desktop's and macos-harness's agents don't see those. cua-driver's macOS runs here
-also offered its agents seven of them beside its own 62 tools, and its agents made some of their calls through them.
+grader and the recordings use; no driver's agents see those. cua-driver's first macOS runs (`sonnet-5-5-2026-11-05`,
+`sonnet-5-5-2026-11-05-multiapp` and `haiku-5-5-2026-11-05`) also offered its agents seven of them beside its own 62
+tools, and its agents made some of their calls through them. They stay in the dataset, but not in the Space, whose
+cua-driver rows on macOS are its runs on its own tools alone (`cua-driver-*-2026-11-05`).
 
 {figures}
 

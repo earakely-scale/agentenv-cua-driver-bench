@@ -108,7 +108,7 @@ a logged-in session, with [Lume](https://github.com/trycua/cua/tree/main/libs/lu
 will do) with the same registry:
 
 ```bash
-pip install 'agentenv-framework>=0.9.1443'
+pip install 'agentenv-framework>=0.9.1446'
 mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
 [sandbox]
 default = "lume"

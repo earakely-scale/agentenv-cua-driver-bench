@@ -99,8 +99,12 @@ runs/<os>/<run>/<trial>/
 - Few trials per cell: trycua's schedule runs each task 5 times per condition, and a cell's rate rests on those 5.
   The pilot run `sonnet-4-5-2026-11-02` covers only the three multi-app tasks, once per condition, and its prompts
   lack trycua's closing line with the time and turn limits, which later runs have.
-- **On macOS, Claude Haiku 5.5 ran only the seven BenchLab tasks**, and Sonnet 5.5's row joins two runs: the
-  BenchLab tasks on PR #498's head, the multi-app tasks on the release that shipped it, 0.9.1443.
+- **On macOS, Claude Haiku 5.5 ran only the seven BenchLab tasks**, on every driver. The macOS runs pin
+  agentenv-framework by git commit, neither of them a PyPI release: cua-driver's and agent-desktop's ran on bc0c9d67,
+  PR #501's head before its review fixes (0.9.1444 in its files), whose drivers for them are 0.9.1446's;
+  macos-harness's ran on e1afb200 (0.9.1445), after #501 gave its agent the whole of its skill, and it matches
+  0.9.1446 in every driver, computer and provider file. The bench's commit moved during the runs, but only the
+  multi-app apps' code changed, and every multi-app trial on the board ran with each Electron app its own bundle.
 - On Linux the driver can click, type and scroll only into the focused window for Chromium, Electron and
   LibreOffice Calc. In the background it has the accessibility (AT-SPI) actions, menus and the clipboard, so many
   background moves are refused and the agent must find another way. On macOS, trycua's home OS, it delivers input to
