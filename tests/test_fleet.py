@@ -128,6 +128,26 @@ def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_image_h
         manifest.build(ROOT, "run-1", "macos", "anthropic/claude-sonnet-5-5", specs, policy, tmp_path)
 
 
+def test_on_an_ec2_mac_the_host_type_is_read_through_apples_curl_which_local_network_privacy_lets_through(
+        manifest, monkeypatch):
+    def unreachable(*args, **kwargs):
+        raise OSError("No route to host")
+    calls = []
+
+    def curl(argv, **kwargs):
+        calls.append(argv)
+        return manifest.subprocess.CompletedProcess(argv, 0, "token" if "PUT" in argv else "mac2-m2.metal", "")
+    monkeypatch.setattr(manifest.urllib.request, "urlopen", unreachable)
+    monkeypatch.setattr(manifest.subprocess, "run", curl)
+    monkeypatch.setattr(manifest.platform, "system", lambda: "Linux")
+    assert manifest._ec2("instance-type") is None and not calls
+
+    monkeypatch.setattr(manifest.platform, "system", lambda: "Darwin")
+    assert manifest._ec2("instance-type") == "mac2-m2.metal"
+    assert [argv[0] for argv in calls] == ["/usr/bin/curl", "/usr/bin/curl"]
+    assert calls[1][-2:] == ["X-aws-ec2-metadata-token: token", "http://169.254.169.254/latest/meta-data/instance-type"]
+
+
 def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_dataset(worker, tmp_path, monkeypatch):
     uploaded = []
     monkeypatch.setattr(worker, "OUT", tmp_path / "out")

@@ -120,7 +120,8 @@ def _require_floor(version: str | None) -> None:
 
 
 def _ec2(item: str) -> str | None:
-    """``item`` of this host's EC2 instance metadata, or None off EC2."""
+    """``item`` of this host's EC2 instance metadata, or None off EC2. On an EC2 Mac, Local Network privacy lets only
+    Apple's own binaries reach the metadata's link-local address, so Apple's curl asks there."""
     base = "http://169.254.169.254/latest"
     try:
         put = urllib.request.Request(f"{base}/api/token", method="PUT",
@@ -129,7 +130,14 @@ def _ec2(item: str) -> str | None:
         get = urllib.request.Request(f"{base}/meta-data/{item}", headers={"X-aws-ec2-metadata-token": token})
         return urllib.request.urlopen(get, timeout=1).read().decode()
     except OSError:
-        return None
+        if platform.system() != "Darwin":
+            return None
+    curl = ["/usr/bin/curl", "-sf", "-m", "2"]
+    token = subprocess.run([*curl, "-X", "PUT", "-H", "X-aws-ec2-metadata-token-ttl-seconds: 60", f"{base}/api/token"],
+                           capture_output=True, text=True).stdout
+    found = subprocess.run([*curl, "-H", f"X-aws-ec2-metadata-token: {token}", f"{base}/meta-data/{item}"],
+                           capture_output=True, text=True) if token else None
+    return found.stdout if found and found.returncode == 0 and found.stdout else None
 
 
 def _distinct(values) -> list:
