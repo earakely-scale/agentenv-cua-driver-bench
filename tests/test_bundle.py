@@ -27,4 +27,4 @@ def test_the_hub_bundle_is_the_bundles_files_and_the_task_pack_with_their_licenc
     assert {p.name for p in (tmp_path / "licenses").iterdir()} == {"Apache-2.0.txt", "FSL-1.1-MIT.md"}
     card = (tmp_path / "README.md").read_text()
     assert "agent-env run hf://org/repo --task cdb-g02-background" in card and "{{" not in card
-    assert f"agent-env-cua-driver-bench/commit/{'c' * 40}" in card
+    assert f"agentenv-cua-driver-bench/commit/{'c' * 40}" in card
