@@ -126,6 +126,7 @@ def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_image_h
     s02 = built["computers"]["desktop-s02"]
     assert (s02["computer"], s02["driver"], s02["display"]) == ("ubuntu-24.04", "cua-driver",
                                                                 {"width": 1920, "height": 1080})
+    assert s02["tool_list"] == "mcp-macos.json"
     assert s02["tool_list_sha256"] == manifest.hashlib.sha256(b'{"tools": ["macos"]}').hexdigest()
     assert built["framework"]["commit"] == "2d4ad6fe"
     assert s02["composed"] == {"vm_bundle/arm64": {

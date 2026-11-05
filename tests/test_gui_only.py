@@ -4,6 +4,7 @@ input and no command run through launch_app; a call to a tool the CLI never offe
 isn't claude-code's stream-json can't be checked. Also its table: trycua's scan at the lock's commit."""
 import asyncio
 import importlib.util
+import json
 import shutil
 from pathlib import Path
 
@@ -70,6 +71,24 @@ def test_a_command_run_through_launch_app_fails(gui_only, launch, violation):
     result = gui_only(_trajectory(_tool("mcp__desktop-s02__launch_app", **launch)))
 
     assert result["result"] is False and f"mcp__desktop-s02__launch_app:{violation}" in result["violations"]
+
+
+@pytest.mark.parametrize("launch, violation", [
+    ({"app": "TextEdit", "args": ["-NSDocumentRevisionsDebugMode", "YES"]}, "args"),
+    ({"app": "Google Chrome", "cdp": 9222}, "cdp"),
+    ({"app": "TextEdit", "env": ["DYLD_INSERT_LIBRARIES=/tmp/x.dylib"]}, "env"),
+    ({"app": "TextEdit", "cwd": "/Users/lume/cdb-s02"}, "cwd"),
+    ({"app": "/bin/sh"}, "command"),
+], ids=["arguments", "a devtools port", "an environment", "a working directory", "a path as its app"])
+def test_a_command_run_through_agent_desktops_launch_fails_alone_or_in_a_batch(gui_only, launch, violation):
+    alone = gui_only(_trajectory(_tool("mcp__desktop-s02-macos-agent-desktop__desktop_launch", **launch)))
+    batched = gui_only(_trajectory(_tool("mcp__desktop-s02-macos-agent-desktop__desktop_batch", commands_json=json.dumps(
+        [{"command": "snapshot", "args": {"app": "TextEdit"}}, {"command": "launch", "args": launch}]))))
+
+    assert f"mcp__desktop-s02-macos-agent-desktop__desktop_launch:{violation}" in alone["violations"]
+    assert f"mcp__desktop-s02-macos-agent-desktop__desktop_batch:launch:{violation}" in batched["violations"]
+    assert gui_only(_trajectory(_tool("mcp__desktop-s02-macos-agent-desktop__desktop_launch", app="TextEdit",
+                                      activate=True)))["result"] is True
 
 
 def test_a_built_in_tool_claude_code_was_offered_fails(gui_only):

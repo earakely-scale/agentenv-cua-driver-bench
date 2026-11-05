@@ -24,7 +24,8 @@ PRICES = {"claude-sonnet-4-5": (3.0, 15.0, 0.30), "claude-sonnet-5-5": (2.0, 10.
           "claude-opus-5-5": (4.0, 20.0, 0.20)}
 TIERED = {"claude-haiku-5-5": (100_000, (0.10, 0.50, 0.01), (0.50, 2.50, 0.05))}
 BENCH = Path(os.environ.get("BENCH", Path.home() / "bench"))
-STEM = re.compile(r"^(?:macos-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?-(?P<condition>foreground|background)$")
+STEM = re.compile(r"^(?:macos-)?(?:(?P<driver>agent-desktop|macos-harness)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?"
+                  r"-(?P<condition>foreground|background)$")
 
 
 def main():
@@ -44,7 +45,7 @@ def main():
 def export(instance, artifacts, out, name, run_index):
     ctx, md = instance["context"], instance["context"]["metadata"]
     stem = instance["task_id"].rsplit("/", 1)[-1]
-    task, condition = STEM.match(stem).group("task", "condition")
+    task, condition, driver = STEM.match(stem).group("task", "condition", "driver")
     steps = {s["id"]: s for s in json.loads((BENCH / "tasks" / f"{stem}.json").read_text())}
     env_step = steps["env"]
     seed = (env_step.get("env_params", {}).get("app_settings", {}).get("benchlab") or {}).get("seed")
@@ -109,6 +110,7 @@ def export(instance, artifacts, out, name, run_index):
         "max_turns": steps["task"].get("max_turns"),
         "timeout_s": steps["task"].get("timeout_seconds"),
         "os": os.environ.get("RUN_OS") or "linux",
+        "driver": driver or "cua-driver",
         "computer": ctx["deployed_envs"][0]["env_id"].rsplit("/", 1)[-1],
         "app": workspace_app,
         "model": response.get("model"),

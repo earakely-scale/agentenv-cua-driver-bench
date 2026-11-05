@@ -3,7 +3,8 @@ task's stem once per run) into worker spec files OUT/worker-NN.txt of at most PE
 computer so that it builds one, in the list's order, and the whole run's lines into OUT/run.txt, which each worker's
 manifest pins. A trial's name is its stem with its run: cdb-g02-background's third line is cdb-g02-r3-background; a
 stem that names its run keeps it. A macOS trial's name is its Linux twin's, the OS being its run's folder
-(runs/macos/RUN)."""
+(runs/macos/RUN), and so is an arm's: macos-agent-desktop-ir-01-r1-foreground is ir-01-r1-foreground, its driver in
+its run's trials."""
 import json
 import re
 import sys
@@ -12,6 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 RUN = re.compile(r"-r(\d)-(foreground|background)$")
+#: A macOS trial's OS and, for another arm than cua-driver's, its driver, which its name leaves to its run's folder.
+PREFIX = re.compile(r"^macos-(?:agent-desktop-|macos-harness-)?")
 
 
 def main():
@@ -31,7 +34,7 @@ def split(bench, stems, per):
         seen[stem] += 1
         named = RUN.search(stem)
         index = int(named[1]) if named else seen[stem]
-        name = (stem if named else re.sub(r"-(foreground|background)$", rf"-r{index}-\1", stem)).removeprefix("macos-")
+        name = PREFIX.sub("", stem if named else re.sub(r"-(foreground|background)$", rf"-r{index}-\1", stem))
         env = next(s for s in json.loads((bench / "tasks" / f"{stem}.json").read_text()) if s["id"] == "env")["env_id"]
         groups[env].append(f"{stem}|{name}|{index}")
     return [(env, specs[start:start + per]) for env, specs in groups.items() for start in range(0, len(specs), per)]

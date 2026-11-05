@@ -11,8 +11,10 @@ from pathlib import Path
 import pandas as pd
 
 CRITERIA = ("key_focus", "window_raised", "typing", "pointer", "clipboard", "space", "dialog", "activation")
-STEM = re.compile(r"^(?:(?P<os>macos)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r(?P<run>\d))?"
-                  r"-(?P<condition>foreground|background)$")
+STEM = re.compile(r"^(?:(?P<os>macos)-)?(?:(?P<driver>agent-desktop|macos-harness)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)"
+                  r"(?:-r(?P<run>\d))?-(?P<condition>foreground|background)$")
+#: The driver of a trial that names none, the bench's first arm.
+DRIVER = "cua-driver"
 
 
 def main():
@@ -53,6 +55,7 @@ def task_row(bench, path):
         "run_index": int(match["run"]) if match["run"] else None,
         "seed": (settings.get("benchlab") or {}).get("seed"),
         "os": match["os"] or "linux",
+        "driver": match["driver"] or DRIVER,
         "computer": steps["env"]["env_id"],
         "prompt": steps["task"]["prompt"],
         "system_prompt": steps["agent"]["system_prompt"],
@@ -74,6 +77,7 @@ def trial_row(dataset, folder, titles):
         "trial_id": facts["trial_id"],
         "run": folder.parent.name,
         "os": facts["os"],
+        "driver": facts.get("driver", DRIVER),
         "task": facts["task"],
         "probe": facts["probe"],
         "title": titles.get(facts["task"]),

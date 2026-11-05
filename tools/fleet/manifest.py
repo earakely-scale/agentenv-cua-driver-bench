@@ -72,15 +72,22 @@ def installed_drivers() -> Path | None:
     return Path(spec.origin).parent / "drivers" / "envs" if spec and spec.origin else None
 
 
+#: What a driver pins of what its agents get, first found first: its MCP server's tool list on another OS than Linux,
+#: on every OS, or the skill its one tool is taught by.
+PINNED = ("mcp-{os}.json", "mcp.json", "skill.md")
+
+
 def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux") -> dict:
-    """The env's computer, driver, display and apps, and the sha256 of the tool list its driver pins on ``os_type``:
-    ``mcp.json`` on Linux, ``mcp-<os>.json`` on another OS."""
+    """The env's computer, driver, display and apps, and the sha256 of what its driver pins of its agents' tools on
+    ``os_type``: cua-driver's ``mcp.json`` on Linux and ``mcp-<os>.json`` on another OS, agent-desktop's ``mcp.json``,
+    macos-harness's ``skill.md``."""
     spec = tomllib.loads((bench / "envs" / env / "env.toml").read_text())
-    pinned = "mcp.json" if os_type == "linux" else f"mcp-{os_type}.json"
-    tools = drivers / spec["driver"] / pinned if drivers else None
+    names = [name.format(os=os_type) for name in PINNED if os_type != "linux" or "{os}" not in name]
+    tools = next((drivers / spec["driver"] / name for name in names if (drivers / spec["driver"] / name).is_file()),
+                 None) if drivers else None
     return {"computer": spec.get("computer"), "driver": spec.get("driver"), "display": spec.get("display"),
-            "apps": spec.get("apps", []),
-            "tool_list_sha256": hashlib.sha256(tools.read_bytes()).hexdigest() if tools and tools.is_file() else None}
+            "apps": spec.get("apps", []), "tool_list": tools.name if tools else None,
+            "tool_list_sha256": hashlib.sha256(tools.read_bytes()).hexdigest() if tools else None}
 
 
 def composed(state: Path | None, bench: Path, env: str) -> dict | None:

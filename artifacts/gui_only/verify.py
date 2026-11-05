@@ -4,10 +4,11 @@
 
 It holds when claude-code was offered no built-in tool but Skill and Read beside the computer env's, tried none trycua
 forbids, put no code in a tool input, and ran no command through cua-driver's ``launch_app``, which on Linux runs one
-where macOS's opens apps only. A trial whose agent's trajectory the verifier isn't given, or isn't claude-code's
+where macOS's opens apps only, nor through agent-desktop's ``launch``, alone or in a batch. A trial whose agent's trajectory the verifier isn't given, or isn't claude-code's
 stream-json, doesn't hold, since its tool calls can't be checked."""
 import hashlib
 import importlib.util
+import json
 import os
 import re
 import tempfile
@@ -68,7 +69,29 @@ def _scan(v2, events):
                 launches.add(f"{name}:launch_path")
             if _COMMAND.search(str(tool_input.get("name") or "")):
                 launches.add(f"{name}:command")
+        if name.endswith("__desktop_launch") and isinstance(tool_input, dict):
+            launches |= {f"{name}:{how}" for how in _desktop_launch(tool_input)}
+        if name.endswith("__desktop_batch") and isinstance(tool_input, dict):
+            launches |= {f"{name}:launch:{how}" for command in _batch(tool_input) if command.get("command") == "launch"
+                         for how in _desktop_launch(command.get("args") or {})}
     return sorted({*hard, *offered, *launches}), soft
+
+
+def _desktop_launch(tool_input):
+    """How agent-desktop's launch ran a command rather than opened an app, as cua-driver's launch_app is judged: with
+    arguments, a DevTools port, an environment or a working directory of its own, or a name a shell would read as more
+    than an app's."""
+    found = [how for how in ("args", "cdp", "env", "cwd") if tool_input.get(how) not in (None, [], "")]
+    return found + (["command"] if _COMMAND.search(str(tool_input.get("app") or "")) else [])
+
+
+def _batch(tool_input):
+    """The commands an agent-desktop batch carries, from its ``commands_json``."""
+    try:
+        commands = json.loads(tool_input.get("commands_json") or "[]")
+    except ValueError:
+        return []
+    return [command for command in commands if isinstance(command, dict)] if isinstance(commands, list) else []
 
 
 def _refused(v2, events):
