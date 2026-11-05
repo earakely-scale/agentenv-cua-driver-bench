@@ -121,7 +121,7 @@ def test_a_comparison_holds_the_os_and_model_and_counts_only_the_tasks_every_dri
 def test_a_task_the_config_doesnt_score_in_the_background_counts_in_the_foreground_alone(space):
     catalog = space("catalog")
     cfg = {**CONFIG, "caveats": [{"os": None, "condition": "background", "tasks": ["mb-10"], "mark": "¶",
-                                  "short": "Not scored in the background", "reason": "Why.", "unscored": True}]}
+                                  "short": "Not scored", "reason": "Why.", "unscored": True}]}
     metas = [m for driver in ("cua-driver", "agent-desktop") for m in _cells(driver, [
         ("ir-01", "foreground", [(True, 1.0)]), ("ir-01", "background", [(False, 0.5)]),
         ("mb-10", "foreground", [(True, 1.0)]), ("mb-10", "background", [(False, 0.0)])])]
@@ -135,7 +135,7 @@ def test_a_task_the_config_doesnt_score_in_the_background_counts_in_the_foregrou
     assert rows[("cua-driver", "background")] == (0, 1, {"ir-01"})
     assert set(comparison["tasks"]) == {"ir-01", "mb-10"}
     assert (cua["foreground"]["n"], cua["background"]["n"], cua["background"]["score"]) == (2, 1, 0.5)
-    assert "not scored¶" in catalog.results_md(cat) and "¶ Not scored in the background: Why." in catalog.results_md(cat)
+    assert "not scored¶" in catalog.results_md(cat) and "¶ Not scored: Why." in catalog.results_md(cat)
     assert catalog.unscored(cfg, "linux", "background", "mb-10") and not catalog.unscored(cfg, "macos", "foreground", "mb-10")
 
 

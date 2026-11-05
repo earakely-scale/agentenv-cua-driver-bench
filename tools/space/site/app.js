@@ -535,7 +535,7 @@ function cellBlock(runs, multi) {
       one ? verdict(runs[0]) : h("div", { class: "runs" },
         off ? h("span", { class: "verdict na" }, "Not scored")
           : h("span", { class: `verdict ${passed ? (passed === runs.length ? "pass" : "some") : "fail"}` }, `${passed}/${runs.length} pass`),
-        runs.map((t) => h("a", { class: `run ${t.passed ? "ok" : "no"}`, href: hashOf(t), title: `Run ${t.run_index ?? t.nth}${t.seed != null ? ` · seed ${t.seed}` : ""}: ${pct(t.grade?.task?.score)} task score, ${t.passed ? "pass" : "fail"}` },
+        runs.map((t) => h("a", { class: `run ${t.passed ? "ok" : "no"}`, href: hashOf(t), title: `Run ${t.run_index ?? t.nth}${t.seed != null ? ` · seed ${t.seed}` : ""}: ${pct(t.grade?.task?.score)} task score, ${off ? "not scored" : t.passed ? "pass" : "fail"}` },
           t.run_index != null ? `r${t.run_index}` : `#${t.nth}`, h("i", {}, pct(t.grade?.task?.score)))))));
 }
 
@@ -570,7 +570,7 @@ function crumbs(t) {
     picker("Condition", t.condition, order(conds, CAT.conditions).map((k) => [k, CONDS[k]?.name || k]), (v) => go({ condition: v })),
     picker("Model", t.model, order(models, CAT.models).map((k) => [k, MODELS[k]?.name || k]), (v) => go({ model: v })),
     CAT.drivers.length > 1 && picker("Driver", t.driver, order(drivers, CAT.drivers).map((k) => [k, driverName(k)]), (v) => go({ driver: v })),
-    runs.length > 1 && picker("Run", t.key, runs.map((r) => [r.key, `${r.run_index != null ? `Run ${r.run_index}` : `#${r.nth}`} · ${pct(r.grade?.task?.score)} · ${r.passed ? "pass" : "fail"}${r.seed != null ? ` · seed ${r.seed}` : ""}`]), (v) => go({ key: v })));
+    runs.length > 1 && picker("Run", t.key, runs.map((r) => [r.key, `${r.run_index != null ? `Run ${r.run_index}` : `#${r.nth}`} · ${pct(r.grade?.task?.score)} · ${unscored(r.os, r.condition, r.task) ? "not scored" : r.passed ? "pass" : "fail"}${r.seed != null ? ` · seed ${r.seed}` : ""}`]), (v) => go({ key: v })));
 }
 
 function trialView(t) {
