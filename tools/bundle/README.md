@@ -62,7 +62,8 @@ agent-env run hf://{{REPO}} --eval macos-bench-v2
 ```
 
 The first run builds each task's computer, a few minutes on Linux and about 7 on macOS, where it first pulls Cua's
-macOS base (about 29 GB); later runs reuse it. On macOS the drivers comparison's trials name their driver:
+macOS base (about 29 GB); later runs reuse it. On an amd64 Linux machine whose Docker can't emulate arm64, the build
+also says it "can't build linux/arm64" for each computer: that form is skipped, and the amd64 one runs. On macOS the drivers comparison's trials name their driver:
 `macos-agent-desktop-…` for Vercel Labs' agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness, and
 `macos-cua-driver-…` for cua-driver on its own tools alone.
 

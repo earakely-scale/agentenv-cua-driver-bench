@@ -137,6 +137,10 @@ def test_a_task_the_config_doesnt_score_in_the_background_counts_in_the_foregrou
     assert (cua["foreground"]["n"], cua["background"]["n"], cua["background"]["score"]) == (2, 1, 0.5)
     assert "not scored¶" in catalog.results_md(cat) and "¶ Not scored: Why." in catalog.results_md(cat)
     assert catalog.unscored(cfg, "linux", "background", "mb-10") and not catalog.unscored(cfg, "macos", "foreground", "mb-10")
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    [panel] = space("figures").driver_specs(cat)["drivers-full-pass"]["panels"]
+    assert [s["values"] for s in panel["series"]] == [[1.0, 0.0], [1.0, 0.0]]
 
 
 def test_the_card_tables_name_each_rows_driver_and_bold_a_models_best_driver(space):

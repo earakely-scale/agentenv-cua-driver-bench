@@ -407,27 +407,29 @@ def specs(cat):
 
 def driver_specs(cat):
     """The drivers figures: a panel per OS and model that several drivers ran, a line per driver, each panel over the
-    tasks all its drivers ran in both conditions (the catalog's comparisons), so a panel compares like with like."""
+    tasks all its drivers ran in both conditions (the catalog's comparisons), each condition over those it scores, so a
+    panel compares like with like."""
     conds = [c for c in cat["conditions"] if c["id"] in ("foreground", "background")]
     drivers = {d["id"]: d for d in cat["drivers"]}
     names = {m["id"]: m["name"] for m in cat["models"]}
     osn = {o["id"]: o["name"] for o in cat["oses"]}
     short = {t["id"]: catalog.short(t) for t in cat["tasks"]}
     rows = {(r["os"], r["model"], r["driver"], r["condition"]): r for r in cat["board"]}
-    runs = sorted({rows[(c["os"], c["model"], d["id"], k["id"])]["tasks"][t]["n"] for c in cat["comparisons"]
-                   for d in c["drivers"] for k in conds for t in c["tasks"]} or {1})
+    runs = sorted({cell["n"] for c in cat["comparisons"] for d in c["drivers"] for k in conds
+                   for t, cell in rows[(c["os"], c["model"], d["id"], k["id"])]["tasks"].items() if t in c["tasks"]}
+                  or {1})
     out = {}
     for key, metric, title in (("drivers-task-score", "score", "Task score by driver"),
                                ("drivers-full-pass", "pass", "Full pass by driver")):
         panels, halves = [], []
         for c in cat["comparisons"]:
-            per = {(d["id"], k["id"]): [rows[(c["os"], c["model"], d["id"], k["id"])]["tasks"][t][metric]
-                                        for t in c["tasks"]] for d in c["drivers"] for k in conds}
+            per = {(d["id"], k["id"]): {t: cell[metric] for t, cell in rows[(c["os"], c["model"], d["id"], k["id"])][
+                "tasks"].items() if t in c["tasks"]} for d in c["drivers"] for k in conds}
             base = cat["driver"] if any(d["id"] == cat["driver"] for d in c["drivers"]) else c["drivers"][0]["id"]
             for d in c["drivers"]:
                 for k in conds:
-                    gaps = [a - b for a, b in zip(per[(d["id"], k["id"])], per[(base, k["id"])])
-                            if None not in (a, b)]
+                    mine, theirs = per[(d["id"], k["id"])], per[(base, k["id"])]
+                    gaps = [mine[t] - theirs[t] for t in mine if t in theirs and None not in (mine[t], theirs[t])]
                     if d["id"] != base and len(gaps) >= 3:
                         lo, hi = boot_ci(gaps)
                         halves.append((hi - lo) / 2)
@@ -438,7 +440,7 @@ def driver_specs(cat):
                                        "values": [d[k["id"]][metric] for k in conds]} for d in c["drivers"]]})
         if key == "drivers-task-score":
             sub = ("The same OS, model and tasks; only the computer-use driver changes. trycua's evaluator (weighted "
-                   "checks), mean over the tasks every driver ran in both conditions.")
+                   "checks), mean over the tasks every driver ran, each condition over those it scores.")
         else:
             sub = ("The same OS, model and tasks; only the computer-use driver changes. Share of trials where every "
                    "half of the grade held: the task, GUI only, and in the background the user undisturbed.")
