@@ -77,6 +77,11 @@
    "sha256": "e233cae7c58a9f32dc9e05530437e6d30a0ef363ee67d7d5dd883eefe3760c85"
   },
   {
+   "path": "platform/launch.macos.json",
+   "url": "https://raw.githubusercontent.com/trycua/cua/22a67eacd15dc71811e330ed88951dd615bb395d/libs/cua-driver-bench/taskpack/tasks/shared/cdb-s02/platform/launch.macos.json",
+   "sha256": "027bad2bf67f9ebde17da53f652b527d574fdbff057aab284c9e0337844677db"
+  },
+  {
    "path": "platform/launch.linux.json",
    "url": "https://raw.githubusercontent.com/trycua/cua/22a67eacd15dc71811e330ed88951dd615bb395d/libs/cua-driver-bench/taskpack/tasks/shared/cdb-s02/platform/launch.linux.json",
    "sha256": "a2680fd62410e3b6cf66fc0e9e4d4bf814189931438e429a26c55acbbd672b71"

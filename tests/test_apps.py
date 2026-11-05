@@ -21,7 +21,7 @@ from agentenv_protocol.computer.app import ComputerAppEnvironment  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TASKS = {"cdb-s02": "CdbS02", "cdb-s03": "CdbS03", "cdb-s04": "CdbS04"}
-SHARED = ("bench_app.py", "install.sh", "devtools_hook.js")
+SHARED = ("bench_app.py", "install.sh", "install-macos.sh", "devtools_hook.js")
 
 
 def _declared(task):
