@@ -56,6 +56,46 @@ The first run composes the computer: it builds an image of the base with the dri
 takes a few minutes; later runs reuse the image. It builds for each arch your Docker can: on an amd64 machine without
 arm64 emulation it says it can't build linux/arm64 and goes on with amd64.
 
+### On macOS
+
+The BenchLab tasks run on macOS too, on trycua's own BenchLab and BenchSentinel apps, built from their Swift sources at
+the pinned commit. The computer is Cua's public macOS 26 VM bundle, run by Lume, with cua-driver and the two apps
+installed. The agent and the grade run in containers beside it.
+
+You need:
+
+- an Apple silicon Mac;
+- `agent-env` running in a logged-in session, since Virtualization.framework runs a VM only there;
+- [Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH;
+- a Docker (`brew install colima docker && colima start` will do) with a registry on `localhost:5000`;
+- a model endpoint.
+
+```bash
+pip install 'agentenv-framework>=0.9.1443'
+docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
+python tools/taskpack.py
+mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
+[sandbox]
+default = "lume"
+
+[model]
+base_url = "https://your-model-proxy"
+api_key = "env:LITELLM_API_KEY"
+default = "anthropic/claude-sonnet-5-5"
+EOF
+agent-env run . --task macos-ir-01-r1-foreground
+agent-env run . --eval macos-bench-v2     # all 70 trials, one after another
+```
+
+**The first run takes a while.** It pulls Cua's base (about 29 GB), then composes the computer, about 7 minutes:
+trycua's apps build in a VM of the base, and the probe checks the result. Later runs reuse the composed computer. A trial
+then takes 2 to 6 minutes.
+
+An eval runs its trials one after another. Apple's licence allows two macOS VMs on a Mac.
+
+**What differs from Linux:** the macOS trial files (`tasks/macos-*.json`) carry trycua's system prompt as written, for
+"a macOS desktop", and grade on the Mac's own Docker.
+
 ## The task apps
 
 Each shared task (`cdb-s02`, `cdb-s03`, `cdb-s04`) is one computer app, so that every window it opens stops and starts
