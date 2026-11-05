@@ -175,7 +175,7 @@ class Runner:
                 record["resumes"] = record.get("resumes", 0) + 1
                 self.say(f"{host.name} {current.id} ended with {seen['ended']} of {record.get('trials', len(current.specs))} "
                          f"trials; resuming ({record['resumes']}/{RESUMES}); {seen['log']}")
-                return self.start(host, current, fresh=False, specs=Path(record["specs"]) if "specs" in record else None)
+                return self.start(host, current, fresh=False, specs=Path(record["specs"]) if record.get("specs") else None)
             else:
                 record["status"] = "failed"
                 self.say(f"{host.name} {current.id} failed: {seen['ended']} of {len(current.specs)} trials; "
@@ -248,9 +248,10 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
         env = {**os.environ, **{name: value for name, value in (("FLEET_VENV", self.board.get("venv")),
                                                                   ("FLEET_BENCH", self.board.get("bench")),
                                                                   ("FLEET_STATE", host.state)) if value}}
-        specs = specs or self.work / f"{worker.id.replace('/', '--')}.txt"
+        path = specs or self.work / f"{worker.id.replace('/', '--')}.txt"
+        lines = specs.read_text().splitlines() if specs else worker.specs
         argv = [sys.executable, str(Path(__file__).with_name("start.py")), host.instance, worker.run, worker.model,
-                str(specs), "--run-specs",
+                str(path), "--run-specs",
                 str(self.work / f"{worker.run}.run.txt"), "--os", self.os]
         if taskpack := self.board.get("taskpack"):
             argv += ["--taskpack", str(ROOT / taskpack)]
@@ -261,8 +262,8 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
         if done.returncode or not said or said[-1] != "started":
             return self.say(f"{host.name} couldn't start {worker.id}: {said[-1:] or done.returncode}; trying again")
         record = self.state.setdefault(worker.id, {})
-        lines = specs.read_text().splitlines()
-        record.update(status="started", at=time.time(), seen=False, host=host.name, specs=str(specs), trials=len(lines),
+        record.update(status="started", at=time.time(), seen=False, host=host.name, trials=len(lines),
+                      specs=str(specs) if specs else None,
                       digest=hashlib.sha256(("\n".join(lines) + "\n").encode()).hexdigest())
         self.say(f"{host.name} {'started' if fresh else 'resumed'} {worker.id} ({len(lines)} trials, {worker.computer})")
         self.save()
