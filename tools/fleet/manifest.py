@@ -9,6 +9,7 @@ import hashlib
 import json
 import platform
 import re
+import subprocess
 import tomllib
 import urllib.request
 from datetime import datetime, timezone
@@ -27,6 +28,8 @@ def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], pol
     the identity of the image the computers boot, where it records one."""
     framework = {name: _version(name) for name in ("agentenv-framework", "agentenv-framework-protocol")}
     _require_floor(framework["agentenv-framework"])
+    if commit := _checkout_commit("agentenv-framework"):
+        framework["commit"] = commit
     lock = tomllib.loads((bench / "taskpack.lock.toml").read_text())
     stems = sorted({line.split("|")[0] for line in specs})
     tasks = {stem: {step["id"]: step for step in json.loads((bench / "tasks" / f"{stem}.json").read_text())}
@@ -41,7 +44,7 @@ def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], pol
         "model": model,
         "agents": sorted({steps["agent"].get("a2a_agent_id") or "default" for steps in tasks.values()}),
         "builtin_tools": _distinct(steps["agent"].get("builtin_tools") for steps in tasks.values()),
-        "computers": {env: _computer(bench, env, drivers) for env in envs},
+        "computers": {env: _computer(bench, env, drivers, os_type) for env in envs},
         "image": image,
         "host": {"platform": platform.platform(), "instance_type": _ec2("instance-type")},
         "limits": _distinct({"max_turns": steps["task"].get("max_turns"),
@@ -60,9 +63,12 @@ def installed_drivers() -> Path | None:
     return Path(spec.origin).parent / "drivers" / "envs" if spec and spec.origin else None
 
 
-def _computer(bench: Path, env: str, drivers: Path | None) -> dict:
+def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux") -> dict:
+    """The env's computer, driver, display and apps, and the sha256 of the tool list its driver pins on ``os_type``:
+    ``mcp.json`` on Linux, ``mcp-<os>.json`` on another OS."""
     spec = tomllib.loads((bench / "envs" / env / "env.toml").read_text())
-    tools = drivers / spec["driver"] / "mcp.json" if drivers else None
+    pinned = "mcp.json" if os_type == "linux" else f"mcp-{os_type}.json"
+    tools = drivers / spec["driver"] / pinned if drivers else None
     return {"computer": spec.get("computer"), "driver": spec.get("driver"), "display": spec.get("display"),
             "apps": spec.get("apps", []),
             "tool_list_sha256": hashlib.sha256(tools.read_bytes()).hexdigest() if tools and tools.is_file() else None}
@@ -97,6 +103,20 @@ def _ec2(item: str) -> str | None:
 def _distinct(values) -> list:
     """Each value once, in a fixed order."""
     return [json.loads(value) for value in sorted({json.dumps(value, sort_keys=True) for value in values})]
+
+
+def _checkout_commit(distribution: str) -> str | None:
+    """The git commit of the checkout ``distribution`` is installed from in editable mode, whose version alone doesn't
+    say what code runs; None when it's installed from a release."""
+    try:
+        source = json.loads(metadata.distribution(distribution).read_text("direct_url.json") or "{}")
+    except metadata.PackageNotFoundError:
+        return None
+    if not source.get("dir_info", {}).get("editable") or not source.get("url", "").startswith("file://"):
+        return None
+    done = subprocess.run(["git", "-C", source["url"].removeprefix("file://"), "rev-parse", "HEAD"],
+                          capture_output=True, text=True)
+    return done.stdout.strip() or None
 
 
 def _version(distribution: str) -> str | None:

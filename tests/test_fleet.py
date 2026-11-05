@@ -76,11 +76,13 @@ def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_image_h
     driver = tmp_path / "cua-driver"
     driver.mkdir()
     (driver / "mcp.json").write_text('{"tools": []}')
+    (driver / "mcp-macos.json").write_text('{"tools": ["macos"]}')
     specs = ["cdb-g02-foreground|cdb-g02-r1-foreground|1", "mb-09-r4-background|mb-09-r4-background|4"]
     policy = {"setup_steps": list(SETUP), "reruns": {"rate": 6, "server": 3, "setup": 2}}
     image = {"image": "agentenv-macos-bench", "macos_build": "25F84"}
     monkeypatch.setattr(manifest, "_version", lambda name: "0.9.1412")
     monkeypatch.setattr(manifest, "_ec2", lambda item: "mac2-m2.metal")
+    monkeypatch.setattr(manifest, "_checkout_commit", lambda name: "2d4ad6fe")
 
     built = manifest.build(ROOT, "run-1", "macos", "anthropic/claude-sonnet-5-5", specs, policy, tmp_path, image)
 
@@ -93,7 +95,8 @@ def test_a_runs_manifest_pins_the_task_pack_computers_drivers_tool_lists_image_h
     s02 = built["computers"]["desktop-s02"]
     assert (s02["computer"], s02["driver"], s02["display"]) == ("ubuntu-24.04", "cua-driver",
                                                                 {"width": 1920, "height": 1080})
-    assert s02["tool_list_sha256"] == manifest.hashlib.sha256(b'{"tools": []}').hexdigest()
+    assert s02["tool_list_sha256"] == manifest.hashlib.sha256(b'{"tools": ["macos"]}').hexdigest()
+    assert built["framework"]["commit"] == "2d4ad6fe"
     assert built["seeds"] == {"mb-09-r4-background": {"benchlab": 539937}}
     assert (built["image"], built["host"]["instance_type"]) == (image, "mac2-m2.metal")
 

@@ -39,7 +39,7 @@
     },
     "macos": {
       "name": "macOS",
-      "detail": ""
+      "detail": "macOS 26 \u00b7 1920\u00d71080 \u00b7 Lume on an EC2 Mac"
     },
     "windows": {
       "name": "Windows",
