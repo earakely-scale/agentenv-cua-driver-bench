@@ -6,6 +6,8 @@ import ast
 import importlib
 import json
 import os
+import plistlib
+import shutil
 import sys
 import tomllib
 import zipfile
@@ -79,7 +81,8 @@ def test_a_task_app_declares_its_files_runtimes_workspace_and_launch(task):
     assert ("fonts-liberation" in apt) == (task == "cdb-s04")
     assert linux.paths == [task]
     assert linux.launch.command == ["venv/bin/python", "bench_app.py"] and linux.launch.at == "boot"
-    assert [step.name for step in declared.install_steps] == ["workspace", "browser", "browser_policies"]
+    assert [step.name for step in declared.install_steps] == ["workspace", "browser", "browser_policies",
+                                                              "electron_apps"]
     assert [check.name for check in declared.ready_checks] == ["windows"]
 
     macos = declared.os["macos"]
@@ -100,7 +103,8 @@ def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node_with_elect
     monkeypatch.setattr(bench_app, "MACOS", False)
     values = {"${bundle}": "/opt/b/task", "${workspace}": "/home/user/cdb-s02", "${workspace_uri}": "file:///x",
               "${python}": "/py"}
-    electron = {"id": "mail", "command": ["npx", "electron", ".", "--surface=mail", "--workspace=${workspace}"]}
+    electron = {"id": "mail", "command": ["npx", "electron", ".", "--surface=mail", "--workspace=${workspace}"],
+                "window": {"title": "Copperfield Mail"}}
     node = {"id": "archive", "command": ["node", "server.js"]}
     calc = {"id": "calc", "command": ["libreoffice", "--calc", "${workspace}/planning/a.ods"]}
     browser = {"id": "browser", "command": ["google-chrome", "--no-first-run", "--user-data-dir=${workspace}/.runtime/b",
@@ -123,7 +127,7 @@ def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node_with_elect
     monkeypatch.setattr(bench_app, "MACOS", True)
     chrome = {"id": "browser", "command": [bench_app.MAC_CHROME, "--no-first-run", "http://127.0.0.1:4184/"]}
     assert bench_app._command(electron, values) == [
-        str(bench_app.HERE / "runtime/electron/Electron.app/Contents/MacOS/Electron"), ".", "--surface=mail",
+        str(bench_app.HERE / "runtime/apps/Copperfield Mail.app/Contents/MacOS/Electron"), ".", "--surface=mail",
         "--workspace=/home/user/cdb-s02", "--user-data-dir=/home/user/cdb-s02/.runtime/electron-mail"]
     assert bench_app._command(chrome, values) == [str(bench_app.MAC_CHROMIUM), "--no-first-run", "http://127.0.0.1:4184/"]
     assert bench_app.MAC_CHROMIUM.relative_to(bench_app.HERE).as_posix() == (
@@ -286,3 +290,30 @@ def test_benchlab_starts_as_trycuas_runner_starts_it_with_a_throwaway_home(lab, 
     assert started["argv"] == ["/usr/bin/python3", str(lab.LAB), "--mode", "irmodal", "--seed", "517139",
                                "--state", str(data / "state.json"), "--events", str(data / "events.jsonl")]
     assert data.is_dir() and started["home"] != str(tmp_path)
+
+
+def test_on_macos_each_electron_app_gets_a_bundle_of_its_own_name_and_identifier(bench_app, tmp_path, monkeypatch):
+    source = tmp_path / "runtime" / "electron" / "Electron.app" / "Contents"
+    (source / "MacOS").mkdir(parents=True)
+    (source / "MacOS" / "Electron").write_text("electron")
+    (source / "Info.plist").write_bytes(plistlib.dumps({"CFBundleName": "Electron", "CFBundleExecutable": "Electron",
+                                                        "CFBundleIdentifier": "com.github.Electron"}))
+    ran = []
+    monkeypatch.setattr(bench_app, "MAC_ELECTRON", source / "MacOS" / "Electron")
+    monkeypatch.setattr(bench_app, "MAC_APPS", tmp_path / "runtime" / "apps")
+    monkeypatch.setattr(bench_app, "_spec", lambda: {"apps": [
+        {"id": "mail", "command": ["npx", "electron", "."], "window": {"title": "Copperfield Mail"}},
+        {"id": "calc", "command": ["soffice"], "window": {"title_contains": "replan"}}]})
+
+    def run(argv, **kwargs):
+        ran.append(argv[0])
+        if argv[0] == "cp":
+            shutil.copytree(argv[-2], argv[-1])
+    monkeypatch.setattr(bench_app.subprocess, "run", run)
+    bench_app.BenchTaskApp.electron_apps(None)
+
+    info = plistlib.loads((tmp_path / "runtime/apps/Copperfield Mail.app/Contents/Info.plist").read_bytes())
+    assert (info["CFBundleName"], info["CFBundleDisplayName"], info["CFBundleIdentifier"], info["CFBundleExecutable"]) == (
+        "Copperfield Mail", "Copperfield Mail", "dev.agentenv.bench.mail", "Electron")
+    assert ran == ["cp", "codesign"] and sorted(p.name for p in (tmp_path / "runtime/apps").iterdir()) == [
+        "Copperfield Mail.app"]

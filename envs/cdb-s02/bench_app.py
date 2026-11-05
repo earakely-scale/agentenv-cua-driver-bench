@@ -108,6 +108,10 @@ GNUCASH_DMG = ("https://github.com/Gnucash/gnucash/releases/download/5.17/Gnucas
 #: Where Chrome for Testing reads managed policies on macOS.
 MAC_POLICIES = Path("/Library/Managed Preferences/com.google.chrome.for.testing.plist")
 MAC_ELECTRON = RUNTIME / "electron" / "Electron.app" / "Contents" / "MacOS" / "Electron"
+#: Where each of the task's Electron apps gets a bundle of its own on macOS: a clone of Electron.app under the app's name
+#: and an identifier of its own, as an Electron app ships, so a driver that names apps tells them apart.
+MAC_APPS = RUNTIME / "apps"
+MAC_APP_ID = "dev.agentenv.bench"
 MAC_CHROMIUM = (RUNTIME / "chromium" / "Google Chrome for Testing.app" / "Contents" / "MacOS"
                 / "Google Chrome for Testing")
 MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -204,6 +208,21 @@ class BenchTaskApp(ComputerAppEnvironment):
             MAC_POLICIES.parent.mkdir(parents=True, exist_ok=True)
             MAC_POLICIES.write_bytes(plistlib.dumps(POLICIES))
 
+    @install_step(scope="session", os="macos")
+    def electron_apps(self) -> None:
+        """Each of the task's Electron apps as a bundle of its own, signed ad hoc, as its Info.plist changed."""
+        for app in _spec()["apps"]:
+            if app["command"][:2] == ["npx", "electron"]:
+                bundle, name = _bundle(app), app["window"]["title"]
+                bundle.parent.mkdir(parents=True, exist_ok=True)
+                subprocess.run(["cp", "-cR", str(MAC_ELECTRON.parents[2]), str(bundle)], check=True)
+                info = bundle / "Contents" / "Info.plist"
+                info.write_bytes(plistlib.dumps({**plistlib.loads(info.read_bytes()), "CFBundleName": name,
+                                                 "CFBundleDisplayName": name,
+                                                 "CFBundleIdentifier": f"{MAC_APP_ID}.{app['id']}"}))
+                subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(bundle)], check=True,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     @ready_check(os=["linux", "macos"])
     def windows(self) -> bool:
         return all(claimed([app["window"] for app in _spec()["apps"] if "window" in app]))
@@ -274,12 +293,12 @@ def _command(app: dict, values: dict[str, str]) -> list[str]:
     """The app's command as the task gives it, with Electron, Node and Chromium this app installed in place of ``npx
     electron``, ``node`` and ``google-chrome``. Electron and Chromium run without Chromium's sandbox, which a container
     can't give them, Electron with its own profile under the workspace's runtime folder and Chromium without /dev/shm,
-    which no computer sizes, and with its own window class. On macOS Electron and Chrome for Testing run sandboxed, in
-    place of ``npx electron`` and Google Chrome."""
+    which no computer sizes, and with its own window class. On macOS Electron runs sandboxed from the app's own bundle,
+    and Chrome for Testing in place of Google Chrome."""
     argv = [_sub(arg, values) for arg in app["command"]]
     if argv[:2] == ["npx", "electron"] and MACOS:
         profile = Path(values["${workspace}"]) / ".runtime" / f"electron-{app['id']}"
-        return [str(MAC_ELECTRON), *argv[2:], f"--user-data-dir={profile}"]
+        return [str(_bundle(app) / "Contents" / "MacOS" / "Electron"), *argv[2:], f"--user-data-dir={profile}"]
     if argv[0] == MAC_CHROME:
         return [str(MAC_CHROMIUM), *argv[1:]]
     if argv[:2] == ["npx", "electron"]:
@@ -293,10 +312,15 @@ def _command(app: dict, values: dict[str, str]) -> list[str]:
     return argv
 
 
+def _bundle(app: dict) -> Path:
+    return MAC_APPS / f"{app['window']['title']}.app"
+
+
 def _hooked(command: list[str]) -> dict[str, str]:
     """For an Electron app, the environment that loads the DevTools hook into it."""
-    electron = MAC_ELECTRON if MACOS else RUNTIME / "electron" / "electron"
-    return {"NODE_OPTIONS": f"--require={DEVTOOLS_HOOK}"} if command[0] == str(electron) else {}
+    electron = (MAC_APPS in Path(command[0]).parents and Path(command[0]).name == "Electron") if MACOS else (
+        command[0] == str(RUNTIME / "electron" / "electron"))
+    return {"NODE_OPTIONS": f"--require={DEVTOOLS_HOOK}"} if electron else {}
 
 
 def _quiet(command: list[str], env: dict[str, str]) -> None:
