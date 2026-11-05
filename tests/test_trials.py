@@ -21,7 +21,9 @@ LABS = ("MB-09", "MB-10", "MB-11", "IR-01", "IR-02", "IR-03", "IR-04")
 RUNS = (1, 2, 3, 4, 5)
 CONDITIONS = ("background", "foreground")
 LAB_TRIALS = tuple(f"{probe.lower()}-r{run}" for probe in LABS for run in RUNS)
-EVERY = (*((name, "linux") for name in (*TRIALS, *LAB_TRIALS)), *((name, "macos") for name in LAB_TRIALS))
+EVERY = tuple((name, os) for os in ("linux", "macos") for name in (*TRIALS, *LAB_TRIALS))
+#: Where each OS's computer keeps a task's workspace: its session user's home.
+HOMES = {"linux": "/home/user", "macos": "/Users/lume"}
 OSES = ("linux", "macos")
 
 
@@ -37,18 +39,19 @@ def trycua():
     return _module(PACK / "scoring" / "bench_v2.py")
 
 
+@pytest.mark.parametrize("os", OSES)
 @pytest.mark.parametrize("probe", TRIALS)
 @pytest.mark.parametrize("condition", CONDITIONS)
-def test_each_trial_is_prompted_as_trycuas_runner_prompts_it(trycua, probe, condition):
+def test_each_trial_is_prompted_as_trycuas_runner_prompts_it(trycua, probe, condition, os):
     task = TRIALS[probe]
     brief = (PACK / "taskpack/tasks/shared" / task / "brief.md").read_text().replace(
         "configured `cua` MCP server", "configured computer-use MCP server").strip()
     limits = json.loads((PACK / "probes" / probe.upper() / "task.json").read_text())
-    trial = _trial(probe, condition)
+    trial = _trial(probe, condition, os)
 
-    assert trial["task"]["prompt"] == _prompt(trycua, f"{brief}\n\nYour workspace directory is `/home/user/{task}`.",
-                                              condition, limits)
-    assert trial["agent"]["system_prompt"] == _system(limits)
+    assert trial["task"]["prompt"] == _prompt(
+        trycua, f"{brief}\n\nYour workspace directory is `{HOMES[os]}/{task}`.", condition, limits)
+    assert trial["agent"]["system_prompt"] == _system(limits, os)
     assert (trial["task"]["timeout_seconds"], trial["task"]["max_turns"]) == (limits["timeout_s"], limits["max_turns"])
 
 
@@ -82,8 +85,8 @@ def test_trycuas_runner_prompts_with_the_brief_in_its_condition_and_tells_the_ti
 @pytest.mark.parametrize("condition", CONDITIONS)
 def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and_grades_it(name, os, condition):
     trial = _trial(name, condition, os)
-    env = (f"desktop-{TRIALS[name].removeprefix('cdb-')}" if name in TRIALS
-           else "desktop-benchlab" if os == "linux" else f"desktop-benchlab-{os}")
+    env = f"desktop-{TRIALS[name].removeprefix('cdb-')}" if name in TRIALS else "desktop-benchlab"
+    env = env if os == "linux" else f"{env}-{os}"
 
     assert trial["env"]["env_id"] == env
     assert trial["env"]["env_params"]["app_settings"]["bench-sentinel"] == {"condition": condition}
