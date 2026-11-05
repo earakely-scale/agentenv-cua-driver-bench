@@ -64,7 +64,8 @@ def main():
     if os.environ.get("HF_REPO"):
         cfg["media_base"] = f"https://huggingface.co/datasets/{os.environ['HF_REPO']}/resolve/main"
         cfg["links"]["dataset"] = f"https://huggingface.co/datasets/{os.environ['HF_REPO']}"
-    folders = trials.discover(args.data)
+    skip = set(cfg.get("exclude_runs") or [])
+    folders = [f for f in trials.discover(args.data) if trials.run_of(f, args.data) not in skip]
     if not folders:
         raise SystemExit(f"no trial folders (with trial.json) under {args.data}")
     space, assets = args.out / "space", args.out / "assets"
@@ -101,7 +102,8 @@ def main():
         files[m["uid"]] = entry
         print(f"{m['uid']}: {len(t['web']['calls'])} calls, user lane {'yes' if t['web']['user'] else 'no'}, "
               f"web.mp4 {entry.get('video_mb', '–')} MB{', Space copy' if keep_local else ''}")
-    cat = catalog.build(metas, cfg, hero_uid, files, trials.discover_missing(args.data))
+    cat = catalog.build(metas, cfg, hero_uid, files, [m for m in trials.discover_missing(args.data)
+                                                     if f"{m['os']}/{m['run']}" not in skip])
     keep = {m["uid"] for m in metas}
     for stale in (data / "trials").iterdir():
         if stale.is_dir() and stale.name not in keep:

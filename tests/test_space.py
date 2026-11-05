@@ -187,3 +187,9 @@ def test_another_drivers_calls_read_in_the_lane_as_steps_on_elements_points_and_
     assert [trials.kind_of(tool, inp) for tool, inp in (
         ("desktop_screenshot", {}), ("macos_harness", {"commands": [["get_app_state", "--app", "BenchLab"]]}),
         ("desktop_wait", {"ms": 800}), ("desktop_drag", {}), ("click", {}))] == ["look", "look", "wait", "act", "act"]
+
+
+def test_a_run_the_config_excludes_is_named_as_its_os_and_run(space):
+    assert space("trials").run_of(Path("/d/runs/macos/cua-driver-sonnet-5-5-2026-11-05/ir-01-r1-foreground"), Path("/d")) == (
+        "macos/cua-driver-sonnet-5-5-2026-11-05")
+    assert all(run.startswith("macos/") for run in json.loads((SPACE / "config.json").read_text())["exclude_runs"])

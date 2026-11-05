@@ -74,6 +74,7 @@
       "board": false
     }
   },
+  "exclude_runs": ["macos/cua-driver-sonnet-5-5-2026-11-05", "macos/cua-driver-haiku-5-5-2026-11-05"],
   "drivers": {
     "cua-driver": {
       "name": "cua-driver",

@@ -40,6 +40,11 @@ def discover(root):
     return sorted({p.parent for p in Path(root).rglob("trial.json")}, key=lambda p: p.name)
 
 
+def run_of(folder, root):
+    """A trial folder's run as ``OS/RUN``, as the config's ``exclude_runs`` names the runs the board leaves out."""
+    return "/".join(Path(folder).relative_to(root).parts[1:3])
+
+
 def discover_missing(root):
     """Each trial whose re-runs were spent, from the runs/OS/RUN/NAME/missing.json the fleet's worker uploads: its OS,
     driver, run, task and condition."""
