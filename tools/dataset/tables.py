@@ -11,7 +11,8 @@ from pathlib import Path
 import pandas as pd
 
 CRITERIA = ("key_focus", "window_raised", "typing", "pointer", "clipboard", "space", "dialog", "activation")
-STEM = re.compile(r"^(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r(?P<run>\d))?-(?P<condition>foreground|background)$")
+STEM = re.compile(r"^(?:(?P<os>macos)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r(?P<run>\d))?"
+                  r"-(?P<condition>foreground|background)$")
 
 
 def main():
@@ -51,7 +52,7 @@ def task_row(bench, path):
         "condition": match["condition"],
         "run_index": int(match["run"]) if match["run"] else None,
         "seed": (settings.get("benchlab") or {}).get("seed"),
-        "os": "linux",
+        "os": match["os"] or "linux",
         "computer": steps["env"]["env_id"],
         "prompt": steps["task"]["prompt"],
         "system_prompt": steps["agent"]["system_prompt"],

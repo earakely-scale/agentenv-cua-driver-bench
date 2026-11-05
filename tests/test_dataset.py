@@ -175,3 +175,6 @@ def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables
     mb09 = tables.task_row(ROOT, ROOT / "tasks" / "mb-09-r2-foreground.json")
     assert (mb09["probe"], mb09["run_index"], mb09["seed"] is not None) == ("MB-09", 2, True)
     assert mb09["title"] == json.loads((PACK / "probes" / "MB-09" / "task.json").read_text())["title"]
+    macos = tables.task_row(ROOT, ROOT / "tasks" / "macos-mb-09-r2-foreground.json")
+    assert (macos["os"], macos["computer"], mb09["os"]) == ("macos", "desktop-benchlab-macos", "linux")
+    assert (macos["task"], macos["seed"], macos["title"]) == ("mb-09", mb09["seed"], mb09["title"])
