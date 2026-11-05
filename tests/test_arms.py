@@ -88,6 +88,27 @@ def test_an_arms_trial_is_named_as_its_twin_and_its_driver_reaches_the_dataset()
                                                                      "macos-harness", None]
     assert export.STEM.match("macos-agent-desktop-mb-10-r3-foreground").group("task", "driver") == (
         "mb-10", "agent-desktop")
+    assert [line.split("|")[1] for line in plan.split(ROOT, ["macos-cua-driver-mb-10-r3-foreground"], 10)[0][1]] == [
+        "mb-10-r3-foreground"]
+    assert export.STEM.match("macos-cua-driver-mb-10-r3-foreground").group("task", "driver") == ("mb-10", "cua-driver")
+    assert not tables.STEM.match("macos-cua-driver-mb-10-r3-foreground")
     task = tables.task_row(ROOT, ROOT / "tasks" / "macos-agent-desktop-ir-01-r1-foreground.json")
     assert (task["driver"], task["computer"], task["os"]) == ("agent-desktop", "desktop-benchlab-macos-agent-desktop",
                                                              "macos")
+
+
+@pytest.mark.parametrize("stem", STEMS)
+def test_cua_drivers_trial_on_its_own_tools_is_its_twin_with_the_computer_tools_hidden(stem):
+    twin = json.loads((ROOT / "tasks" / f"{stem}.json").read_text())
+    trial = json.loads((ROOT / "tasks" / f"macos-cua-driver-{stem.removeprefix('macos-')}.json").read_text())
+    hidden = trial.pop(next(n for n, step in enumerate(trial) if step["id"] == "arm_tools"))
+    agent = next(step for step in trial if step["id"] == "agent")
+    waits = agent["depends_on"]
+    agent["depends_on"] = ["env"]
+
+    assert trial == twin and waits == ["env", "arm_tools"]
+    assert hidden == {"id": "arm_tools", "type": "modify_env_tool_access", "env_id": next(
+        step for step in twin if step["id"] == "env")["env_id"], "action": "disable", "role": "default",
+        "tools": COMPUTER_TOOLS, "depends_on": ["env"]}
+    assert (ROOT / "evals" / "macos-cua-driver-bench-v2-trials.txt").read_text().split() == [
+        f"macos-cua-driver-{s.removeprefix('macos-')}" for s in (ROOT / "evals" / "macos-bench-v2-trials.txt").read_text().split()]
