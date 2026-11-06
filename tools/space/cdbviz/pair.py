@@ -23,10 +23,12 @@ WORDS = {"foreground": "the agent has the desktop to itself", "background": "a p
 
 
 class Panel:
-    """One trial's half of the frame: its scene for timing and the grade, and where it sits."""
+    """One trial's half of the frame: its scene for timing and the grade, and where it sits: its left edge, the top of
+    its video and the video's size, a pair's half by default."""
 
-    def __init__(self, trial, cat, cfg, x0):
+    def __init__(self, trial, cat, cfg, x0, top=TOP, size=(PW, PV)):
         self.trial, self.scene, self.x0 = trial, Scene(trial, cat, cfg, 1), x0
+        self.top, (self.pw, self.pv) = top, size
         self.m, self.cfg = trial["meta"], cfg
         self.view = (0, 0, self.scene.sw, self.scene.sh)
 
@@ -38,10 +40,10 @@ class Panel:
         return min(self.scene.end, self.scene.start + tau * speed)
 
     def px(self, x):
-        return self.x0 + (x - self.view[0]) * PW / self.view[2]
+        return self.x0 + (x - self.view[0]) * self.pw / self.view[2]
 
     def py(self, y):
-        return TOP + (y - self.view[1]) * PV / self.view[3]
+        return self.top + (y - self.view[1]) * self.pv / self.view[3]
 
     def boxes(self):
         sc = self.scene
@@ -53,8 +55,8 @@ class Panel:
 
     def draw(self, img, d, video, t, speed):
         sc = self.scene
-        img.paste(video, (self.x0, TOP))
-        d.rectangle((self.x0 - 1, TOP - 1, self.x0 + PW, TOP + PV), outline=C["line"], width=1)
+        img.paste(video, (self.x0, self.top))
+        d.rectangle((self.x0 - 1, self.top - 1, self.x0 + self.pw, self.top + self.pv), outline=C["line"], width=1)
         self.label(d)
         i = sc.cur(t)
         c = sc.calls[i] if i >= 0 else None
@@ -104,14 +106,14 @@ class Panel:
         col = C["user"] if cond == "background" else C["agent"]
         f = font(800, 10.5)
         cw = d.textlength(name.upper(), font=f) + 16
-        y = HDR + 6
+        y = self.top - LAB + 6
         pill(d, (self.x0, y, self.x0 + cw, y + 20), fill=col + (44,), r=10, outline=col + (150,))
         d.text((self.x0 + 8, y + 4), name.upper(), font=f, fill=col)
-        d.text((self.x0 + cw + 9, y + 2.5), fit(d, WORDS.get(cond, ""), font(500, 12.5), PW - cw - 10), font=font(500, 12.5),
-               fill=C["ink2"])
+        d.text((self.x0 + cw + 9, y + 2.5), fit(d, WORDS.get(cond, ""), font(500, 12.5), self.pw - cw - 10),
+               font=font(500, 12.5), fill=C["ink2"])
 
     def strip(self, d, c, t, speed):
-        sc, x0, y0 = self.scene, self.x0, TOP + PV + 8
+        sc, x0, y0 = self.scene, self.x0, self.top + self.pv + 8
         f = font(800, 10)
         d.text((x0, y0 + 5), "AGENT", font=f, fill=C["agent"])
         lx = x0 + 52
@@ -120,13 +122,14 @@ class Panel:
         else:
             text = c["verb"] + (f" {c['obj']}" if c.get("obj") else "")
             fb = font(700, 12)
-            room = x0 + PW - lx - 70
+            room = x0 + self.pw - lx - 70
             shown = fit(d, text, fb, room)
             w = d.textlength(shown, font=fb) + 16
             pill(d, (lx, y0, lx + w, y0 + 21), fill=C["bad"] if c.get("err") else C["agent"], r=6)
             d.text((lx + 8, y0 + 3.5), shown, font=fb, fill=(255, 255, 255))
             n = f"{c['i'] + 1} of {len(sc.calls)}"
-            d.text((x0 + PW - d.textlength(n, font=font(500, 11)), y0 + 4.5), n, font=font(500, 11), fill=C["ink4"])
+            d.text((x0 + self.pw - d.textlength(n, font=font(500, 11)), y0 + 4.5), n, font=font(500, 11),
+                   fill=C["ink4"])
         y1 = y0 + 28
         d.text((x0, y1 + 5), "USER", font=f, fill=C["user"])
         if self.m["condition"] == "background":
@@ -137,7 +140,7 @@ class Panel:
                 d.text((lx + 23, y1 + 3.5), "Undisturbed, still typing", font=font(700, 12), fill=C["good"])
             else:
                 names = [k["short"] for k in sc.cat["criteria"] if k["id"] in broken]
-                text = fit(d, "Disturbed: " + ", ".join(names), font(700, 12), PW - 70)
+                text = fit(d, "Disturbed: " + ", ".join(names), font(700, 12), self.pw - 70)
                 w = d.textlength(text, font=font(700, 12)) + 31
                 pill(d, (lx, y1, lx + w, y1 + 21), fill=C["bad_dim"], r=6)
                 d.text((lx + 8, y1 + 3), "✗", font=font(800, 12.5), fill=C["bad"])
@@ -150,7 +153,7 @@ class Panel:
         sc, x0 = self.scene, self.x0
         label = f"{fmt(t)} / {fmt(sc.dur)}"
         lw = d.textlength(label, font=font("mono", 11)) + 8
-        x1 = x0 + PW - lw
+        x1 = x0 + self.pw - lw
         pill(d, (x0, y, x1, y + 10), fill=C["bg"], r=3)
         span = sc.end - sc.start
         X = lambda tt: x0 + (x1 - x0) * min(1, max(0, (tt - sc.start) / span))
@@ -167,10 +170,11 @@ class Panel:
     def grade(self, img, d):
         """The trial's grade over its video, as the hero's card says it, at the panel's size."""
         m, g = self.m, self.m["grade"]
-        region = img.crop((self.x0, TOP, self.x0 + PW, TOP + PV)).filter(ImageFilter.GaussianBlur(2))
-        img.paste(region, (self.x0, TOP))
-        d.rectangle((self.x0, TOP, self.x0 + PW, TOP + PV), fill=(5, 7, 12, 185))
-        x, y = self.x0 + 20, TOP + 18
+        box = (self.x0, self.top, self.x0 + self.pw, self.top + self.pv)
+        region = img.crop(box).filter(ImageFilter.GaussianBlur(2))
+        img.paste(region, (self.x0, self.top))
+        d.rectangle(box, fill=(5, 7, 12, 185))
+        x, y = self.x0 + 20, self.top + 18
         ok = m["passed"]
         d.text((x, y), "THE GRADE", font=font(800, 10.5), fill=C["ink3"])
         d.text((x, y + 15), "Pass" if ok else "Fail", font=font(800, 30), fill=C["good"] if ok else C["bad"])
@@ -183,14 +187,15 @@ class Panel:
             rows.append(("User undisturbed", u["result"] if u else None, f"{8 - len(br)} of 8" if u else ""))
         y += 60
         for name, okk, val in rows:
-            pill(d, (x, y, self.x0 + PW - 20, y + 32), fill=C["panel2"], r=8, outline=C["line"])
+            pill(d, (x, y, self.x0 + self.pw - 20, y + 32), fill=C["panel2"], r=8, outline=C["line"])
             col = C["ink4"] if okk is None else (C["good"] if okk else C["bad"])
             d.ellipse((x + 9, y + 8, x + 25, y + 24), fill=col)
             mark = "–" if okk is None else ("✓" if okk else "✗")
             d.text((x + 17 - d.textlength(mark, font=font(800, 11)) / 2, y + 9), mark, font=font(800, 11), fill=(255, 255, 255))
             d.text((x + 34, y + 7), name, font=font(700, 13), fill=C["ink"])
             if val:
-                d.text((self.x0 + PW - 32 - d.textlength(val, font=font(800, 13)), y + 7), val, font=font(800, 13), fill=C["ink"])
+                d.text((self.x0 + self.pw - 32 - d.textlength(val, font=font(800, 13)), y + 7), val, font=font(800, 13),
+                       fill=C["ink"])
             y += 38
         facts = " · ".join(v for v in [m.get("tool_calls") is not None and f"{m['tool_calls']} tool calls",
                                         mins(m.get("duration"))] if v)
