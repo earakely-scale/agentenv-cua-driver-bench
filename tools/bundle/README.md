@@ -45,7 +45,8 @@ export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_
 agent-env run hf://{{REPO}} --task cdb-g02-background --model anthropic/claude-sonnet-5-5   # one trial
 agent-env run hf://{{REPO}} --eval bench-v2 --model anthropic/claude-sonnet-5-5             # every task of Bench v2 once
 # GPT-6 in OpenAI's Codex CLI (agentenv-framework 0.9.1454 or later), on cua-driver's own tools as the board ran it
-agent-env run hf://{{REPO}} --task codex-cdb-g02-background --model openai/gpt-6.1-sol --set envs/desktop-s02.tools=driver# Vercel Labs' agent-desktop in cua-driver's place, as the Linux drivers comparison ran it (0.9.1456 or later)
+agent-env run hf://{{REPO}} --task codex-cdb-g02-background --model openai/gpt-6.1-sol --set envs/desktop-s02.tools=driver
+# Vercel Labs' agent-desktop in cua-driver's place, as the Linux drivers comparison ran it (0.9.1456 or later)
 agent-env run hf://{{REPO}} --task agent-desktop-cdb-g02-background --model anthropic/claude-sonnet-5-5
 ```
 

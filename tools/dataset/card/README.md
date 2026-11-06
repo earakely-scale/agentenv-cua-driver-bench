@@ -87,7 +87,8 @@ agent-env run hf://earakely-scale/cua-driver-bench --eval bench-v2 --model anthr
   --set envs/desktop-s02.tools=driver --set envs/desktop-s03.tools=driver --set envs/desktop-s04.tools=driver
 # GPT-6 in OpenAI's Codex CLI
 agent-env run hf://earakely-scale/cua-driver-bench --task codex-cdb-g02-background --model openai/gpt-6.1-sol \
-  --set envs/desktop-s02.tools=driver# Vercel Labs' agent-desktop in cua-driver's place, as the Linux drivers comparison ran it (0.9.1456 or later)
+  --set envs/desktop-s02.tools=driver
+# Vercel Labs' agent-desktop in cua-driver's place, as the Linux drivers comparison ran it (0.9.1456 or later)
 agent-env run hf://earakely-scale/cua-driver-bench --task agent-desktop-cdb-g02-background --model anthropic/claude-sonnet-5-5
 ```
 
