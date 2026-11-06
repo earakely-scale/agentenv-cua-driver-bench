@@ -192,9 +192,9 @@ function boardView() {
   const os = osSection();
   const wrap = h("div", { class: "wrap" },
     !os && (CAT.pairs || []).length ? pairsSection() : null,
-    resultsSection(),
+    resultsSection(), costSection(),
     CAT.comparisons.length ? driversSection() : null,
-    os, modelsSection(), failuresSection(), trialsSection(), howSection());
+    os, modelsSection(), failuresSection(), partialSection(), trialsSection(), howSection());
   $("#app").replaceChildren(h("div", { class: "wrap" }, landing()), sectionNav(wrap), wrap);
 }
 
@@ -296,10 +296,394 @@ function figures(keys, alt) {
 
 function resultsSection() {
   const lines = CAT.models.filter((m) => m.board).length > 1 ? ", a line per model" : "";
-  return h("section", { "aria-labelledby": "results-h" },
+  return h("section", { class: "results", "aria-labelledby": "results-h" },
     h("div", { class: "section-head", id: "results", "data-nav": "Results" }, h("h2", { id: "results-h" }, "Results"),
-      h("p", {}, `All through ${driverName(CAT.driver)}: a panel per OS${lines}.`)),
-    figures(CAT.figures, (f) => (f === "task-score" ? "Task score by condition" : "Full pass by condition")));
+      h("p", {}, `The share of trials that fully pass: the task done, through the GUI only, and in the background with the user undisturbed. All through ${driverName(CAT.driver)}: a panel per OS${lines}.`)),
+    figures(CAT.figures.filter((f) => f !== "task-score"), () => "Full pass by condition"));
+}
+
+// The cost section's filters for this visit: the condition counted and the OSes, drivers and models hidden.
+const COST = { cond: "background", off: new Set() };
+const SHAPES = ["circle", "square", "triangle", "diamond"];
+const shapeOf = (id) => SHAPES[Math.max(0, CAT.drivers.findIndex((d) => d.id === id)) % SHAPES.length];
+const slotOf = (id) => `var(--s${(MODELS[id]?.slot ?? 0) % 8})`;
+const shortModel = (id) => (MODELS[id]?.name || id).replace(/^(Claude|GPT-[\d.]+)\s+/, "");
+const usd = (v) => (v == null || !isFinite(v) ? "–" : `$${v < 0.095 ? v.toFixed(3) : v.toFixed(2)}`);
+const fx = (v) => v.toFixed(1);
+
+function glyph(shape, r) {
+  const f = (v) => +v.toFixed(2);
+  if (shape === "square") return `M${f(-r * 0.86)},${f(-r * 0.86)}H${f(r * 0.86)}V${f(r * 0.86)}H${f(-r * 0.86)}Z`;
+  if (shape === "triangle") return `M0,${f(-r * 1.2)}L${f(r * 1.12)},${f(r * 0.8)}L${f(-r * 1.12)},${f(r * 0.8)}Z`;
+  if (shape === "diamond") return `M0,${f(-r * 1.2)}L${f(r * 1.2)},0L0,${f(r * 1.2)}L${f(-r * 1.2)},0Z`;
+  return `M${-r},0A${r},${r} 0 1,0 ${r},0A${r},${r} 0 1,0 ${-r},0Z`;
+}
+
+const markIcon = (shape, color) => sv("svg", { class: "mk", viewBox: "-8 -8 16 16", width: 14, height: 14, "aria-hidden": "true" },
+  sv("path", { d: glyph(shape, 5.4), style: `fill: ${color}` }));
+
+/** Each shown OS's setups (a driver and a model) in the chosen condition as the share of trials that fully pass against
+ * their mean cost at list price, over the tasks every shown setup of that OS ran, so a panel's points count the same
+ * trials; a point is on the frontier when no cheaper one passes as large a share. */
+function costPanels() {
+  const on = (k) => !COST.off.has(k);
+  return CAT.oses.filter((o) => on(`os:${o.id}`)).map((o) => {
+    const by = new Map();
+    for (const t of CAT.trials) {
+      if (t.os !== o.id || !MODELS[t.model]?.board || !on(`driver:${t.driver}`) || !on(`model:${t.model}`)) continue;
+      if (COST.cond !== "all" && t.condition !== COST.cond) continue;
+      const k = `${t.driver}|${t.model}`, c = `${t.task}|${t.condition}`;
+      if (!by.has(k)) by.set(k, new Map());
+      if (!by.get(k).has(c)) by.get(k).set(c, []);
+      by.get(k).get(c).push(t);
+    }
+    const sets = [...by.values()];
+    const cells = sets.length ? [...sets[0].keys()].filter((c) => sets.every((m) => m.has(c))) : [];
+    const points = [...by.entries()].map(([k, m]) => {
+      const [driver, model] = k.split("|");
+      const trials = cells.flatMap((c) => m.get(c));
+      const costs = trials.map((t) => t.cost).filter((v) => v != null);
+      const passed = trials.filter((t) => t.passed).length;
+      return { key: `${o.id}|${k}`, os: o.id, driver, model, trials, n: trials.length, passed,
+        share: trials.length ? passed / trials.length : 0, cost: costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null, frontier: false };
+    }).filter((p) => p.n && p.cost > 0);
+    let top = 0;
+    for (const p of points.slice().sort((a, b) => a.cost - b.cost || b.share - a.share)) {
+      if (p.share > top) { p.frontier = true; top = p.share; }
+    }
+    return { os: o, points, tasks: new Set(cells.map((c) => c.split("|")[0])).size };
+  }).filter((p) => p.points.length);
+}
+
+function costSection() {
+  const priced = CAT.trials.filter((t) => MODELS[t.model]?.board && t.cost != null);
+  if (new Set(priced.map((t) => `${t.os}|${t.driver}|${t.model}`)).size < 2) return null;
+  const ran = (key) => new Set(priced.map((t) => t[key]));
+  const oses = CAT.oses.filter((o) => ran("os").has(o.id));
+  const drivers = CAT.drivers.filter((d) => ran("driver").has(d.id));
+  const models = CAT.models.filter((m) => m.board && ran("model").has(m.id));
+  const host = h("div", { class: "pgrid" });
+  const tip = h("div", { class: "ptip", hidden: true, role: "tooltip" });
+  const stage = h("div", { class: "pstage" }, host, tip);
+  const table = h("div", { class: "ptable-wrap" });
+  const prev = new Map();
+  let panels = [], pinned = null, sort = { key: "share", dir: -1 };
+  const ctx = document.createElement("canvas").getContext("2d");
+  const measure = (s, weight, size) => { ctx.font = `${weight} ${size}px Inter, system-ui, sans-serif`; return ctx.measureText(s).width; };
+
+  const highlight = (match) => {
+    stage.classList.toggle("dim", !!match);
+    for (const el of stage.querySelectorAll("[data-key]")) el.classList.toggle("hl", !!match && match(el.dataset.key));
+    for (const el of table.querySelectorAll("tr[data-key]")) el.classList.toggle("hl", !!match && match(el.dataset.key));
+  };
+  const find = (key) => panels.flatMap((p) => p.points).find((q) => q.key === key);
+  const showTip = (key, pin) => {
+    const q = find(key), el = stage.querySelector(`.pt[data-key="${CSS.escape(key)}"]`);
+    if (!q || !el) return;
+    pinned = pin ? key : null;
+    tip.replaceChildren(...tipBody(q, panels.find((p) => p.os.id === q.os), pin));
+    tip.classList.toggle("pinned", !!pin);
+    tip.hidden = false;
+    const r = el.querySelector("path").getBoundingClientRect(), box = stage.getBoundingClientRect();
+    const half = tip.offsetWidth / 2, x = Math.min(Math.max(r.left + r.width / 2 - box.left, half + 4), box.width - half - 4);
+    const below = r.top - box.top < tip.offsetHeight + 16;
+    tip.classList.toggle("below", below);
+    tip.style.left = `${x}px`;
+    tip.style.top = `${(below ? r.bottom : r.top) - box.top}px`;
+    highlight((k) => k === key);
+  };
+  const hideTip = () => { pinned = null; tip.hidden = true; highlight(null); };
+
+  stage.addEventListener("pointerover", (e) => {
+    const el = e.target.closest("[data-key]");
+    if (el && !pinned && e.pointerType !== "touch") showTip(el.dataset.key, false);
+  });
+  stage.addEventListener("pointerout", (e) => {
+    if (!pinned && e.target.closest("[data-key]") && !e.relatedTarget?.closest?.("[data-key]")) hideTip();
+  });
+  stage.addEventListener("click", (e) => {
+    if (e.target.closest(".ptip")) return;
+    const el = e.target.closest("[data-key]");
+    if (el && pinned !== el.dataset.key) showTip(el.dataset.key, true);
+    else hideTip();
+  });
+  stage.addEventListener("focusin", (e) => { const el = e.target.closest(".pt"); if (el && !pinned) showTip(el.dataset.key, false); });
+  stage.addEventListener("focusout", (e) => { if (!pinned && !stage.contains(e.relatedTarget)) hideTip(); });
+  stage.addEventListener("keydown", (e) => {
+    const el = e.target.closest(".pt");
+    if (e.key === "Escape") hideTip();
+    else if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); showTip(el.dataset.key, true); }
+  });
+
+  const paint = () => {
+    const all = panels.flatMap((p) => p.points);
+    if (!all.length) return;
+    const costs = all.map((q) => q.cost);
+    const lo = Math.min(...costs) / 1.6, hi = Math.max(...costs) * 1.6;
+    for (const [i, fig] of [...host.children].entries()) {
+      const plot = fig.querySelector(".pplot");
+      if (plot?.clientWidth) plot.replaceChildren(costPlane(panels[i], lo, hi, plot.clientWidth, prev, measure));
+    }
+    requestAnimationFrame(() => {
+      for (const g of stage.querySelectorAll(".pt")) { g.style.transform = g.dataset.to; prev.set(g.dataset.key, g.dataset.to); }
+    });
+  };
+  const draw = () => {
+    hideTip();
+    panels = costPanels();
+    host.replaceChildren(...panels.map((p) => h("figure", { class: "ppanel" },
+      h("figcaption", { class: "pcap" }, h("b", {}, p.os.name), h("span", {}, COST.cond === "all" ? "both conditions" : COST.cond),
+        h("small", {}, `${p.tasks} task${p.tasks === 1 ? "" : "s"} · ${[...new Set(p.points.map((q) => q.n))].join("–")} trials a point`)),
+      h("div", { class: "pplot" }),
+      h("p", { class: "pline" }, frontierLine(p)))));
+    host.classList.toggle("one", panels.length === 1);
+    paint();
+    table.replaceChildren(costTable(panels, sort, (key) => {
+      sort = key === sort.key ? { key, dir: -sort.dir } : { key, dir: key === "name" || key === "cost" || key === "per" ? 1 : -1 };
+      draw();
+    }));
+    sync.forEach((f) => f());
+  };
+  new ResizeObserver(() => requestAnimationFrame(paint)).observe(host);
+  table.addEventListener("pointerover", (e) => { const tr = e.target.closest("tr[data-key]"); if (tr && !pinned) highlight((k) => k === tr.dataset.key); });
+  table.addEventListener("pointerleave", () => { if (!pinned) highlight(null); });
+
+  const sync = [];
+  const conds = h("div", { class: "tabs", role: "group", "aria-label": "Condition" },
+    [["background", "Background"], ["foreground", "Foreground"], ["all", "Both"]].map(([id, label]) =>
+      h("button", { "data-id": id, onclick: () => { COST.cond = id; draw(); } }, label)));
+  sync.push(() => { for (const b of conds.children) b.setAttribute("aria-pressed", String(b.dataset.id === COST.cond)); });
+  const part = (key, i) => key.split("|")[i];
+  const chips = (label, items, kind, at, icon) => {
+    if (items.length < 2) return null;
+    const row = h("div", { class: "pchips", role: "group", "aria-label": label }, h("span", { class: "plab" }, label),
+      items.map((x) => h("button", { class: "pchip", "data-id": `${kind}:${x.id}`,
+        onclick: () => {
+          const k = `${kind}:${x.id}`;
+          if (!COST.off.has(k) && items.filter((y) => !COST.off.has(`${kind}:${y.id}`)).length === 1) return;
+          COST.off.has(k) ? COST.off.delete(k) : COST.off.add(k);
+          draw();
+        },
+        onpointerenter: () => { if (!pinned) highlight((key) => part(key, at) === x.id); },
+        onpointerleave: () => { if (!pinned) highlight(null); } }, icon(x), x.short || x.name)));
+    sync.push(() => { for (const b of row.querySelectorAll(".pchip")) b.setAttribute("aria-pressed", String(!COST.off.has(b.dataset.id))); });
+    return row;
+  };
+  const reset = h("button", { class: "preset", onclick: () => { COST.off.clear(); draw(); } }, "Show all");
+  sync.push(() => { reset.hidden = !COST.off.size; });
+  const controls = h("div", { class: "pcontrols" },
+    h("div", { class: "pchips" }, h("span", { class: "plab" }, "Trials"), conds),
+    chips("OS", oses, "os", 0, () => null),
+    chips("Driver", drivers.map((d) => ({ ...d, short: driverLabel(d.id) })), "driver", 1, (d) => markIcon(shapeOf(d.id), "var(--ink-2)")),
+    chips("Model", models, "model", 2, (m) => h("span", { class: "dot", style: { background: slotOf(m.id) } })),
+    reset);
+  draw();
+
+  return h("section", { class: "cost", "aria-labelledby": "cost-h" },
+    h("div", { class: "section-head", id: "cost", "data-nav": "Cost" }, h("h2", { id: "cost-h" }, "What a pass costs"),
+      h("p", {}, "Each point is one setup, an operating system, a driver and a model: its full pass against what a trial costs. Hover or tap a point for its replays; filter with the chips.")),
+    controls, stage,
+    h("div", { class: "pkey" },
+      drivers.length > 1 ? drivers.map((d) => h("span", {}, markIcon(shapeOf(d.id), "var(--ink-2)"), driverLabel(d.id))) : null,
+      h("span", {}, h("i", { class: "pk on" }), "on the frontier"), h("span", {}, h("i", { class: "pk off" }), "passes no more than a cheaper point"),
+      h("span", {}, h("i", { class: "pk line" }), "the frontier: the most any point passes at that cost or less")),
+    h("p", { class: "dnote" }, "Cost is the mean a trial at list price, from the tokens each trial's trajectory reports (Anthropic's prices for Claude, OpenAI's for GPT-6), on a log scale. In a panel every point counts the same tasks and runs: those every shown setup ran."),
+    table);
+}
+
+function costPlane(p, lo, hi, W, prev, measure) {
+  const H = Math.round(Math.max(300, Math.min(430, W * 0.64)));
+  const M = { l: 56, r: 12, t: 14, b: 44 };
+  const L = Math.log10;
+  const X = (c) => M.l + ((L(c) - L(lo)) / (L(hi) - L(lo))) * (W - M.l - M.r);
+  const Y = (v) => M.t + (1 - v) * (H - M.t - M.b);
+  const svg = sv("svg", { class: "psvg", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img",
+    "aria-label": `${p.os.name}: ${p.points.map((q) => `${MODELS[q.model]?.name} through ${driverLabel(q.driver)}, ${pct(q.share)} full pass at ${usd(q.cost)} a trial${q.frontier ? ", on the frontier" : ""}`).join("; ")}` });
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+    svg.append(sv("line", { class: "pgl", x1: M.l, x2: W - M.r, y1: fx(Y(v)), y2: fx(Y(v)) }));
+    svg.append(sv("text", { class: "ptick", x: M.l - 8, y: fx(Y(v) + 4), "text-anchor": "end" }, pct(v)));
+  }
+  for (const c of logTicks(lo, hi)) {
+    svg.append(sv("line", { class: "pgl", x1: fx(X(c)), x2: fx(X(c)), y1: M.t, y2: H - M.b }));
+    svg.append(sv("text", { class: "ptick", x: fx(X(c)), y: H - M.b + 17, "text-anchor": "middle" }, `$${c}`));
+  }
+  svg.append(sv("text", { class: "paxis", x: fx((M.l + W - M.r) / 2), y: H - 6, "text-anchor": "middle" }, "cost per trial, log scale"));
+  svg.append(sv("text", { class: "paxis", transform: `translate(13 ${fx((M.t + H - M.b) / 2)}) rotate(-90)`, "text-anchor": "middle" }, "full pass"));
+  const front = p.points.filter((q) => q.frontier).sort((a, b) => a.cost - b.cost);
+  if (front.length) {
+    const steps = front.slice(1).map((q) => `H${fx(X(q.cost))}V${fx(Y(q.share))}`).join("") + `H${W - M.r}`;
+    const start = `M${fx(X(front[0].cost))},${fx(Y(0))}V${fx(Y(front[0].share))}`;
+    svg.append(sv("path", { class: "parea", d: `${start}${steps}V${fx(Y(0))}Z` }));
+    svg.append(sv("path", { class: "pfront", d: `${start}${steps}` }));
+  }
+  const multi = new Set(p.points.map((q) => q.driver)).size > 1;
+  const at = (q) => [X(q.cost), Y(q.share)];
+  const dots = p.points.map((q) => { const [x, y] = at(q); return [x - 10, y - 10, x + 10, y + 10]; });
+  const bounds = [M.l - 4, 0, W, H - M.b + 4];
+  const placed = [];
+  for (const q of p.points.slice().sort((a, b) => b.frontier - a.frontier || b.share - a.share || a.cost - b.cost)) {
+    const [x, y] = at(q);
+    const l1 = multi ? `${shortModel(q.model)} · ${driverLabel(q.driver)}` : shortModel(q.model);
+    const l2 = `${pct(q.share)} · ${usd(q.cost)}`;
+    const w = Math.max(measure(l1, 650, 12.5), measure(l2, 500, 11.5)) + 2, ht = 29, R = 12;
+    let best = null;
+    for (const [bx, by, anchor] of [[x + R, y - ht / 2, "start"], [x - R - w, y - ht / 2, "end"], [x - w / 2, y - R - ht, "middle"],
+      [x - w / 2, y + R, "middle"], [x + R * 0.7, y - R * 0.7 - ht, "start"], [x + R * 0.7, y + R * 0.7, "start"],
+      [x - R * 0.7 - w, y - R * 0.7 - ht, "end"], [x - R * 0.7 - w, y + R * 0.7, "end"]]) {
+      const r = [bx, by, bx + w, by + ht];
+      const cost = dots.reduce((s, b) => s + overlap(r, b) * 3, 0) + placed.reduce((s, b) => s + overlap(r, b.r) * 6, 0)
+        + (area(r) - overlap(r, bounds)) * 10;
+      if (!best || cost < best.cost) best = { cost, r, anchor };
+    }
+    if (placed.some((b) => overlap(best.r, b.r) > 0) || area(best.r) > overlap(best.r, bounds)) continue;
+    placed.push(best);
+    const tx = { start: best.r[0], end: best.r[2], middle: (best.r[0] + best.r[2]) / 2 }[best.anchor];
+    svg.append(sv("g", { class: `pl${q.frontier ? " on" : ""}`, "data-key": q.key, transform: `translate(${fx(tx)} ${fx(best.r[1])})` },
+      sv("text", { y: 12, "text-anchor": best.anchor, class: "pl1" }, l1),
+      sv("text", { y: 26, "text-anchor": best.anchor, class: "pl2" }, l2)));
+  }
+  for (const q of p.points) {
+    const [x, y] = at(q);
+    const to = `translate(${fx(x)}px, ${fx(y)}px)`;
+    svg.append(sv("g", { class: `pt${q.frontier ? " on" : ""}${prev.has(q.key) ? "" : " new"}`, "data-key": q.key, "data-to": to,
+      style: `transform: ${prev.get(q.key) || to}; --c: ${slotOf(q.model)}`, tabindex: "0", role: "button",
+      "aria-label": `${MODELS[q.model]?.name} through ${driverLabel(q.driver)} on ${p.os.name}: ${q.passed} of ${q.n} trials pass, ${usd(q.cost)} a trial` },
+    sv("circle", { r: 16, class: "phit" }), sv("path", { d: glyph(shapeOf(q.driver), q.frontier ? 7.5 : 6.5) })));
+  }
+  return svg;
+}
+
+const area = (r) => Math.max(0, r[2] - r[0]) * Math.max(0, r[3] - r[1]);
+const overlap = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+
+function logTicks(lo, hi) {
+  const steps = hi / lo > 30 ? [1, 3] : [1, 2, 3, 5];
+  const out = [];
+  for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) {
+    for (const m of steps) { const v = +(m * 10 ** e).toPrecision(6); if (v >= lo && v <= hi) out.push(v); }
+  }
+  return out;
+}
+
+const setupName = (q, multi) => `${MODELS[q.model]?.name || q.model}${multi ? ` through ${driverLabel(q.driver)}` : ""}`;
+
+/** A panel's frontier in a sentence: where it starts and ends, and what the dearer end buys over the cheaper. */
+function frontierLine(p) {
+  const multi = new Set(p.points.map((q) => q.driver)).size > 1;
+  const front = p.points.filter((q) => q.frontier).sort((a, b) => a.cost - b.cost);
+  const said = (q) => [h("b", {}, setupName(q, multi)), ` (${pct(q.share)} at ${usd(q.cost)})`];
+  if (!front.length) return "No setup shown here passes a trial.";
+  const off = p.points.length - front.length;
+  const rest = off ? ` The other ${off === 1 ? "point passes" : `${off} pass`} no more than a cheaper one.` : "";
+  if (front.length === 1) return [...said(front[0]), p.points.length > 1 ? " passes the most, and nothing passes as much for less." : ".", rest];
+  const a = front[0], b = front[front.length - 1];
+  return ["The frontier runs from ", ...said(a), " to ", ...said(b),
+    `: ${(b.cost / a.cost).toFixed(1)}× the cost a trial for ${Math.round((b.share - a.share) * 100)} points more.`, rest];
+}
+
+function tipBody(q, p, pin) {
+  const multi = new Set(p.points.map((x) => x.driver)).size > 1;
+  const beat = q.frontier ? null : p.points.filter((x) => x.frontier && x.cost <= q.cost && x.share >= q.share).sort((a, b) => a.cost - b.cost)[0];
+  const pass = q.trials.find((t) => t.passed), fail = q.trials.find((t) => !t.passed);
+  const row = (k, v) => h("div", { class: "trow" }, h("span", {}, k), h("b", {}, v));
+  return [
+    h("div", { class: "thead" }, h("span", { class: "dot", style: { background: slotOf(q.model) } }), MODELS[q.model]?.name || q.model),
+    h("div", { class: "tsub" }, [driverLabel(q.driver), p.os.name, COST.cond === "all" ? "both conditions" : COST.cond, HARNESS_NAMES[MODELS[q.model]?.harness]].filter(Boolean).join(" · ")),
+    row("Full pass", `${q.passed} of ${q.n} · ${pct(q.share)}`),
+    row("A trial", usd(q.cost)),
+    row("A full pass", q.passed ? usd(q.cost / q.share) : "no pass"),
+    h("div", { class: "tfoot" }, q.frontier ? "On the frontier: nothing cheaper passes as much."
+      : beat ? `Off the frontier: ${setupName(beat, multi)} passes ${beat.share > q.share ? "more" : "as much"} for less.` : "No pass, so off the frontier."),
+    pin ? h("div", { class: "tlinks" }, pass ? h("a", { href: hashOf(pass) }, "Replay a pass →") : null, fail ? h("a", { href: hashOf(fail) }, "Replay a failure →") : null)
+      : h("div", { class: "thint" }, "Click for its replays"),
+  ];
+}
+
+function costTable(panels, sort, onsort) {
+  const multiOs = panels.length > 1;
+  const rows = panels.flatMap((p) => p.points.map((q) => ({ q, p })));
+  const val = { name: ({ q }) => `${q.os} ${MODELS[q.model]?.name} ${driverLabel(q.driver)}`, share: ({ q }) => q.share,
+    cost: ({ q }) => q.cost, per: ({ q }) => (q.passed ? q.cost / q.share : Infinity) };
+  rows.sort((a, b) => {
+    const x = val[sort.key](a), y = val[sort.key](b);
+    return (typeof x === "string" ? x.localeCompare(y) : x - y) * sort.dir || a.q.cost - b.q.cost;
+  });
+  const th = (key, label, cls) => h("th", { class: cls, "aria-sort": sort.key === key ? (sort.dir > 0 ? "ascending" : "descending") : null },
+    h("button", { onclick: () => onsort(key) }, label, h("span", { class: "sarr", "aria-hidden": "true" }, sort.key === key ? (sort.dir > 0 ? "▲" : "▼") : "")));
+  return h("table", { class: "ptable" },
+    h("thead", {}, h("tr", {}, th("name", "Setup", "l"), th("share", "Full pass"), th("cost", "A trial"), th("per", "A full pass"), h("th", {}, "Frontier"))),
+    h("tbody", {}, rows.map(({ q, p }) => h("tr", { "data-key": q.key },
+      h("td", { class: "l" }, h("span", { class: "psetup" }, markIcon(shapeOf(q.driver), slotOf(q.model)),
+        h("span", {}, h("b", {}, MODELS[q.model]?.name || q.model), h("small", {}, [driverLabel(q.driver), multiOs ? p.os.name : null].filter(Boolean).join(" · "))))),
+      h("td", {}, h("span", { class: "pbar" }, h("i", { style: { width: pct(q.share) } })), h("b", {}, pct(q.share)), h("small", {}, ` ${q.passed}/${q.n}`)),
+      h("td", {}, usd(q.cost)),
+      h("td", {}, q.passed ? usd(q.cost / q.share) : "–"),
+      h("td", {}, q.frontier ? h("span", { class: "fyes", "aria-label": "on the frontier" }, "✓") : "")))));
+}
+
+/** How trycua's task score, its partial credit, differs from a full pass: the three levels, where the credit goes from
+ * one to the next on each OS and condition, how the trials that fail still score, and the task-score figures. */
+function partialSection() {
+  const runs = CAT.trials.filter((t) => MODELS[t.model]?.board && t.grade?.task);
+  if (!runs.length) return null;
+  const rows = CAT.oses.flatMap((o) => CAT.conditions.map((c) => {
+    const r = runs.filter((t) => t.os === o.id && t.condition === c.id);
+    if (!r.length) return null;
+    const share = (f) => r.filter(f).length / r.length;
+    const done = (t) => t.grade.task.result;
+    return { label: `${o.name} · ${c.name.toLowerCase()}`, n: r.length, bg: c.id === "background", steps: [
+      meanOf(r.map((t) => t.grade.task.score)), share(done), share((t) => t.passed)] };
+  })).filter(Boolean);
+  const heads = ["Task score, mean", "Task done", "Full pass"];
+  const ladder = h("div", { class: "ladder", role: "table", "aria-label": "Mean task score, task done and full pass, per OS and condition" },
+    h("div", { class: "lrow lhead", role: "row" }, h("span", { role: "columnheader" }), heads.map((x, i) => h("span", { role: "columnheader", class: `l${i}` }, x))),
+    rows.map((r) => h("div", { class: "lrow", role: "row" }, h("span", { class: "lname", role: "rowheader" }, r.label, h("small", {}, `${r.n} trials`)),
+      r.steps.map((v, i) => h("span", { class: `lcell l${i}`, role: "cell", "data-k": heads[i] },
+        h("span", { class: "lbar" }, h("i", { style: { width: pct(v) } })), h("b", {}, pct(v)))))));
+  const hist = h("div");
+  const histTabs = h("div", { class: "tabs", role: "group", "aria-label": "Condition" });
+  const pickHist = (cond) => {
+    for (const b of histTabs.children) b.setAttribute("aria-pressed", String(b.dataset.id === cond));
+    hist.replaceChildren(scoreHist(runs.filter((t) => cond === "all" || t.condition === cond), cond));
+  };
+  histTabs.append(...[["all", "Both"], ["foreground", "Foreground"], ["background", "Background"]].map(([id, label]) =>
+    h("button", { "data-id": id, onclick: () => pickHist(id) }, label)));
+  pickHist("all");
+  const figs = [...CAT.figures, ...(CAT.driver_figures || [])].filter((f) => f.endsWith("task-score"));
+  return h("section", { class: "partial", "aria-labelledby": "partial-h" },
+    h("div", { class: "section-head", id: "partial", "data-nav": "Partial credit" }, h("h2", { id: "partial-h" }, "Partial credit"),
+      h("p", {}, "trycua's task score, how it differs from a full pass, and where the gap comes from.")),
+    h("div", { class: "levels" },
+      h("article", {}, h("span", { class: "lvl" }, "Partial credit"), h("h3", {}, "Task score"),
+        h("p", {}, "trycua's evaluator runs weighted checks on the files the apps left. The task score is the share of points that held, from 0 to 100%: a run that fixed the calendar but not the workbook still scores.")),
+      h("article", {}, h("span", { class: "lvl" }, "trycua's success"), h("h3", {}, "Task done"),
+        h("p", {}, "Every one of the task's checks held: a task score of 100%. Anything less is partial credit and counts as the task not done.")),
+      h("article", { class: "full" }, h("span", { class: "lvl" }, "What this page counts"), h("h3", {}, "Full pass"),
+        h("p", {}, "The task done, through the GUI only, and in the background with the user undisturbed on all eight of trycua's criteria. A trial can score 100% on the task and still fail."))),
+    h("div", { class: "subhead" }, h("h3", {}, "Where the credit goes"), h("p", {}, "Every trial on the board, each OS and condition, from the mean task score down to the full pass.")),
+    ladder,
+    h("div", { class: "subhead" }, h("h3", {}, "How the trials that fail still score"), h("p", {}, "Every trial that didn't fully pass, by its task score, a column per tenth."), histTabs),
+    hist,
+    figs.length ? [h("div", { class: "subhead" }, h("h3", {}, "Task score by condition and by driver"), h("p", {}, "The results and drivers figures, scored by partial credit instead of full pass.")),
+      figures(figs, (f) => (f.startsWith("drivers") ? "Task score by driver" : "Task score by condition"))] : null);
+}
+
+function scoreHist(runs, cond) {
+  const failed = runs.filter((t) => !t.passed);
+  const kind = (t) => (t.grade.task.result ? "done" : "short");
+  const bins = Array.from({ length: 11 }, () => ({ done: 0, short: 0 }));
+  for (const t of failed) bins[Math.min(10, Math.floor((t.grade.task.score ?? 0) * 10 + 1e-9))][kind(t)]++;
+  const top = Math.max(1, ...bins.map((b) => b.done + b.short));
+  const half = failed.filter((t) => (t.grade.task.score ?? 0) >= 0.5).length, done = failed.filter((t) => t.grade.task.result).length;
+  const NAMES = { short: "task not done", done: cond === "foreground" ? "task done, then left the GUI" : "task done, then left the GUI or disturbed the user" };
+  return h("div", { class: "hist" },
+    tips(h("div", { class: "hbars" }, bins.map((b, i) => h("div", { class: "hcol" },
+      h("div", { class: "hstack" }, ["short", "done"].map((k) => b[k] ? h("i", { class: `h${k}`, style: { height: `${(b[k] / top) * 100}%` },
+        "data-tip": `${b[k]} trial${b[k] === 1 ? "" : "s"} scoring ${i === 10 ? "100%" : `${i * 10}–${i * 10 + 9}%`}: ${NAMES[k]}` }) : null)),
+      h("span", { class: "hlab" }, i === 10 ? "100%" : `${i * 10}`))))),
+    h("div", { class: "okey" }, Object.entries(NAMES).map(([k, v]) => h("span", {}, h("i", { class: `hk h${k}` }), v))),
+    failed.length ? h("p", { class: "dnote" }, `Of the ${failed.length} trials here that didn't fully pass, `, h("b", {}, `${half} (${pct(half / failed.length)})`),
+      " still scored half the task's points or more, and ", h("b", {}, `${done}`), ` did the whole task but ${NAMES.done.replace("task done, then ", "")}. Both count toward the task score and not toward a full pass.`) : null);
 }
 
 function driversSection() {
@@ -312,7 +696,7 @@ function driversSection() {
     h("div", { class: "section-head", id: "drivers", "data-nav": "Drivers" }, h("h2", { id: "drivers-h" }, "How the drivers differ"),
       h("p", {}, `${OSES[c.os]?.name || c.os} · ${MODELS[c.model]?.name || c.model} · the same ${c.tasks.length} tasks and seeds; only the computer-use driver changes.`)),
     cards, outcomeKey(cards),
-    figures(CAT.driver_figures, (f) => (f.endsWith("task-score") ? "Task score by driver" : "Full pass by driver")),
+    figures(CAT.driver_figures.filter((f) => !f.endsWith("task-score")), () => "Full pass by driver"),
     extra.length ? h("div", { class: "solo" }, figures(extra, () => "Which of the user's eight criteria each driver broke in the background")) : null,
     h("p", { class: "dnote" }, "Every driver also serves AgentEnv's ", h("code", {}, "computer_*"),
       " tools, which the grader and the recordings use; no driver's agents here see them. cua-driver's first runs on ",
@@ -506,14 +890,14 @@ function modelsSection() {
   const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
   const depth = Math.max(...runs.map((t) => t.of));
   const cards = tips(h("div", { class: "xcards" }, models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth))));
-  const figs = (CAT.compare_figures || []).filter((f) => f === "models-tasks" || f === "pareto");
+  const figs = (CAT.compare_figures || []).filter((f) => f === "models-tasks");
   return h("section", { class: "models", "aria-labelledby": "models-h" },
     h("div", { class: "section-head", id: "models", "data-nav": "Models" }, h("h2", { id: "models-h" }, "How the models differ"),
       h("p", {}, `${os.name} · ${driverName(CAT.driver)} · the same ${tasks.length} tasks; only the model and its harness change.`)),
     cards, outcomeKey(cards),
     models.some((m) => m.harness === "codex-cli") ? h("p", { class: "dnote" }, "Codex CLI hands the model a tool's structured result alone, so GPT never sees ",
       `${driverName(CAT.driver)}'s window screenshots, only its accessibility tree.`) : null,
-    figs.length ? figures(figs, (f) => (f === "pareto" ? "Cost per trial against full pass, a point per model" : "Passes by task and model: a row per task and a column per model, foreground and background")) : null);
+    figs.length ? figures(figs, () => "Passes by task and model: a row per task and a column per model, foreground and background") : null);
 }
 
 function modelCard(m, runs, tasks, depth) {

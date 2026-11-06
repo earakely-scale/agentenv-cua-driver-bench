@@ -570,64 +570,60 @@ def tasks_notes(os_, blocks, groups, cols):
     return out
 
 def pareto_spec(cat):
-    """The share of trials passed against a trial's mean cost at list price: a panel of the models the bench's first
-    driver ran on the OS with the most of them, and one of the drivers of the widest comparison, each over the trials
-    every point of it ran, with the frontier."""
+    """The share of trials that fully pass against a trial's mean cost at list price, a row of panels per condition: the
+    models the bench's first driver ran on the OS with the most of them, and the drivers of the widest comparison, each
+    over the trials every point of it ran, with the frontier."""
     os_, models = widest(cat)
     names = {m["id"]: m["name"] for m in cat["models"]}
     osn = {o["id"]: o["name"] for o in cat["oses"]}
-    sets = [(f"Models on {os_['name']}", f"through {label_of(cat, cat['driver'])}", os_["id"],
+    sets = [("models", f"Models on {os_['name']}", f"through {label_of(cat, cat['driver'])}", os_["id"],
              [(cat["driver"], m["id"], m["name"], m["slot"]) for m in models])]
     if cat["comparisons"]:
         c = max(cat["comparisons"], key=lambda c: (len(c["drivers"]), len(c["tasks"])))
         slots = {d["id"]: d["slot"] for d in cat["drivers"]}
-        sets.append((f"Drivers on {osn[c['os']]}", names[c["model"]], c["os"],
+        sets.append(("drivers", f"Drivers on {osn[c['os']]}", names[c["model"]], c["os"],
                      [(d["id"], c["model"], label_of(cat, d["id"]), slots[d["id"]]) for d in c["drivers"]]))
     panels = []
-    for label, via, os_id, entries in sets:
-        points = tally(cat, os_id, entries)
-        if len(points) < 2:
-            continue
-        for p in frontier(points):
-            p["frontier"] = True
-        ns = sorted({p["n"] for p in points})
-        panels.append({"label": label, "note": f"{via} · {ns[0]}{f'–{ns[-1]}' if len(ns) > 1 else ''} trials each",
-                       "points": points, "os": osn[os_id], "via": via})
-    sub = ("The share of trials passed against what a trial costs at list price, on a log scale. The line is the "
-           "frontier: the most any point passes at that cost or less; a hollow point passes less than a cheaper one.")
-    foot = ("Each panel counts the same trials for every point: those of the tasks and conditions all of them ran. Cost "
-            "from the tokens each trial's trajectory reports, at Anthropic's and OpenAI's list prices. Tasks by trycua's "
-            "Cua Driver Bench, run on AgentEnv; not trycua's official results.")
+    for cond in (c for c in cat["conditions"] if c["id"] in catalog.CONDITIONS):
+        for kind, label, via, os_id, entries in sets:
+            points = tally(cat, os_id, entries, cond["id"])
+            if len(points) < 2:
+                continue
+            for p in frontier(points):
+                p["frontier"] = True
+            ns = sorted({p["n"] for p in points})
+            panels.append({"label": f"{label} · {cond['name'].lower()}", "kind": kind, "cond": cond["name"].lower(),
+                           "note": f"{via} · {ns[0]}{f'–{ns[-1]}' if len(ns) > 1 else ''} trials each",
+                           "points": points, "os": osn[os_id], "via": via})
+    sub = ("The share of trials that fully pass against what a trial costs at list price, on a log scale, a row per "
+           "condition. The line is the frontier: the most any point passes at that cost or less; a hollow point passes "
+           "no more than a cheaper one.")
+    foot = ("Each panel counts the same trials for every point: those of the tasks all of them ran in that condition. "
+            "Cost from the tokens each trial's trajectory reports, at Anthropic's and OpenAI's list prices. Tasks by "
+            "trycua's Cua Driver Bench, run on AgentEnv; not trycua's official results.")
     desc = "; ".join(f"{p['label']}, {q['name']}: {pct(q['share'])} of {q['n']} trials passed at ${q['cost']:.2f} a "
                      f"trial{', on the frontier' if q['frontier'] else ''}" for p in panels for q in p["points"])
     return {"title": "Passes against cost", "subtitle": sub, "foot": foot, "desc": desc, "draw": scatter,
-            "panels": panels, "notes": pareto_notes(panels)}
+            "panels": panels, "cols": len(sets), "notes": pareto_notes(panels)}
 
 
 def pareto_notes(panels):
-    """The frontier's sentences: the first panel's most passes and what more money buys past them, its frontier and what
-    beats each point off it, and the other panels' points in order."""
+    """A sentence per panel: what passes the most and at what cost, and the frontier up to it; or, when every point
+    passes as much, that the cheapest is the whole frontier."""
     out = []
     said = lambda q: f"{q['name']} ({pct(q['share'])} at ${q['cost']:.2f})"
-    for k, p in enumerate(panels):
-        pts, front = p["points"], sorted((q for q in p["points"] if q["frontier"]), key=lambda q: q["cost"])
-        if k == 0:
-            top = max(pts, key=lambda q: (q["share"], -q["cost"]))
-            out.append(f"On {p['os']}, {top['name']} passes the most trials, {pct(top['share'])} ({top['passed']} of "
-                       f"{top['n']}), at ${top['cost']:.2f} a trial" + "".join(
-                           f"; {q['name']} costs {q['cost'] / top['cost']:.1f}× as much and passes {pct(q['share'])}"
-                           for q in pts if q["cost"] > top["cost"]) + ".")
-            beaten = [f"{q['name']} than " + next(f["name"] for f in front if f["cost"] <= q["cost"]
-                                                  and f["share"] >= q["share"])
-                      for q in sorted(pts, key=lambda q: -q["cost"]) if not q["frontier"]]
-            out.append(f"The frontier is {join([said(q) for q in front])}"
-                       + (f". Every other model passes no more than a cheaper one: {join(beaten)}." if beaten else "."))
-        else:
-            order = sorted(pts, key=lambda q: -q["share"])
-            out.append(f"On {p['os']}, with {p['via']}, " + ", ".join(
-                f"{q['name']} passes {pct(q['share'])} at ${q['cost']:.2f} a trial" if j == 0
-                else f"{q['name']} {pct(q['share'])} at ${q['cost']:.2f}" for j, q in enumerate(order))
-                + (": each costlier driver passes more." if all(q["frontier"] for q in pts) else "."))
+    for p in panels:
+        pts = p["points"]
+        front = sorted((q for q in pts if q["frontier"]), key=lambda q: q["cost"])
+        where = f"In the {p['cond']} on {p['os']}" + (f", with {p['via']}" if p["kind"] == "drivers" else "")
+        if len({q["share"] for q in pts}) == 1:
+            out.append(f"{where}, every {p['kind'][:-1]} passes {pct(pts[0]['share'])}, so the cheapest, "
+                       f"{said(front[0])}, is the whole frontier.")
+            continue
+        top = max(pts, key=lambda q: (q["share"], -q["cost"]))
+        out.append(f"{where}, {top['name']} passes the most, {pct(top['share'])} at ${top['cost']:.2f} a trial; "
+                   + (f"the frontier is {join([said(q) for q in front])}." if len(front) > 1
+                      else "nothing cheaper passes as much."))
     return out
 
 def gap_spec(cat):
@@ -716,15 +712,16 @@ def os_gaps(cat):
     return out
 
 
-def tally(cat, os_, entries):
+def tally(cat, os_, entries, cond=None):
     """Each of ``entries`` (driver, model, name, slot) on ``os_`` as the share of its trials that passed and their mean cost
-    at list price, over the tasks and conditions every entry has trials of, so that every point counts the same ones."""
+    at list price, over the tasks and conditions (``cond`` alone if given) every entry has trials of, so that every point
+    counts the same ones."""
     by = defaultdict(list)
     for t in cat["trials"]:
         if t["os"] == os_:
             by[(t["driver"], t["model"], t["task"], t["condition"])].append(t)
     cells = [(t["id"], c) for t in cat["tasks"] for c in t["conditions"]
-             if all(by[(d, m, t["id"], c)] for d, m, *_ in entries)]
+             if c == (cond or c) and all(by[(d, m, t["id"], c)] for d, m, *_ in entries)]
     out = []
     for d, m, name, slot in entries:
         trials = [x for t, c in cells for x in by[(d, m, t, c)]]
@@ -979,14 +976,15 @@ def scatter(spec, theme, phone):
     s = PHONE if phone else DESKTOP
     panels = spec["panels"]
     n = len(panels)
+    cols = 1 if phone else min(n, spec.get("cols") or n)
+    rows = ceil(n / cols)
     margin = 16 if phone else 28
-    W = 360 if phone else 60 + spec.get("panel_w", 380) * n
+    W = 360 if phone else 60 + spec.get("panel_w", 380) * cols
     ph = (300 if phone else 330) + label_h(s, True, True)
-    svg, y0 = frame(spec, W, n * ph + (n - 1) * 26 if phone else ph, theme, phone)
-    pw = W - 2 * margin if phone else (W - 2 * margin - (n - 1) * 36) / n
+    svg, y0 = frame(spec, W, rows * ph + (rows - 1) * 26, theme, phone)
+    pw = (W - 2 * margin - (cols - 1) * 36) / cols
     for k, p in enumerate(panels):
-        plane(svg, margin + (0 if phone else k * (pw + 36)), y0 + (k * (ph + 26) if phone else 0), pw, ph, p, theme, s,
-              phone)
+        plane(svg, margin + (k % cols) * (pw + 36), y0 + (k // cols) * (ph + 26), pw, ph, p, theme, s, phone)
     return svg.render(spec["title"], spec["desc"])
 
 

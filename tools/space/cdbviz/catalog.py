@@ -187,7 +187,7 @@ def results_md(cat):
     drivers = {d["id"]: (i, d["name"]) for i, d in enumerate(cat["drivers"])}
     probes = {t["id"]: short(t) for t in cat["tasks"]}
     osn = {o["id"]: o["name"] for o in cat["oses"]}
-    head = "| OS | Model | Driver | Condition | Task score | Full pass | " + " | ".join(probes[t] for t in tasks) + " |"
+    head = "| OS | Model | Driver | Condition | Full pass | " + " | ".join(probes[t] for t in tasks) + " | Task score |"
     lines = [head, "|" + "---|" * (6 + len(tasks))]
     order = {c: i for i, c in enumerate(CONDITIONS)}
     used = []
@@ -199,16 +199,16 @@ def results_md(cat):
             cv = caveat(cat, r["os"], r["condition"], t)
             if cv and cv not in used:
                 used.append(cv)
-            cells.append("–" if not p else f"{pct(p['score'])} · {p['passed']}/{p['n']}{cv['mark'] if cv else ''}")
+            cells.append("–" if not p else f"{p['passed']}/{p['n']}{cv['mark'] if cv else ''}")
         lost = f" (incomplete: {r['missing']} missing)" if r.get("missing") else ""
         lines.append(f"| {osn.get(r['os'], r['os'])} | {names.get(r['model'], r['model'])}{lost} | "
                      f"{drivers[r['driver']][1]} | {r['condition']} | "
-                     f"{pct(r['task_score'])} | {pct(r['full_pass'])} ({r['passed']}/{r['n_trials']}) | "
-                     + " | ".join(cells) + " |")
-    lines += ["", "Task score: trycua's evaluator (weighted checks), mean over runs, then over tasks. Full pass: every "
-              "half of the grade held (the task, GUI only, the sentinel's log, and in the background the user "
-              "undisturbed), as the share of runs per task averaged over tasks, with the count of passing trials. "
-              "Each task cell: mean task score · passing runs / runs."
+                     f"**{pct(r['full_pass'])}** ({r['passed']}/{r['n_trials']}) | " + " | ".join(cells)
+                     + f" | {pct(r['task_score'])} |")
+    lines += ["", "Full pass: every half of the grade held (the task, GUI only, the sentinel's log, and in the "
+              "background the user undisturbed), as the share of runs per task averaged over tasks, with the count of "
+              "passing trials. Each task cell: passing runs / runs. Task score: trycua's partial credit, the share of "
+              "its weighted checks that held, mean over runs, then over tasks (see Partial credit below)."
               + (f" {only[0].upper()}{only[1:]}." if (only := only_in(cat, tasks)) else "")]
     if any(r.get("missing") for r in cat["board"]):
         lines += ["", "Incomplete: some of the row's trials are missing, cut short by infrastructure (a rate limit, an API "

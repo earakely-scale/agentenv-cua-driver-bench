@@ -422,7 +422,7 @@ def test_the_comparison_figures_are_written_with_their_notes_and_one_without_dat
         "models-tasks", "pareto"}
     assert all((tmp_path / f"{key}{variant}.svg").exists() for key in written["compare_figures"]
                for variant in ("", "-dark", "-phone", "-phone-dark"))
-    assert "Claude Haiku 5.5 (75% at $0.10)" in written["compare_notes"]["pareto"][1]
+    assert "Claude Haiku 5.5 (50% at $0.10), is the whole frontier" in written["compare_notes"]["pareto"][1]
 
 
 def _calls(*rows):

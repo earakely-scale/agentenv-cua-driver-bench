@@ -37,8 +37,9 @@ FAILURE_FIGURES = {
 COMPARE_FIGURES = {
     "models-tasks": "Grid of how many of each task's five runs passed, a row per task in its family and a column per "
                     "model, a block for the foreground and one for the background, each cell shaded by its passes",
-    "pareto": "Scatter of the share of trials passed against the mean cost of a trial at list price on a log scale, a "
-              "point per model on Linux and per driver on macOS, with the frontier of the most passes for the money",
+    "pareto": "Scatter of the share of trials that fully pass against the mean cost of a trial at list price on a log "
+              "scale, a row for the foreground and one for the background, a point per model on Linux and per driver on "
+              "macOS, with the frontier of the most passes for the money",
     "os-gap": "Line chart of the share of trials that pass in the foreground and the background, a panel per model, one "
               "line for Linux and one for macOS, the driver held fixed",
 }
@@ -73,6 +74,8 @@ def main():
     text = text.replace("{{FAILURES}}\n\n", f"{failures}\n\n" if failures else "")
     gallery = _gallery(catalog)
     text = text.replace("{{GALLERY}}\n\n", f"{gallery}\n\n" if gallery else "")
+    partial = _partial(catalog)
+    text = text.replace("{{PARTIAL}}\n\n", f"{partial}\n\n" if partial else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
     (dataset / "README.md").write_text(text)
 
@@ -171,7 +174,7 @@ def _link(row):
 
 
 def _results(out, trials, missing, names, drivers):
-    figures = "\n\n".join(_picture(name, alt) for name, alt in FIGURES.items())
+    figures = _picture("full-pass", FIGURES["full-pass"])
     runs = trials.groupby(["run", "model", "driver"], sort=False).agg(
         trials=("trial_id", "count"), passed=("passed", "sum"), task_score=("task_score", "mean"),
         harness=("harness", "first"), version=("harness_version", "first")).reset_index()
@@ -214,7 +217,8 @@ def _drivers(out, catalog):
     table = path.read_text().strip() if path.exists() else ""
     if not table:
         return ""
-    figures = "\n\n".join(_picture(name, DRIVER_FIGURES[name]) for name in catalog.get("driver_figures") or [])
+    figures = "\n\n".join(_picture(name, DRIVER_FIGURES[name]) for name in catalog.get("driver_figures") or []
+                           if not name.endswith("task-score"))
     return f"""### Drivers
 
 The same tasks through other computer-use drivers, with the OS, the model, the tasks, their seeds and the grade held
@@ -284,6 +288,48 @@ The board three ways: every task's passes model by model, what a pass costs, and
 system does.
 
 {figures}"""
+
+
+def _partial(catalog):
+    """The card's partial-credit section: how trycua's task score differs from a full pass, a row per OS and condition
+    from the mean task score down to the full pass, and the task-score figures; nothing without graded trials."""
+    board = {m["id"] for m in catalog["models"] if m.get("board")}
+    trials = [t for t in catalog["trials"] if t["model"] in board and (t.get("grade") or {}).get("task")]
+    if not trials:
+        return ""
+    score = lambda t: t["grade"]["task"]["score"] or 0
+    rows = []
+    for o in catalog["oses"]:
+        for c in (c for c in catalog["conditions"] if c["id"] in ("foreground", "background")):
+            got = [t for t in trials if t["os"] == o["id"] and t["condition"] == c["id"]]
+            if got:
+                done, passed = sum(bool(t["grade"]["task"]["result"]) for t in got), sum(bool(t["passed"]) for t in got)
+                rows.append(f"| {o['name']} | {c['name'].lower()} | {len(got)} | {_pct(sum(map(score, got)) / len(got))} | "
+                            f"{_pct(done / len(got))} ({done}) | **{_pct(passed / len(got))}** ({passed}) |")
+    failed = [t for t in trials if not t["passed"]]
+    half = sum(score(t) >= 0.5 for t in failed)
+    done = sum(bool(t["grade"]["task"]["result"]) for t in failed)
+    keys = [k for k in [*(catalog.get("figures") or []), *(catalog.get("driver_figures") or [])] if k.endswith("task-score")]
+    figures = "\n\n".join(_picture(k, {**FIGURES, **DRIVER_FIGURES}[k]) for k in keys)
+    return f"""## Partial credit: the task score
+
+Everything above counts full passes. trycua's evaluator also gives partial credit: the **task score** is the share of a
+task's weighted checks that held, from 0 to 100%, and 100% is the task done, trycua's own success. A **full pass** asks
+more: the task done, through the GUI only, and in the background with the user undisturbed on all eight of trycua's
+criteria. A trial can score 100% on the task and still fail, which is why task scores run well above full passes.
+
+| OS | Condition | Trials | Mean task score | Task done | Full pass |
+|---|---|---:|---:|---:|---:|
+{chr(10).join(rows)}
+
+Of the {len(failed)} trials that didn't fully pass, {half} ({_pct(half / len(failed)) if failed else "0%"}) still scored
+half the task's points or more, and {done} did the whole task but left the GUI or disturbed the user.
+
+{figures}"""
+
+
+def _pct(value):
+    return f"{int(100 * value + 0.5)}%"
 
 
 def _gallery(catalog):
