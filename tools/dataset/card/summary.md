@@ -58,6 +58,25 @@ in Claude Code, and GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex 
 - **Cost per trial at list price** runs from $0.02 (Luna) and $0.07 (Haiku) to $0.82 (Opus); Sonnet
   costs $0.56, Sol $0.19 and Terra $0.11.
 
+**Two drivers on Linux, Claude Sonnet 5.5 through each on its own tools, every trial of Bench v2** (runs
+`cua-driver-sonnet-5-5-2026-11-06` and `agent-desktop-sonnet-5-5-2026-11-06`; Vercel Labs' agent-desktop 1.2.0 headed
+in the foreground and headless in the background, as on macOS):
+
+| Driver | Foreground | Background | Multi-app (fg) | Cost per trial |
+|---|---:|---:|---:|---:|
+| cua-driver | 42 of 50 | 5 of 40 | 7 of 15 | $0.56 |
+| agent-desktop | 39 of 50 | 5 of 40 | 4 of 15 | $0.29 |
+
+- **In the background the window manager decides, not the driver: both pass IR-02's five trials and no other.**
+  agent-desktop disturbs the user only in the three dialog tasks (‡), where every driver does; elsewhere, unable to
+  reach an app without bringing it forward, it stops and reports itself blocked (18 trials, 9 of them after
+  agent-desktop refused background input). cua-driver, beside those dialogs, disturbs the user 7 times and leaves the
+  GUI once.
+- **In the foreground cua-driver passes 42 of 50 and agent-desktop 39.** Both pass every precision and interruption
+  trial; on the multi-app tasks agent-desktop runs out of turns, passing CDB-G04 4 of 5 and neither G02 nor G03, where
+  cua-driver passes G02 3 of 5 and G04 4 of 5.
+- **agent-desktop costs about half as much a trial**, $0.29 against $0.56.
+
 cua-driver's first Linux runs, which also offered its agents AgentEnv's seven `computer_*` tools beside its own 66,
 stay in the dataset but not on the board: Claude Sonnet 5.5 (`sonnet-5-5-2026-11-03`) passed 36 of 50 in the
 foreground, 2 of them multi-app, and 5 of 40 in the background, Claude Haiku 5.5 (`haiku-5-5-2026-11-02`) 36 of 50
