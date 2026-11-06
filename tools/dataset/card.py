@@ -43,7 +43,9 @@ def main():
     text = (HERE / "card" / "README.md").read_text()
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
-    text = text.replace("{{RESULTS}}", _results(out, trials, missing, {m["id"]: m["name"] for m in catalog["models"]},
+    models = json.loads((HERE.parent / "space" / "config.json").read_text())["models"]
+    names = {**{k: v["name"] for k, v in models.items()}, **{m["id"]: m["name"] for m in catalog["models"]}}
+    text = text.replace("{{RESULTS}}", _results(out, trials, missing, names,
                                                  {d["id"]: d["name"] for d in catalog["drivers"]}))
     drivers = _drivers(out, catalog)
     text = text.replace("{{DRIVERS}}\n\n", f"{drivers}\n\n" if drivers else "")
