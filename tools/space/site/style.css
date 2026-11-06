@@ -154,6 +154,8 @@ a.sq:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
 .sq.gui::after { content: ""; position: absolute; inset: 25%; background: linear-gradient(45deg, transparent 42%, #fff 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, #fff 42% 58%, transparent 58%); }
 .sq.other { background: var(--ink-4); }
 .sq.gap { box-shadow: inset 0 0 0 1px var(--line-2); opacity: .7; }
+.xcards, .tstrip { position: relative; }
+.tip { position: absolute; z-index: 6; transform: translate(-50%, calc(-100% - 8px)); width: max-content; max-width: min(320px, 86vw); padding: 5px 9px; border-radius: 7px; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 550; line-height: 1.4; pointer-events: none; box-shadow: var(--shadow); }
 .okey { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 12px 0 18px; color: var(--ink-2); font-size: 12.5px; }
 .okey > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .okey .sq { --sq: 12px; }

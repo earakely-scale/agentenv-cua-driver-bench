@@ -305,7 +305,7 @@ function driversSection() {
   const c = CAT.comparisons.find((x) => x.model === leadModel() && x.tasks.length === CAT.comparisons[0].tasks.length) || CAT.comparisons[0];
   const runs = CAT.trials.filter((t) => t.os === c.os && t.model === c.model && c.tasks.includes(t.task) && c.drivers.some((d) => d.id === t.driver));
   const depth = Math.max(...runs.map((t) => t.of));
-  const cards = h("div", { class: "xcards" }, c.drivers.map((d) => driverCard(d, runs.filter((t) => t.driver === d.id), c.tasks, depth)));
+  const cards = tips(h("div", { class: "xcards" }, c.drivers.map((d) => driverCard(d, runs.filter((t) => t.driver === d.id), c.tasks, depth))));
   const extra = (CAT.failure_figures || []).filter((f) => f === "disturbances");
   return h("section", { class: "drivers", "aria-labelledby": "drivers-h" },
     h("div", { class: "section-head", id: "drivers", "data-nav": "Drivers" }, h("h2", { id: "drivers-h" }, "How the drivers differ"),
@@ -385,7 +385,7 @@ function waffle(runs, ids, depth, label) {
     h("div", { class: "wcols" }, f.ids.map((id) => {
       const col = runs.filter((t) => t.task === id);
       return h("div", { class: "wc" }, col.map(square),
-        Array.from({ length: Math.max(0, depth - col.length) }, () => h("i", { class: "sq gap", title: `${probeOf(id)}: no trial yet` })));
+        Array.from({ length: Math.max(0, depth - col.length) }, () => h("i", { class: "sq gap", "data-tip": `${probeOf(id)}: no trial yet` })));
     })),
     h("span", { class: "wfam" }, f.id))));
 }
@@ -394,7 +394,25 @@ function square(t) {
   const k = outcome(t);
   const mode = CAT.failures?.modes.find((m) => m.id === CAT.failures.by_trial[t.uid]);
   const say = `${probeOf(t.task)} ${TASKS[t.task]?.title || ""}, run ${t.run_index ?? t.nth}: ${SAID[k]}${mode ? ` (${mode.name})` : ""}`;
-  return h("a", { class: `sq ${k}`, href: hashOf(t), title: say, "aria-label": `${say}. Replay it`, tabindex: "-1" });
+  return h("a", { class: `sq ${k}`, href: hashOf(t), "data-tip": say, "aria-label": `${say}. Replay it`, tabindex: "-1" });
+}
+
+function tips(root) {
+  const tip = h("div", { class: "tip", hidden: true });
+  root.append(tip);
+  root.addEventListener("pointerover", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (!el) return;
+    tip.textContent = el.dataset.tip;
+    tip.hidden = false;
+    const r = el.getBoundingClientRect(), box = root.getBoundingClientRect(), half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.min(Math.max(r.left + r.width / 2 - box.left, half), box.width - half)}px`;
+    tip.style.top = `${r.top - box.top}px`;
+  });
+  root.addEventListener("pointerout", (e) => {
+    if (e.target.closest("[data-tip]")) tip.hidden = true;
+  });
+  return root;
 }
 
 function outcomeKey(cards) {
@@ -460,13 +478,13 @@ function taskFact(oses) {
     const passed = l.cells[i].reduce((s, p) => s + p.passed, 0), n = l.cells[i].reduce((s, p) => s + p.n, 0);
     const cv = caveatOf(l.o.id, "background", k.id);
     if (cv && !passed) marks.set(cv.mark, cv);
-    return h("span", { class: `tc ${passed ? "ok" : "no"}`, title: `${probeOf(k.id)} on ${l.o.name}: ${passed} of ${n} background trials pass${cv ? `. ${cv.short}` : ""}` },
+    return h("span", { class: `tc ${passed ? "ok" : "no"}`, "data-tip": `${probeOf(k.id)} on ${l.o.name}: ${passed} of ${n} background trials pass${cv ? `. ${cv.short}` : ""}` },
       passed ? "✓" : cv ? cv.mark : "");
   };
-  const grid = h("div", { class: "tstrip", style: { "--n": tasks.length } },
+  const grid = tips(h("div", { class: "tstrip", style: { "--n": tasks.length } },
     h("span"), tasks.map((k) => h("span", { class: "th" }, probeOf(k.id))), h("span"),
     lines.map((l) => [h("span", { class: "rl" }, l.o.name), tasks.map((k, i) => cell(l, k, i)),
-      h("b", { class: "rc" }, `${l.cells.filter((ps) => ps.some((p) => p.passed)).length} of ${tasks.length}`)]));
+      h("b", { class: "rc" }, `${l.cells.filter((ps) => ps.some((p) => p.passed)).length} of ${tasks.length}`)])));
   return h("article", { class: "fact" },
     h("h3", {}, "Background tasks any model passed"),
     h("p", { class: "fsub" }, `Through ${driverName(CAT.driver)}: ${lines.map((l) => `${l.models} model${l.models === 1 ? "" : "s"} on ${l.o.name}`).join(", ")}`),
@@ -486,7 +504,7 @@ function modelsSection() {
   const runs = CAT.trials.filter((t) => t.os === os.id && t.driver === CAT.driver && models.some((m) => m.id === t.model));
   const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
   const depth = Math.max(...runs.map((t) => t.of));
-  const cards = h("div", { class: "xcards" }, models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth)));
+  const cards = tips(h("div", { class: "xcards" }, models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth))));
   const figs = (CAT.compare_figures || []).filter((f) => f === "models-tasks" || f === "pareto");
   return h("section", { class: "models", "aria-labelledby": "models-h" },
     h("div", { class: "section-head", id: "models", "data-nav": "Models" }, h("h2", { id: "models-h" }, "How the models differ"),
