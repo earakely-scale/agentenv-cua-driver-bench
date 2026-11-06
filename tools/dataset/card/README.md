@@ -21,6 +21,7 @@ tags:
 - linux
 - mcp
 - claude-code
+- codex
 configs:
 - config_name: trials
   default: true
@@ -56,9 +57,10 @@ computer. This dataset holds every trial: the screen recording, the agent's full
 grade and the apps' final files. The [replay Space](https://huggingface.co/spaces/earakely-scale/CuaDriverBench-AgentEnv)
 plays each trial with the agent's tool calls and the user's typing beside it.
 
-It covers Linux (Ubuntu 24.04) and macOS 26, with Claude in Claude Code. Each run, one model through one computer-use
-driver on one operating system at one commit of the bench, is a folder of its own under `runs/`, so other operating
-systems, models and drivers are added beside it.
+It covers Linux (Ubuntu 24.04) and macOS 26: Claude Haiku, Sonnet and Opus 5.5 in Claude Code, and on Linux GPT-6
+Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI. Each run, one model through one computer-use driver on one
+operating system at one commit of the bench, is a folder of its own under `runs/`, so other operating systems, models
+and drivers are added beside it.
 
 These are AgentEnv's runs of trycua's tasks, not trycua's own: trycua runs the bench with its own runner, on macOS,
 Linux and Windows, and results from the two runners aren't like-for-like.
@@ -100,6 +102,13 @@ agent-env run . --task cdb-g02-background      # one trial
 agent-env run . --eval bench-v2                # every task of Bench v2 once (66 task files)
 ```
 
+The board's Linux rows run each trial with cua-driver's own tools alone, `--set envs/<computer>.tools=driver` (below).
+GPT-6 runs in Codex through the `codex-` task files, each its Linux twin with AgentEnv's `codex` agent:
+
+```bash
+agent-env run . --task codex-cdb-g02-background --model openai/gpt-6.1-sol --set envs/desktop-s02.tools=driver
+```
+
 The first run builds each task's computer (a few minutes); later runs reuse it. `agent-env run . --eval sentinel`
 checks, without a model, that every kind of disturbance is caught and scored by trycua's files.
 
@@ -136,7 +145,7 @@ names ending in `-macos` on macOS. What a setting changes runs under ids ending 
 
 ```bash
 pip install 'agentenv-framework>=0.9.1453'
-# Linux: cua-driver on its own tools alone, as the macOS rows ran it
+# Linux: cua-driver on its own tools alone, as every row on the board ran it
 agent-env run . --task ir-01-r1-background --set envs/desktop-benchlab.tools=driver
 # Linux: AgentEnv's reference driver in cua-driver's place
 agent-env run . --task ir-01-r1-background --set envs/desktop-benchlab.driver=reference
@@ -148,7 +157,7 @@ agent-env run . --task macos-ir-01-r1-background --set envs/desktop-benchlab-mac
 ```
 
 `tools` is `standard` (AgentEnv's `computer_*` tools alone), `driver` (the driver's own alone) or `both`, the default;
-the Linux rows here ran with `both`. An eval deploys several envs, so set each one, for example
+the Linux rows on the board ran with `driver`, and the first Linux runs, which stay in the dataset, with `both`. An eval deploys several envs, so set each one, for example
 `--eval bench-v2 --set envs/desktop-benchlab.driver=reference --set envs/desktop-s02.driver=reference
 --set envs/desktop-s03.driver=reference --set envs/desktop-s04.driver=reference`. The `macos-agent-desktop-…`,
 `macos-macos-harness-…` and `macos-cua-driver-…` task files are these settings written out, and they are what the

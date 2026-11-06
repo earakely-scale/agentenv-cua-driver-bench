@@ -806,7 +806,7 @@ def load(folder, cfg, data_dir=None):
         "os": trial.get("os") or "linux", "driver": trial.get("driver") or DRIVER, "task": task,
         "probe": trial.get("probe"), "condition": condition, "model": trial.get("model"),
         "model_name": model_name(trial.get("model") or "?", cfg),
-        "harness": trial.get("harness"), "harness_version": trial.get("harness_version"),
+        "harness": trial.get("harness"), "harness_version": trial.get("harness_version"), "effort": trial.get("effort"),
         "computer": trial.get("computer"), "started_at": trial.get("started_at"), "run": run,
         "duration": rnd(trial.get("duration_s"), 1), "cost": rnd(trial.get("cost_usd"), 2),
         "turns": trial.get("num_turns"), "model_calls": trial.get("model_calls"),

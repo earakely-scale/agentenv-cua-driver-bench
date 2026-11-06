@@ -28,6 +28,8 @@ DRIVER_FIGURES = {
                          "the background condition, a panel per OS and model, one line per computer-use driver",
 }
 DRIVER = "cua-driver"
+HARNESSES = {"claude-code": "Claude Code", "codex-cli": "Codex CLI"}
+OSES = {"linux": "Linux", "macos": "macOS"}
 
 
 def main():
@@ -99,9 +101,11 @@ def _hero(catalog, trials):
     user = "keeps the user undisturbed" if row.user_undisturbed else f"disturbs the user ({broken})"
     ended = "runs out of turns" if "maximum number of turns" in str(row.agent_error) else \
         "runs out of time" if "timed out" in str(row.agent_error) else "finishes"
-    alt = (f"{model} in Claude Code on {row.probe}, {row.title}, in the {row.condition} condition: the Linux desktop "
-           f"as recorded, the user's window outlined, and the agent's tool calls in order with the current one lit")
-    caption = (f"{model} in Claude Code on {row.probe} {row.title}, {row.condition} condition, run "
+    harness = HARNESSES.get(row.harness, row.harness)
+    alt = (f"{model} in {harness} on {row.probe}, {row.title}, in the {row.condition} condition: the "
+           f"{OSES.get(row.os, row.os)} desktop as recorded, the user's window outlined, and the agent's tool calls in "
+           f"order with the current one lit")
+    caption = (f"{model} in {harness} on {row.probe} {row.title}, {row.condition} condition, run "
                f"{int(row.run_index)}, sped up. It makes {int(row.tool_calls)} tool calls in "
                f"{int(row.model_calls)} model calls ({int(row.tool_errors)} refused or failed), "
                f"{'stays' if row.gui_only else 'does not stay'} inside the GUI, {user} and {ended}: task score "
@@ -114,11 +118,11 @@ def _results(out, trials, missing, names, drivers):
     figures = "\n\n".join(_picture(name, alt) for name, alt in FIGURES.items())
     runs = trials.groupby(["run", "model", "driver"], sort=False).agg(
         trials=("trial_id", "count"), passed=("passed", "sum"), task_score=("task_score", "mean"),
-        harness=("harness_version", "first")).reset_index()
+        harness=("harness", "first"), version=("harness_version", "first")).reset_index()
     runs["cost"] = runs.run.map(trials.groupby("run").cost_usd.sum())
     lost = missing.groupby("run").size()
     run_rows = "\n".join(
-        f"| `{r.run}` | {names.get(r.model, r.model)} | {drivers.get(r.driver, r.driver)} | Claude Code {r.harness} | "
+        f"| `{r.run}` | {names.get(r.model, r.model)} | {drivers.get(r.driver, r.driver)} | {HARNESSES.get(r.harness, r.harness)} {r.version} | "
         f"{r.trials} | {_lost(lost.get(r.run, 0))} | {int(r.passed)} | {r.task_score:.2f} | ${r.cost:.2f} |"
         for r in runs.itertuples())
     per_trial = "\n".join(
@@ -134,8 +138,8 @@ def _results(out, trials, missing, names, drivers):
 |---|---|---|---|---:|---:|---:|---:|---:|
 {run_rows}
 
-Cost is at list price from the tokens each trial's trajectory reports (Claude Code's own
-figure is in `cost_usd_reported`). A run with missing trials, which infrastructure cut short past their re-runs
+Cost is at list price from the tokens each trial's trajectory reports: Anthropic's for Claude, OpenAI's for GPT-6
+(as LiteLLM's price map lists them). Claude Code's own figure is in `cost_usd_reported`; Codex reports none. A run with missing trials, which infrastructure cut short past their re-runs
 (`results/missing.parquet`), is incomplete and isn't ranked.
 
 <details><summary>Every trial</summary>

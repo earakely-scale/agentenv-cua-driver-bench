@@ -677,6 +677,7 @@ function gradeSection(t) {
       h("dt", {}, "Model"), h("dd", {}, t.model_name),
       h("dt", {}, "Driver"), h("dd", {}, driverName(t.driver)),
       h("dt", {}, "Harness"), h("dd", {}, `${t.harness || "–"} ${t.harness_version || ""}`),
+      h("dt", {}, "Effort"), h("dd", {}, t.effort || (t.harness === "claude-code" ? "medium (Claude Code's default)" : "–")),
       h("dt", {}, "Computer"), h("dd", {}, t.computer || "–"),
       h("dt", {}, "Turns"), h("dd", {}, t.turns ?? "–"),
       h("dt", {}, "Tool calls"), h("dd", {}, `${t.tool_calls ?? "–"}${t.tool_errors ? ` · ${t.tool_errors} errors` : ""}`),
@@ -1117,7 +1118,7 @@ function createPlayer(root, trial, tl) {
     const s = texts[si];
     if (s && t - s.t < 9 && (!texts[si + 1] || t < texts[si + 1].t)) {
       say.hidden = false;
-      if (say._i !== si) { say.replaceChildren(h("b", {}, "Claude"), `“${s.text.length > 220 ? s.text.slice(0, 219) + "…" : s.text}”`); say._i = si; }
+      if (say._i !== si) { say.replaceChildren(h("b", {}, trial.model_name || "Agent"), `“${s.text.length > 220 ? s.text.slice(0, 219) + "…" : s.text}”`); say._i = si; }
     } else say.hidden = true;
 
     if (ub && ub.final) {

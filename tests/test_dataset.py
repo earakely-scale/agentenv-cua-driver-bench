@@ -196,17 +196,19 @@ def test_a_board_row_and_a_card_run_with_a_missing_trial_are_labelled_incomplete
                                 "drivers": [{"id": "cua-driver", "name": "cua-driver"}]})
     (tmp_path / "results.md").write_text(table)
     trial = {"run": "m-run", "os": "macos", "model": "m", "driver": "cua-driver", "trial_id": "ir-02-r1-background",
-             "passed": True, "task_score": 1.0, "cost_usd": 0.5, "harness_version": "2.1",
+             "passed": True, "task_score": 1.0, "cost_usd": 0.5, "harness": "claude-code", "harness_version": "2.1",
              "gui_only": True, "user_undisturbed": True, "tool_calls": 9}
     runs = card._results(tmp_path, tables.pd.DataFrame([trial, {
-        **trial, "trial_id": "ir-02-r3-background", "passed": False, "task_score": 0.0,
-        "cost_usd": 0.25}]), tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M"}, {"cua-driver": "CD"})
+        **trial, "trial_id": "ir-02-r3-background", "passed": False, "task_score": 0.0, "cost_usd": 0.25}, {
+        **trial, "run": "g-run", "model": "g", "harness": "codex-cli", "harness_version": "0.147.0"}]),
+        tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M", "g": "G"}, {"cua-driver": "CD"})
 
     assert missing == [{"os": "macos", "driver": "cua-driver", "run": "m-run", "name": folder.name, "task": "ir-02",
                         "condition": "background"}]
     assert {row["model"]: row["missing"] for row in rows} == {"m": 1, "n": 0}
     assert "| m (incomplete: 1 missing) | cua-driver | background |" in table and "isn't ranked" in table
     assert "| `m-run` | M | CD | Claude Code 2.1 | 2 | **1, incomplete** | 1 | 0.50 | $0.75 |" in runs
+    assert "| `g-run` | G | CD | Codex CLI 0.147.0 | 1 |" in runs
     assert "| ir-02-r1-background | macos | m | CD | 1.00 |" in runs
     assert "| ir-02-r3-background | macos | m | CD | 0.00 | ✓ | ✓ | ✗ | 9 | $0.25 |" in runs
 

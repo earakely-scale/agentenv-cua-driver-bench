@@ -41,11 +41,17 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    with cua-driver, the task's apps as trycua's macOS descriptors run them, and trycua's own BenchSentinel. The
    drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`) are those
    with Vercel Labs' agent-desktop or browser-use's macOS harness in cua-driver's place, and nothing else changed.
-2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver's MCP
-   server, its own tools alone (on Linux through `--set envs/<computer>.tools=driver`, since the Linux task files
-   keep the default, which adds AgentEnv's `computer_*` tools), and AgentEnv's `peer_agents` server,
-   which no task uses, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns
-   and 360 seconds.
+2. Deploy the agent with the computer's driver's MCP server, its own tools alone (on Linux through
+   `--set envs/<computer>.tools=driver`, since the Linux task files keep the default, which adds AgentEnv's
+   `computer_*` tools), AgentEnv's `peer_agents` server, which no task uses, trycua's system prompt (for "a Linux
+   desktop" on Linux, as written on macOS), at most 45 turns and 360 seconds:
+   - **Claude Code** for Claude Haiku, Sonnet and Opus 5.5, its built-in tools limited to `Skill` and `Read`, at its
+     default effort for these models, medium (no `--effort` is passed).
+   - **OpenAI's Codex CLI 0.147.0** for GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol, as AgentEnv's `codex` agent runs
+     it (`tasks/codex-*.json`, each its Linux twin but for the agent), every tool of its own off (shell, patch, web
+     search, image viewing, plan, sub-agents), which leaves the driver's tools, `peer_agents` and Codex's reads of MCP
+     resources, at medium effort, set in the task. Codex has no turn limit of its own: AgentEnv's agent stops it after
+     45 tool calls, each one model request, since Codex sends these models no parallel calls.
 3. Start recording the screen (10 fps), arm the sentinel, prompt the agent, disarm the sentinel.
 4. Snapshot the computer's app data and grade it in a separate container with no network.
 
@@ -64,7 +70,7 @@ A trial passes only if every half does:
 | Half | How it is decided |
 |---|---|
 | Task | trycua's evaluator for the task on the snapshot of the apps' data (the task pack's `evaluator/evaluate.py`, or the probe's `evaluate.py` on BenchLab's state and events); the score is its weighted share of checks that pass |
-| GUI only | the live guard saw no way out of the GUI, and the trajectory has none of trycua's forbidden tools, no built-in tool beyond `Skill` and `Read`, and no `launch_app` given a command or arguments |
+| GUI only | the live guard saw no way out of the GUI, and the trajectory has none of trycua's forbidden tools, no built-in tool beyond `Skill` and `Read` (Codex's own tools read as trycua's runner reads its Codex arm's: a command as `Bash`, a file change as `Edit`, a web search as `WebSearch`, a sub-agent as `Agent`, anything else as `Task`), and no `launch_app` given a command or arguments |
 | User undisturbed | background only: trycua's A22 criteria on the sentinel's log, all eight must hold (below) |
 
 The A22 criteria:
@@ -94,7 +100,7 @@ runs/<os>/<run>/<trial>/
   web.mp4                    the Space's smaller copy of the recording
   manifest.json              the recording's source, timing and segments
   timeline.json              the tool calls, the model's text and the user's log on the recording's clock
-  trajectory.json            Claude Code's stream-json, as recorded (screenshots included)
+  trajectory.json            Claude Code's stream-json, or Codex's `exec --json` events with the time each arrived, as recorded (screenshots included)
   sentinel.jsonl             the user's window's log, in trycua's format
   sentinel.stderr            the sentinel's own error output (macOS)
   condition                  the condition the sentinel was launched in, which its log's start line doesn't carry (macOS)
@@ -109,7 +115,9 @@ runs/<os>/<run>/<trial>/
 - Few trials per cell: trycua's schedule runs each task 5 times per condition, and a cell's rate rests on those 5.
   The pilot run `sonnet-4-5-2026-11-02` covers only the three multi-app tasks, once per condition, and its prompts
   lack trycua's closing line with the time and turn limits, which later runs have.
-- **On macOS, Claude Haiku 5.5 ran only the seven BenchLab tasks**, on every driver. The macOS runs pin
+- **On macOS, Claude Haiku 5.5 ran the seven BenchLab tasks on 2026-11-05 and the three multi-app tasks on
+  2026-11-06** (runs `*-haiku-5-5-2026-11-06-multiapp`), on every driver; Claude Opus 5.5 ran with cua-driver alone.
+  GPT-6 ran on Linux alone. The macOS runs pin
   agentenv-framework by git commit, neither of them a PyPI release: cua-driver's and agent-desktop's ran on bc0c9d67,
   PR #501's head before its review fixes (0.9.1444 in its files), whose drivers for them are 0.9.1446's;
   browser-use's ran on e1afb200 (0.9.1445), after #501 gave its agent the whole of its skill, and it matches
@@ -137,6 +145,22 @@ runs/<os>/<run>/<trial>/
   [trycua/cua#6574](https://github.com/trycua/cua/pull/6574) after the commit this bench pins): a real hover and a native tooltip need the pointer, which in the
   background is the user's. MB-09 runs in both conditions, though in the background its drag keeps the user
   undisturbed only through a driver that drags without moving the user's pointer.
+- **GPT-6 in Codex sees cua-driver's screens as text.** Codex sends the model a tool result's structured content
+  alone when it has one, so the screenshot that cua-driver's `get_window_state` and `get_desktop_state` return beside
+  their accessibility tree never reaches GPT-6; `zoom`'s image does. Every Codex release through 0.167 does this, the
+  0.160 trycua's runner pins included, and these runs keep Codex as it ships. Codex 0.147 has no settings for the
+  GPT-6 models either, so they run on its generic ones (no code mode, no parallel tool calls, its default
+  instructions), as a warning in each trajectory says. trycua's runner has published no Codex numbers, and runs its
+  Codex arms on macOS only.
+- **The GPT-6 runs pin agentenv-framework at commit 9ee4cc17** ([PR #513](https://github.com/scaleapi/agentenv-framework/pull/513)), not yet a release: its `codex` agent
+  stops a turn at the task's 45-turn limit and records when each event arrived and the turn's usage. Their limit
+  counts tool calls; `model_calls` is Codex's own count of model requests.
+- **Setup differences from trycua's runner**, found auditing these runs and not corrected in them: cua-driver's arm
+  offers `run_script`, as trycua's `cc-cua-driver-script` arm does, without the short `run_script` paragraph that arm
+  adds to the system prompt; agent-desktop's foreground trials run every command headed, with real pointer and keys,
+  where trycua's adapter lets the model ask for that per call (`AD_HEADED=agent`, its default); and browser-use's
+  adapter attaches a screenshot to every `get_app_state`, where trycua's sends one on request (`BU_SHOT=ondemand`, its
+  default), and its agent spends its first turn reading the skill. Each applies to every trial of its driver.
 - Claude Code's `num_turns` counts tool round trips, across a context compaction too, so it passes 45 when the model
   makes several calls in one message; the 45-turn limit holds on `model_calls`, the model's distinct messages.
 
