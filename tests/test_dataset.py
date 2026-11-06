@@ -123,6 +123,8 @@ def test_codexs_events_read_as_claude_codes_its_calls_timed_its_usage_priced_and
                 {"type": "agentenv.usage", "timestamp": _stamp(17), "model_requests": 4,
                  "usage": {"input_tokens": 50_000, "cached_input_tokens": 40_000, "output_tokens": 2_000}}]
 
+    assert export.STEM.match("codex-cdb-g02-foreground").group("task", "condition", "driver") == (
+        "cdb-g02", "foreground", None)
     events = export.from_codex(recorded, "openai/gpt-6.1-sol")
     timeline = export.timeline(events, [], START, START + 30, {})
     result = events[-1]
