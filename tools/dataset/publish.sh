@@ -22,12 +22,25 @@ PY
 "$python" "$bench/tools/dataset/card.py" "$work/out" "$work/dataset"
 [ -n "${DRY_RUN:-}" ] && { echo "built in $work; nothing uploaded"; exit 0; }
 "$python" - "$work/dataset" "$work/out/space" <<'PY'
-import os, sys
+import os, sys, time
 from huggingface_hub import HfApi
 api, repo = HfApi(), os.environ["HF_REPO"]
-print(api.upload_folder(repo_id=repo, repo_type="dataset", folder_path=sys.argv[1], commit_message="Tables, card, figures, hero and web copies",
-                        allow_patterns=["README.md", "LICENSE.md", "licenses/*", "assets/**", "results/*.parquet", "tasks/*.parquet", "runs/**/web.mp4"]))
+
+
+def retried(call, attempts=12):
+    for attempt in range(attempts):
+        try:
+            return call()
+        except Exception as error:
+            if attempt == attempts - 1:
+                raise
+            print(f"upload refused ({str(error)[:120]}); again in {min(300, 30 * (attempt + 1))} s", flush=True)
+            time.sleep(min(300, 30 * (attempt + 1)))
+
+
+print(retried(lambda: api.upload_folder(repo_id=repo, repo_type="dataset", folder_path=sys.argv[1], commit_message="Tables, card, figures, hero and web copies",
+                                        allow_patterns=["README.md", "LICENSE.md", "licenses/*", "assets/**", "results/*.parquet", "tasks/*.parquet", "runs/**/web.mp4"])))
 api.create_repo(repo, repo_type="space", space_sdk="static", exist_ok=True)
-print(api.upload_folder(repo_id=repo, repo_type="space", folder_path=sys.argv[2], commit_message="Replay Space",
-                        delete_patterns=["data/**"]))
+print(retried(lambda: api.upload_folder(repo_id=repo, repo_type="space", folder_path=sys.argv[2], commit_message="Replay Space",
+                                        delete_patterns=["data/**"])))
 PY

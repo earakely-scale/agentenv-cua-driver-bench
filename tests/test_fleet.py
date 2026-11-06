@@ -197,6 +197,22 @@ def test_a_workers_manifest_pins_the_whole_run_and_keeps_what_other_workers_uplo
     assert worker._harness() == {"name": "codex-cli", "effort": "medium"}
 
 
+def test_an_upload_the_hub_refuses_is_tried_again_after_a_growing_wait_and_gives_up_in_the_end(worker, monkeypatch):
+    waits, calls = [], []
+    monkeypatch.setattr(worker.time, "sleep", waits.append)
+
+    def refused_twice():
+        calls.append(1)
+        if len(calls) < 3:
+            raise RuntimeError("429 Too Many Requests")
+        return "committed"
+
+    assert worker._retried(refused_twice) == "committed" and waits == [30, 60]
+    with pytest.raises(RuntimeError):
+        worker._retried(lambda: (_ for _ in ()).throw(RuntimeError("429")), attempts=3)
+    assert waits[2:] == [30, 60]
+
+
 def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_dataset(worker, tmp_path, monkeypatch):
     uploaded = []
     monkeypatch.setattr(worker, "OUT", tmp_path / "out")

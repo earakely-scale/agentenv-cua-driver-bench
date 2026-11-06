@@ -127,16 +127,13 @@ def _missing(api, run, name, stem, index, instance, kind, tries, code):
 
 def _upload(api, run, name):
     """Upload OUT/name to the run's folder for it, replacing what was there; the last error, or None."""
-    for attempt in range(5):
-        try:
-            api.upload_folder(repo_id=REPO, repo_type="dataset", folder_path=str(OUT / name),
-                              path_in_repo=f"runs/{OS}/{run}/{name}", commit_message=f"{run}: {name}",
-                              delete_patterns="*")
-            return None
-        except Exception as error:
-            if attempt == 4:
-                return str(error)[:500]
-            time.sleep(30 * (attempt + 1))
+    try:
+        _retried(lambda: api.upload_folder(repo_id=REPO, repo_type="dataset", folder_path=str(OUT / name),
+                                           path_in_repo=f"runs/{OS}/{run}/{name}", commit_message=f"{run}: {name}",
+                                           delete_patterns="*"))
+        return None
+    except Exception as error:
+        return str(error)[:500]
 
 
 def _upload_manifest(api, run, done=()):
@@ -151,8 +148,21 @@ def _upload_manifest(api, run, done=()):
                            state=DB.parents[2], harness={**_harness(), "versions": versions}, settings=_settings())
     built = _merged(built, _uploaded(run))
     (OUT / "manifest.json").write_text(json.dumps(built, indent=1))
-    api.upload_file(path_or_fileobj=str(OUT / "manifest.json"), path_in_repo=f"runs/{OS}/{run}/manifest.json",
-                    repo_id=REPO, repo_type="dataset", commit_message=f"{run}: manifest")
+    _retried(lambda: api.upload_file(path_or_fileobj=str(OUT / "manifest.json"),
+                                     path_in_repo=f"runs/{OS}/{run}/manifest.json", repo_id=REPO, repo_type="dataset",
+                                     commit_message=f"{run}: manifest"))
+
+
+def _retried(call, attempts=12):
+    """``call``'s result, tried again with a growing wait, up to five minutes, while it fails: a dataset takes at most
+    320 commits an hour, which a fleet's workers can reach together."""
+    for attempt in range(attempts):
+        try:
+            return call()
+        except Exception:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(min(300, 30 * (attempt + 1)))
 
 
 def _harness():
