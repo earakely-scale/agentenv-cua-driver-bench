@@ -292,11 +292,11 @@ function failuresSection() {
   const F = CAT.failures;
   const trial = Object.fromEntries(CAT.trials.map((t) => [t.uid, t]));
   const color = (m) => (m.tint ? `color-mix(in srgb, var(--s${m.slot}) ${Math.round(100 * m.tint[0])}%, transparent)` : `var(--s${m.slot})`);
-  const name = (t) => `${(TASKS[t.task]?.probe || t.task).replace("CDB-", "")} · ${OSES[t.os]?.name || t.os} · ${driverLabel(t.driver)}`;
+  const name = (t) => `${TASKS[t.task].probe.replace("CDB-", "")} · ${OSES[t.os].name} · ${driverLabel(t.driver)}`;
   return h("section", { class: "failures", "aria-labelledby": "failures-h" },
     h("div", { class: "section-head", id: "failures" }, h("h2", { id: "failures-h" }, "Where trials fail"),
       h("p", {}, "Each trial once: a pass, or the gravest way it failed. Open one to watch it fail.")),
-    figures(CAT.failure_figures || [], (f) => (f === "failure-modes" ? "How the trials ended" : "How the user was disturbed")),
+    figures(CAT.failure_figures, (f) => (f === "failure-modes" ? "How the trials ended" : "How the user was disturbed")),
     h("div", { class: "dcards fcards" }, F.modes.filter((m) => F.examples[m.id]).map((m) => h("article", { class: "dcard", style: { "--dc": color(m) } },
       h("h3", {}, h("span", { class: "dot" }), m.name),
       h("p", {}, m.description),
