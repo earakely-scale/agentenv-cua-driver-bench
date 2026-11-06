@@ -15,7 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from cdbviz import catalog, figures, hero, media, trials  # noqa: E402
+from cdbviz import catalog, figures, hero, media, pair, trials  # noqa: E402
 
 
 def pick_hero(metas, cfg):
@@ -28,6 +28,27 @@ def pick_hero(metas, cfg):
         return None
     score = lambda m: (m["user_lane"], m["passed"], (m["grade"]["task"] or {}).get("score") or 0, m["tool_calls"] or 0)
     return max(bg, key=score)["uid"]
+
+
+def pairs(loaded, cat, cfg, data_dir, assets, space):
+    """Each configured task's foreground and background trials of one run side by side: a GIF for the card and an MP4
+    for the Space, as the catalog's ``pairs``."""
+    out = []
+    for want in cfg.get("pairs") or []:
+        found = {t["meta"]["condition"]: t for t in loaded if trials.run_of(t["folder"], data_dir) == f"{want['os']}/{want['run']}"
+                 and t["meta"]["task"] == want["task"] and t["meta"].get("run_index") == want["run_index"]}
+        if set(found) != {"foreground", "background"}:
+            print(f"pair {want}: no trial for {sorted({'foreground', 'background'} - set(found))}")
+            continue
+        name = f"pair-{want['os']}"
+        gif, mp4 = pair.render(found["foreground"], found["background"], cat, cfg, assets, name)
+        (space / "media").mkdir(exist_ok=True)
+        shutil.copy2(mp4, space / "media" / mp4.name)
+        mp4.unlink()
+        out.append({"name": name, "video": f"media/{mp4.name}", "gif": gif.name, "os": want["os"], "task": want["task"],
+                    "run_index": want["run_index"], **{c: found[c]["meta"]["uid"] for c in found}})
+        print(f"{name}: {gif} ({gif.stat().st_size / 1e6:.1f} MB), {mp4.name}")
+    return out
 
 
 def encode(t, cfg, space, force):
@@ -119,6 +140,8 @@ def main():
         t = next(x for x in loaded if x["meta"]["uid"] == hero_uid)
         gif, still = hero.render(t, cat, cfg, assets)
         print(f"hero: {hero_uid} -> {gif} ({gif.stat().st_size / 1e6:.1f} MB), {still}")
+    cat["pairs"] = [] if args.no_gif else pairs(loaded, cat, cfg, args.data, assets, space)
+    (data / "catalog.json").write_text(json.dumps(cat, separators=(",", ":"), ensure_ascii=False))
     print(f"catalog: {len(metas)} trials -> {data / 'catalog.json'}")
 
 

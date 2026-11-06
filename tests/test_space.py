@@ -222,3 +222,20 @@ def test_a_run_the_config_excludes_is_named_as_its_os_and_run(space):
         "macos/cua-driver-sonnet-5-5-2026-11-05")
     cfg = json.loads((SPACE / "config.json").read_text())
     assert all(run.count("/") == 1 and run.split("/")[0] in cfg["oses"] for run in cfg["exclude_runs"])
+
+
+def test_a_pairs_panels_show_one_region_of_the_screen_holding_every_window_at_its_aspect(space):
+    pair = space("pair")
+
+    class Fake:
+        def __init__(self, condition, wins, frame=None):
+            self.scene = type("S", (), {"sw": 1920, "sh": 1080, "calls": [{"win": w, "kind": "act"} for w in wins],
+                                        "user": {"frame": frame} if frame else None})()
+            self.m, self.cfg = {"condition": condition}, {"user_frame": [420, 340, 900, 520]}
+            self.boxes = lambda: pair.Panel.boxes(self)
+
+    x, y, w, h = pair.view(Fake("foreground", [[65, 81, 760, 568]]), Fake("background", [[65, 81, 760, 568]], [420, 340, 900, 520]))
+
+    assert abs(w / h - 16 / 9) < 1e-6 and x <= 65 - 56 + 1 and y <= 81 and x + w >= 1320 and y + h >= 860
+    assert x >= 0 and y >= 0 and x + w <= 1920 and y + h <= 1080
+    assert pair.view(Fake("foreground", [])) == (0, 0, 1920, 1080)

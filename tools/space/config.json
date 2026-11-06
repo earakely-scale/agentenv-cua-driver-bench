@@ -9,6 +9,10 @@
   },
   "media_base": "https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv/resolve/main",
   "space_local": "hero",
+  "pairs": [
+    {"os": "linux", "run": "cua-driver-sonnet-5-5-2026-11-06", "task": "ir-02", "run_index": 4},
+    {"os": "macos", "run": "cua-driver-sonnet-5-5-2026-11-05", "task": "cdb-g04", "run_index": 4}
+  ],
   "hero": {
     "trial": "linux--cua-driver-sonnet-5-5-2026-11-06--ir-02-r3-background",
     "seconds": 24,

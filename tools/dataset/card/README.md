@@ -63,7 +63,7 @@ systems, models and drivers are added beside it.
 These are AgentEnv's runs of trycua's tasks, not trycua's own: trycua runs the bench with its own runner, on macOS,
 Linux and Windows, and results from the two runners aren't like-for-like.
 
-## Results
+{{PAIRS}}## Results
 
 {{SUMMARY}}
 

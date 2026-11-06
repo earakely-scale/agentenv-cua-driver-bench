@@ -182,7 +182,9 @@ function boardView() {
   document.title = CAT.title;
   VIEW.board = true;
   const wrap = h("div", { class: "wrap" });
-  wrap.append(landing(), resultsSection());
+  wrap.append(landing());
+  if ((CAT.pairs || []).length) wrap.append(pairsSection());
+  wrap.append(resultsSection());
   if (CAT.comparisons.length) wrap.append(driversSection());
   wrap.append(trialsSection(), howSection());
   $("#app").replaceChildren(wrap);
@@ -210,6 +212,25 @@ function landing() {
         h("p", {}, "In the background condition a simulated user types into their own window, “User activity”, one character a second. A sentinel logs everything that reaches them.")),
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot judge" }), "The grade"),
         h("p", {}, "Every half must hold: the task, by trycua's own evaluator; GUI only, no way out of the GUI; and in the background, the user undisturbed on all eight of trycua's criteria."))));
+}
+
+function pairsSection() {
+  return h("section", { class: "pairs", "aria-labelledby": "pairs-h" },
+    h("div", { class: "section-head", id: "pairs" }, h("h2", { id: "pairs-h" }, "The same task in both conditions"),
+      h("p", {}, "One run of a task in the foreground, left, and in the background, right: the same model, driver, task and seed, at one speed.")),
+    h("div", { class: "pair-list" }, CAT.pairs.map((p) => {
+      const fg = CAT.trials.find((t) => t.uid === p.foreground), bg = CAT.trials.find((t) => t.uid === p.background);
+      if (!fg || !bg) return null;
+      const task = TASKS[fg.task] || {};
+      const said = (t) => (t.passed ? "pass" : "not a pass") + (t.condition === "background" && t.grade?.user_undisturbed?.result ? ", the user undisturbed" : "");
+      const video = h("video", { src: p.video, autoplay: true, muted: true, loop: true, playsinline: true, preload: "metadata",
+        "aria-label": `${fg.model_name} through ${driverName(fg.driver)} on ${OSES[p.os]?.name || p.os}, ${task.probe || fg.task} ${task.title || ""}: the foreground and background trials side by side` });
+      video.muted = true;
+      return h("figure", { class: "pair" }, video,
+        h("figcaption", {}, h("b", {}, `${OSES[p.os]?.name || p.os} · ${(task.probe || fg.task).replace("CDB-", "")} ${task.title || ""}`),
+          ` — ${fg.model_name} through ${driverName(fg.driver)}, run ${p.run_index}. Foreground ${said(fg)}; background ${said(bg)}. `,
+          h("a", { href: hashOf(fg) }, "Replay the foreground"), " · ", h("a", { href: hashOf(bg) }, "Replay the background")));
+    })));
 }
 
 function figures(keys, alt) {

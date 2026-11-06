@@ -42,6 +42,7 @@ def main():
     shutil.copytree(HERE / "licenses", dataset / "licenses", dirs_exist_ok=True)
     text = (HERE / "card" / "README.md").read_text()
     text = text.replace("{{HERO}}", _hero(catalog, trials))
+    text = text.replace("{{PAIRS}}", _pairs(catalog, trials))
     text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
     models = json.loads((HERE.parent / "space" / "config.json").read_text())["models"]
     names = {**{k: v["name"] for k, v in models.items()}, **{m["id"]: m["name"] for m in catalog["models"]}}
@@ -51,6 +52,40 @@ def main():
     text = text.replace("{{DRIVERS}}\n\n", f"{drivers}\n\n" if drivers else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
     (dataset / "README.md").write_text(text)
+
+
+def _pairs(catalog, trials):
+    """The card's side-by-side section: each configured task's foreground and background trials of one run, the GIF
+    and what each condition came to; nothing without them."""
+    rows = []
+    for p in catalog.get("pairs") or []:
+        got = {}
+        for cond in ("foreground", "background"):
+            run, trial = catalog_uid(p[cond])
+            got[cond] = trials[(trials.run == run) & (trials.trial_id == trial) & (trials.os == p["os"])].iloc[0]
+        fg, bg = got["foreground"], got["background"]
+        model = _model(catalog, fg.model)
+        osn = next((o["name"] for o in catalog["oses"] if o["id"] == p["os"]), p["os"])
+        driver = next((d["name"] for d in catalog["drivers"] if d["id"] == fg.driver), fg.driver)
+        lead = "" if fg.driver == DRIVER else f"{fg.driver}/"
+        link = f"{SPACE}#/{lead}{p['os']}/{fg.task}/background/{urllib.parse.quote(fg.model, safe='')}/r{int(fg.run_index)}"
+        said = {c: ("a pass" if r.passed else "not a pass") + (", the user undisturbed" if c == "background" and r.user_undisturbed
+                                                             else "") for c, r in got.items()}
+        alt = (f"{model} through {driver} on {osn}, {fg.probe} {fg.title}, run {int(fg.run_index)}: the foreground trial "
+               f"and the background trial side by side, each ending on its grade")
+        rows.append(f"[![{alt}](assets/{p['gif']})]({link})\n\n<sub>{osn}: {model} through {driver} on {fg.probe} "
+                    f"{fg.title}, run {int(fg.run_index)}, at one speed. Foreground {said['foreground']}; background "
+                    f"{said['background']}. **▶ [Replay the background trial]({link})**</sub>")
+    if not rows:
+        return ""
+    return ("## The same task in both conditions\n\nOne run of a task in the foreground, left, and in the background, right: "
+            "the same model, driver, task and seed, played at one speed.\n\n" + "\n\n".join(rows) + "\n\n")
+
+
+def catalog_uid(uid):
+    """A Space trial uid, ``os--run--trial_id``, as (run, trial_id)."""
+    *_, run, trial = uid.split("--")
+    return run, trial
 
 
 def _hero(catalog, trials):

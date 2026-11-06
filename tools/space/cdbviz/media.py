@@ -46,10 +46,14 @@ def frame(src, t, out, width=960, quality=3):
                     "-vf", f"scale={width}:-2:flags=lanczos", "-q:v", str(quality), str(out)], check=True)
 
 
-def frames(src, start, fps, count, size):
+def frames(src, start, fps, count, size, crop=None):
+    """Raw RGB frames of ``src`` from ``start``, at ``fps``, scaled to ``size``; ``crop`` (x, y, w, h, as fractions of
+    the frame) first keeps only that part of it."""
     w, h = size
+    cut = f"crop=iw*{crop[2]:.5f}:ih*{crop[3]:.5f}:iw*{crop[0]:.5f}:ih*{crop[1]:.5f}," if crop else ""
     cmd = ["ffmpeg", "-v", "error", "-ss", f"{max(0.0, start):.3f}", "-i", str(src), "-vf",
-           f"fps={fps},scale={w}:{h}:flags=lanczos", "-frames:v", str(count), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+           f"fps={fps},{cut}scale={w}:{h}:flags=lanczos", "-frames:v", str(count), "-f", "rawvideo", "-pix_fmt", "rgb24",
+           "-"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     n = w * h * 3
     try:

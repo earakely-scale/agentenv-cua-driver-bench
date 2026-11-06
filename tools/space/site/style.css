@@ -97,6 +97,11 @@ button, select { font: inherit; color: inherit; }
 .controls { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .controls .tabs { margin-left: 0; }
 .figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pair-list { display: grid; gap: 18px; }
+.pair { margin: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #0b0f19; }
+.pair video { display: block; width: 100%; height: auto; aspect-ratio: 960 / 462; background: #0b0f19; }
+.pair figcaption { padding: 11px 14px 12px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); background: var(--surface); border-top: 1px solid var(--line); }
+.pair figcaption b { color: var(--ink); font-weight: 650; }
 .fig { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; background: var(--surface); }
 .fig img { display: block; width: 100%; height: auto; }
 
