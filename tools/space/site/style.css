@@ -122,11 +122,11 @@ button, select { font: inherit; color: inherit; }
 .subhead p { margin: 0; color: var(--ink-3); font-size: 13.5px; }
 
 /* cards with a square per trial */
-.xcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 404px), 1fr)); gap: 14px; }
+.xcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .xcard { min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 15px; border: 1px solid var(--line); border-top: 3px solid var(--dc); border-radius: var(--radius); background: var(--surface); }
 .xcard h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 750; letter-spacing: -.01em; }
 .xcard h3 .dot { background: var(--dc); }
-.xcard .what { margin: -8px 0 0; color: var(--ink-3); font-size: 13px; line-height: 1.45; }
+.xcard .what { margin: -8px 0 0; color: var(--ink-3); font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .xline { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
 p.xline { display: block; }
 .xline.pace { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12.5px; }
@@ -559,6 +559,7 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
   .board > .cond-cell::before { content: attr(data-cond); display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
   .players, .how { grid-template-columns: minmax(0, 1fr); }
   .os-top, .os-top.bare .facts { grid-template-columns: minmax(0, 1fr); }
+  .xcards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
   .controls { margin-left: 0; justify-content: flex-start; flex-basis: 100%; }
   .cmp-grid { grid-template-columns: minmax(112px, auto) repeat(2, minmax(0, 1fr)); }
   .cmp-grid > .ch:first-child { display: none; }
@@ -616,6 +617,7 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
   .cc.total .lead-tag { display: none; }
   .snav a { padding: 6px 11px; font-size: 13px; }
   .xcard { padding: 13px 14px 14px; }
+  .xcard .what { -webkit-line-clamp: 4; }
   .wpair { --sq: 12px; gap: 12px 20px; }
   .wlab { width: 0; min-width: 100%; flex-wrap: wrap; row-gap: 0; }
   .wlab span { flex-basis: 100%; }
