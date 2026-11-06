@@ -9,29 +9,32 @@ from collections import Counter, defaultdict
 
 from . import catalog
 
-#: The outcomes in the order the figures stack them, a pass first, then mildest to gravest.
+#: The outcomes in the order the figures stack them, a pass first, then mildest to gravest, each with its colour: a
+#: figures.SERIES slot, and for a tint its strength in the light and the dark theme. A pass and the dialog over the user
+#: are tints, so the failures the agent made stand out; the full hues, in this order, keep neighbours apart for
+#: colour-blind readers.
 MODES = [
-    {"id": "pass", "name": "Passed",
+    {"id": "pass", "slot": 2, "tint": [0.3, 0.42], "name": "Passed",
      "description": "Every half of the grade held: the task, GUI only, and in the background the user undisturbed."},
-    {"id": "wrong", "name": "Done, but wrong",
+    {"id": "wrong", "slot": 7, "name": "Done, but wrong",
      "description": "The agent finished, most often replying DONE, but trycua's evaluator found the task wrong or "
                     "unfinished."},
-    {"id": "out_of_turns", "name": "Ran out of turns",
+    {"id": "out_of_turns", "slot": 0, "name": "Ran out of turns",
      "description": "The agent hit the bench's limit, 45 turns or 6 minutes, before it finished."},
-    {"id": "blocked", "name": "Stopped, blocked",
+    {"id": "blocked", "slot": 1, "name": "Stopped, blocked",
      "description": "The agent stopped and replied BLOCKED: a step its tools couldn't do (browser-use has no hover; "
                     "GPT-6 in Codex never sees a screenshot), an app that stopped responding, or a result it couldn't "
                     "confirm."},
-    {"id": "no_background", "name": "No background input",
+    {"id": "no_background", "slot": 6, "name": "No background input",
      "description": "In the background, the driver refused to reach the app without bringing it forward, and the agent "
                     "stopped (BLOCKED) rather than disturb the user."},
-    {"id": "dialog", "name": "Dialog over the user",
+    {"id": "dialog", "slot": 3, "tint": [0.35, 0.45], "name": "Dialog over the user",
      "description": "Disturbed the user in a task that can't pass in the background on this OS: on Linux the task's "
                     "own dialog covers the user's window whatever the agent does (‡)."},
-    {"id": "disturbed", "name": "Disturbed the user",
+    {"id": "disturbed", "slot": 3, "name": "Disturbed the user",
      "description": "In the background, the agent took the user's keyboard focus, raised a window over theirs, moved "
                     "their pointer, changed their clipboard or lost one of their keystrokes: trycua's A22 criteria."},
-    {"id": "left_gui", "name": "Left the GUI",
+    {"id": "left_gui", "slot": 4, "name": "Left the GUI",
      "description": "The agent got round the GUI, such as running a command through cua-driver's launch_app, which "
                     "fails the trial whatever else it did."},
 ]

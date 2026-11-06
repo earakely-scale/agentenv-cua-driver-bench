@@ -481,13 +481,6 @@ def write_all(cat, out_dirs):
     return written
 
 
-#: Each outcome's colour, a SERIES slot and its strength in the light and the dark theme: a pass and the dialog over the
-#: user are tints, so the failures the agent made stand out; the full hues, in failures.MODES' order, keep neighbours
-#: apart for colour-blind readers.
-OUTCOME = {"pass": (2, 0.3, 0.42), "wrong": (7, 1, 1), "out_of_turns": (0, 1, 1), "blocked": (1, 1, 1),
-           "no_background": (6, 1, 1), "dialog": (3, 0.35, 0.45), "disturbed": (3, 1, 1), "left_gui": (4, 1, 1)}
-
-
 def failure_specs(cat):
     """The failure figures, of the board's trials: how each OS, driver and model's trials ended in each condition, and
     which of trycua's A22 criteria its background trials broke."""
@@ -567,8 +560,9 @@ def ink_on(theme, slot, strength):
 
 
 def tinted(theme, outcome):
-    slot, light, dark = OUTCOME[outcome]
-    return slot, light if theme == "light" else dark
+    """An outcome's SERIES slot and strength in ``theme``."""
+    m = next(m for m in failures.MODES if m["id"] == outcome)
+    return m["slot"], m["tint"][theme == "dark"] if m.get("tint") else 1
 
 
 def head(svg, spec, s, margin):
