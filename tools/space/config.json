@@ -48,7 +48,7 @@
      "caption": "It is still working through the calendar when it takes its 45th turn and the harness stops it, the schedule unfinished. All 15 of Sonnet's multi-app foreground trials through agent-desktop end at the turn limit."},
     {"os": "macos", "run": "macos-harness-sonnet-5-5-2026-11-05", "trial": "mb-11-r2-foreground", "mode": "hover",
      "title": "Has no hover, so the tooltip never shows",
-     "caption": "browser-use's harness has no command that just points. To show the Cube icon's tooltip the agent clicks, holds, drags and scrolls on it; the tooltip never appears, and it replies BLOCKED. browser-use fails all ten hover tasks (MB-10 and MB-11); cua-driver and agent-desktop pass them.",
+     "caption": "browser-use's harness has no command that just points. To show the Cube icon's tooltip the agent clicks, holds, drags and scrolls on it; the tooltip never appears, and it replies BLOCKED. Through browser-use, Sonnet and Haiku fail all 20 hover trials (MB-10 and MB-11); through cua-driver and agent-desktop they pass every one.",
      "view": [0, 30, 1156, 650]}
   ],
   "hero": {
