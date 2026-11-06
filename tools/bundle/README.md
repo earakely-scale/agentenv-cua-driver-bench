@@ -37,11 +37,10 @@ results.
 
 ## Run it
 
-On Linux, with Docker and a local registry:
+On Linux, with Docker:
 
 ```bash
 pip install 'agentenv-framework>=0.9.1446'
-docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
 mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
 [model]
 base_url = "https://your-litellm-or-openai-compatible-proxy"
@@ -55,8 +54,7 @@ agent-env run hf://{{REPO}} --task codex-cdb-g02-background --model openai/gpt-6
 ```
 
 On an Apple silicon Mac, the same tasks run on macOS 26, in a logged-in session with
-[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do) with the same
-registry. Add a `[sandbox]` table to the config, then run the `macos-` tasks:
+[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do). Add a `[sandbox]` table to the config, then run the `macos-` tasks:
 
 ```bash
 printf '\n[sandbox]\ndefault = "lume"\n' >> .agentenv/config.toml

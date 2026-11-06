@@ -77,7 +77,6 @@ OpenAI-compatible endpoint for the model:
 
 ```bash
 pip install 'agentenv-framework>=0.9.1454'
-docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2   # where the task computers are built
 mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
 [model]
 base_url = "https://your-litellm-or-openai-compatible-proxy"
@@ -97,8 +96,8 @@ agent-env run hf://earakely-scale/cua-driver-bench --task codex-cdb-g02-backgrou
 
 The first run builds each task's computer, a few minutes; later runs reuse it. On an Apple silicon Mac the same tasks
 run on macOS 26 (we used EC2 mac2-m2.metal hosts), in a logged-in session with
-[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do) with the same
-registry. Add `[sandbox]` with `default = "lume"` to the config and run the `macos-` tasks: `macos-cua-driver-…` for
+[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do). Add
+`[sandbox]` with `default = "lume"` to the config and run the `macos-` tasks: `macos-cua-driver-…` for
 cua-driver on its own tools, `macos-agent-desktop-…` for Vercel Labs' agent-desktop and `macos-macos-harness-…` for
 browser-use's macOS harness, as the drivers comparison ran them, for example
 `agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background`.
@@ -140,7 +139,6 @@ tooling and tests; `agent-env run .` in a clone takes the same arguments as `hf:
 
 ```bash
 pip install 'agentenv-framework>=0.9.1412'
-docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
 git clone https://github.com/earakely-scale/agentenv-cua-driver-bench && cd agentenv-cua-driver-bench
 python tools/taskpack.py                       # fetch trycua's task pack at the pinned commit
 mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
@@ -166,7 +164,7 @@ checks, without a model, that every kind of disturbance is caught and scored by 
 
 On an Apple silicon Mac, the tasks run on macOS 26 (we used EC2 mac2-m2.metal hosts). `agent-env` must run in
 a logged-in session, with [Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima
-will do) with the same registry:
+will do):
 
 ```bash
 pip install 'agentenv-framework>=0.9.1446'
