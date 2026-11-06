@@ -45,7 +45,11 @@
      "caption": "It can't open a log file through the apps, so it asks cua-driver's launch_app to run sh -c 'cp …'. A shell is a way out of the GUI, so the trial fails GUI-only whether or not the command ran."},
     {"os": "macos", "run": "agent-desktop-sonnet-5-5-2026-11-05", "trial": "cdb-g02-r3-foreground", "mode": "turns",
      "title": "Runs out of turns mid-task",
-     "caption": "It is still working through the calendar when it takes its 45th turn and the harness stops it, the schedule unfinished. All 15 of Sonnet's multi-app foreground trials through agent-desktop end at the turn limit."}
+     "caption": "It is still working through the calendar when it takes its 45th turn and the harness stops it, the schedule unfinished. All 15 of Sonnet's multi-app foreground trials through agent-desktop end at the turn limit."},
+    {"os": "macos", "run": "macos-harness-sonnet-5-5-2026-11-05", "trial": "mb-11-r2-foreground", "mode": "hover",
+     "title": "Has no hover, so the tooltip never shows",
+     "caption": "browser-use's harness has no command that just points. To show the Cube icon's tooltip the agent clicks, holds, drags and scrolls on it; the tooltip never appears, and it replies BLOCKED. browser-use fails all ten hover tasks (MB-10 and MB-11); cua-driver and agent-desktop pass them.",
+     "view": [0, 30, 1156, 650]}
   ],
   "hero": {
     "trial": "linux--cua-driver-sonnet-5-5-2026-11-06--ir-02-r3-background",
