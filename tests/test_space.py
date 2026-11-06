@@ -239,3 +239,87 @@ def test_a_pairs_panels_show_one_region_of_the_screen_holding_every_window_at_it
     assert abs(w / h - 16 / 9) < 1e-6 and x <= 65 - 56 + 1 and y <= 81 and x + w >= 1320 and y + h >= 860
     assert x >= 0 and y >= 0 and x + w <= 1920 and y + h <= 1080
     assert pair.view(Fake("foreground", [])) == (0, 0, 1920, 1080)
+
+
+def test_the_grid_counts_each_tasks_passing_runs_per_model_off_where_the_bench_doesnt_run_it_none_before_it_ran(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    cfg = {**CONFIG, "tasks": {"mb-10": {"probe": "MB-10", "conditions": ["foreground"]}},
+           "caveats": [{"os": "linux", "condition": "background", "tasks": ["ir-01"], "mark": "‡",
+                        "short": "Not passable on Linux"}]}
+    metas = [{**m, "harness": "claude-code"} for m in _cells("cua-driver", [
+        ("ir-01", "foreground", [(True, 1.0)] * 2), ("ir-01", "background", [(False, 1.0)] * 2),
+        ("ir-02", "foreground", [(True, 1.0), (False, 0.5)]), ("ir-02", "background", [(True, 1.0)] * 2),
+        ("mb-10", "foreground", [(True, 1.0)] * 2)], os="linux")] + [{**m, "harness": "claude-code"} for m in _cells(
+        "cua-driver", [("ir-01", "foreground", [(True, 1.0)]), ("ir-01", "background", [(False, 1.0)]),
+                       ("ir-02", "background", [(True, 1.0)])], os="linux", model=HAIKU)]
+
+    spec = space("figures").tasks_spec(_catalog(space, metas, cfg))
+
+    fg, bg = spec["panels"]
+    assert [c["id"] for c in spec["cols"]] == [HAIKU, SONNET] and spec["full"] == 2
+    assert (fg["cells"][("ir-02", SONNET)]["passed"], fg["cells"][("ir-02", SONNET)]["n"]) == (1, 2)
+    assert bg["cells"][("mb-10", SONNET)] == "off" and fg["cells"][("ir-02", HAIKU)] is None
+    assert list(bg["marks"]) == ["ir-01"] and not fg["marks"]
+    assert spec["notes"][:2] == [
+        "With the user typing on Linux, every model passes IR-02 and no other task: all 3 of its trials, against none "
+        "of the other 3.", "The marked rows can't pass there: IR-01 (‡ not passable on Linux)."]
+
+
+def test_a_models_column_is_headed_by_its_family_and_its_variant(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    heads = space("figures").heads
+
+    assert heads(["Claude Haiku 5.5", "Claude Opus 5.5", "GPT-6 Luna", "GPT-6.1 Terra", "GPT-6.1 Sol"]) == [
+        ("Claude 5.5", "Haiku"), ("Claude 5.5", "Opus"), ("GPT-6", "Luna"), ("GPT-6.1", "Terra"), ("GPT-6.1", "Sol")]
+
+
+def test_the_frontier_holds_the_points_no_cheaper_one_matches_and_a_point_counts_the_trials_every_point_ran(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    figures = space("figures")
+    points = [{"name": name, "cost": cost, "share": share} for name, cost, share in (
+        ("luna", 0.02, 0.34), ("haiku", 0.07, 0.43), ("terra", 0.10, 0.39), ("sol", 0.18, 0.43), ("sonnet", 0.56, 0.52),
+        ("opus", 0.82, 0.48))]
+    metas = ([{**m, "cost": 0.5} for m in _cells("cua-driver", [
+        ("ir-01", "foreground", [(True, 1.0), (False, 0.0)]), ("ir-02", "foreground", [(True, 1.0)] * 2)], os="linux")]
+             + [{**m, "cost": 0.1} for m in _cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)] * 2)],
+                                                    os="linux", model=HAIKU)])
+
+    tallied = figures.tally(_catalog(space, metas), "linux", [("cua-driver", SONNET, "S", 1), ("cua-driver", HAIKU, "H", 0)])
+
+    assert [p["name"] for p in figures.frontier(points)] == ["luna", "haiku", "sonnet"]
+    assert [(p["name"], p["n"], p["passed"], p["cost"]) for p in tallied] == [("S", 2, 1, 0.5), ("H", 2, 2, 0.1)]
+
+
+def test_an_os_gap_holds_the_model_and_the_bench_driver_over_the_tasks_every_os_ran_in_both_conditions(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    both = lambda task, fg, bg: [(task, "foreground", fg), (task, "background", bg)]
+    metas = (_cells("cua-driver", both("ir-01", [(True, 1.0)] * 2, [(False, 0.5)] * 2)
+                    + both("mb-09", [(True, 1.0)] * 2, [(False, 0.5)] * 2), os="linux")
+             + _cells("cua-driver", both("ir-01", [(True, 1.0)] * 2, [(True, 1.0)] * 2), os="macos")
+             + _cells("agent-desktop", both("ir-01", [(False, 0.0)], [(False, 0.0)]), os="linux"))
+
+    [gap] = space("figures").os_gaps(_catalog(space, metas))
+
+    assert (gap["model"], gap["tasks"]) == (SONNET, ["ir-01"])
+    assert {o["id"]: (o["foreground"]["pass"], o["background"]["pass"]) for o in gap["oses"]} == {
+        "linux": (1.0, 0.0), "macos": (1.0, 1.0)}
+
+
+def test_the_comparison_figures_are_written_with_their_notes_and_one_without_data_is_left_out(space, tmp_path):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    metas = [{**m, "cost": cost, "harness": "claude-code"} for model, cost in ((SONNET, 0.5), (HAIKU, 0.1)) for m in _cells(
+        "cua-driver", [("ir-01", "foreground", [(True, 1.0)] * 2), ("ir-01", "background", [(False, 1.0), (True, 1.0)])],
+        os="linux", model=model)]
+
+    written = space("figures").write_all(_catalog(space, metas), [tmp_path])
+
+    assert written["compare_figures"] == ["models-tasks", "pareto"] and set(written["compare_notes"]) == {
+        "models-tasks", "pareto"}
+    assert all((tmp_path / f"{key}{variant}.svg").exists() for key in written["compare_figures"]
+               for variant in ("", "-dark", "-phone", "-phone-dark"))
+    assert "Claude Haiku 5.5 (75% at $0.10)" in written["compare_notes"]["pareto"][1]

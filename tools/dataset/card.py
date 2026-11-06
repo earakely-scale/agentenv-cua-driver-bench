@@ -27,6 +27,14 @@ DRIVER_FIGURES = {
     "drivers-full-pass": "Line chart of the share of trials that pass every half of the grade in the foreground and "
                          "the background condition, a panel per OS and model, one line per computer-use driver",
 }
+COMPARE_FIGURES = {
+    "models-tasks": "Grid of how many of each task's five runs passed, a row per task in its family and a column per "
+                    "model, a block for the foreground and one for the background, each cell shaded by its passes",
+    "pareto": "Scatter of the share of trials passed against the mean cost of a trial at list price on a log scale, a "
+              "point per model on Linux and per driver on macOS, with the frontier of the most passes for the money",
+    "os-gap": "Line chart of the share of trials that pass in the foreground and the background, a panel per model, one "
+              "line for Linux and one for macOS, the driver held fixed",
+}
 DRIVER = "cua-driver"
 HARNESSES = {"claude-code": "Claude Code", "codex-cli": "Codex CLI"}
 OSES = {"linux": "Linux", "macos": "macOS"}
@@ -50,6 +58,8 @@ def main():
     names = {**{k: v["name"] for k, v in models.items()}, **{m["id"]: m["name"] for m in catalog["models"]}}
     text = text.replace("{{RESULTS}}", _results(out, trials, missing, names,
                                                  {d["id"]: d["name"] for d in catalog["drivers"]}))
+    compare = _compare(catalog)
+    text = text.replace("{{COMPARE}}\n\n", f"{compare}\n\n" if compare else "")
     drivers = _drivers(out, catalog)
     text = text.replace("{{DRIVERS}}\n\n", f"{drivers}\n\n" if drivers else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
@@ -207,6 +217,23 @@ in the Space, whose cua-driver rows are its runs on its own tools alone (`cua-dr
 {figures}
 
 {table}"""
+
+
+def _compare(catalog):
+    """The comparison section: each comparison figure the build wrote, with the sentences its numbers make, their dollars
+    escaped since Hugging Face's Markdown takes two in a paragraph for math; nothing without them."""
+    keys = catalog.get("compare_figures") or []
+    if not keys:
+        return ""
+    notes = catalog.get("compare_notes") or {}
+    said = lambda key: " ".join(notes.get(key) or []).replace("$", "\\$")
+    figures = "\n\n".join(f"{_picture(key, COMPARE_FIGURES[key])}\n\n{said(key)}" for key in keys)
+    return f"""## How models, operating systems and drivers compare
+
+The board three ways: every task's passes model by model, what a pass costs, and what changes when only the operating
+system does.
+
+{figures}"""
 
 
 def _lost(count):

@@ -71,6 +71,8 @@ Linux and Windows, and results from the two runners aren't like-for-like.
 
 {{RESULTS}}
 
+{{COMPARE}}
+
 {{DRIVERS}}
 
 ## Quick start

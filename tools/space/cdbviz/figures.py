@@ -530,8 +530,8 @@ def tasks_notes(os_, blocks, groups, cols):
         a, b = total(bg, passing, ids)
         every = all(total(bg, passing, [m])[0] for m in ids)
         out = [f"With the user typing on {os_['name']}, {'every model passes' if every else 'the models pass'} "
-               f"{named(rows[passing[0]])} and no other task: {of(a, b)} of its trials, against none of the other "
-               f"{n - b}."]
+               f"{named(rows[passing[0]])} and no other task: {f'all {b}' if a == b else a} of its "
+               f"{'' if a == b else f'{b} '}trials" + (f", against none of the other {n - b}." if n > b else ".")]
     else:
         out = [f"With the user typing on {os_['name']}, the models pass {p} of {n} trials"
                + (f", all of them in {join([rows[t]['probe'] for t in passing])}." if passing else ".")]
@@ -616,7 +616,7 @@ def pareto_notes(panels):
                                                   and f["share"] >= q["share"])
                       for q in sorted(pts, key=lambda q: -q["cost"]) if not q["frontier"]]
             out.append(f"The frontier is {join([said(q) for q in front])}"
-                       + (f". Every other model passes less than a cheaper one: {join(beaten)}." if beaten else "."))
+                       + (f". Every other model passes no more than a cheaper one: {join(beaten)}." if beaten else "."))
         else:
             order = sorted(pts, key=lambda q: -q["share"])
             out.append(f"On {p['os']}, with {p['via']}, " + ", ".join(
