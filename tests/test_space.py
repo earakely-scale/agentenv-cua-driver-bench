@@ -218,4 +218,5 @@ def test_another_drivers_calls_read_in_the_lane_as_steps_on_elements_points_and_
 def test_a_run_the_config_excludes_is_named_as_its_os_and_run(space):
     assert space("trials").run_of(Path("/d/runs/macos/cua-driver-sonnet-5-5-2026-11-05/ir-01-r1-foreground"), Path("/d")) == (
         "macos/cua-driver-sonnet-5-5-2026-11-05")
-    assert all(run.startswith("macos/") for run in json.loads((SPACE / "config.json").read_text())["exclude_runs"])
+    cfg = json.loads((SPACE / "config.json").read_text())
+    assert all(run.count("/") == 1 and run.split("/")[0] in cfg["oses"] for run in cfg["exclude_runs"])
