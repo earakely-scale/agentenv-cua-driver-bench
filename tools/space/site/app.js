@@ -546,7 +546,7 @@ function gallery(F, clips) {
   const failed = F ? CAT.trials.map((t) => F.by_trial[t.uid]).filter(Boolean) : [];
   const count = (id) => failed.filter((x) => x === id).length;
   const modes = (F?.modes || []).filter((m) => count(m.id) || clips.some((g) => g.mode === m.id)).sort((a, b) => count(b.id) - count(a.id));
-  const grid = h("div", { class: "clips" }, clips.map(clip));
+  const grid = h("div", { class: "fgrid" }, clips.map(clip));
   const desc = h("p", { class: "mdesc" });
   const chips = h("div", { class: "tabs modes", role: "group", "aria-label": "Failure modes" },
     [null, ...modes].map((m) => h("button", { "aria-pressed": "false", onclick: () => pick(m) }, m ? m.name : "All", h("small", {}, m ? count(m.id) : failed.length))));
@@ -567,16 +567,16 @@ function gallery(F, clips) {
 function clip(g) {
   const t = CAT.trials.find((x) => x.uid === g.uid);
   const mode = CAT.failures?.modes.find((m) => m.id === g.mode);
-  const video = h("video", { src: g.video, muted: true, loop: true, playsinline: true, preload: "none", poster: t?.poster || null, "aria-label": g.title });
+  const video = h("video", { src: g.video, muted: true, loop: true, playsinline: true, preload: "none", "aria-label": `${g.title}: ${g.caption}` });
   video.muted = true;
-  return h("figure", { class: "clip", "data-mode": g.mode },
-    h("div", { class: "clip-v" }, video, mode ? h("span", { class: "clip-tag" }, mode.name) : null),
+  return h("figure", { class: `fclip${t?.passed ? " pass" : ""}`, "data-mode": g.mode }, video,
     h("figcaption", {}, h("b", {}, g.title), g.caption ? h("p", {}, g.caption) : null,
-      h("div", { class: "clip-foot" },
+      h("div", { class: "fclip-foot" },
+        mode ? h("span", { class: "chip mode" }, mode.name) : null,
         h("span", { class: "chip" }, OSES[g.os]?.name || g.os),
         h("span", { class: "chip", title: driverName(g.driver) }, driverDot(g.driver), driverLabel(g.driver)),
         h("span", { class: "chip" }, h("span", { class: "dot", style: { background: `var(--s${(MODELS[g.model]?.slot ?? 0) % 8})` } }), MODELS[g.model]?.name || g.model),
-        t ? h("a", { class: "clip-go", href: hashOf(t) }, "Replay the trial →") : null)));
+        t ? h("a", { class: "fclip-go", href: hashOf(t) }, "Replay the trial →") : null)));
 }
 
 function playWhenSeen(videos) {

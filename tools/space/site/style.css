@@ -192,18 +192,19 @@ a.sq:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
 .tabs.modes small { margin-left: 7px; color: var(--ink-3); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mdesc { margin: 0; max-width: 110ch; color: var(--ink-2); font-size: 13.5px; line-height: 1.5; }
 .mdesc a { color: var(--agent-ink); }
-.clips { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
-.clip { margin: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
-.clip-v { position: relative; background: #0b0f19; }
-.clip-v video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #0b0f19; }
-.clip-tag { position: absolute; left: 10px; top: 10px; max-width: calc(100% - 20px); padding: 3px 9px; border-radius: 7px; background: rgba(8, 11, 18, .82); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.clip figcaption { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 11px 14px 13px; border-top: 1px solid var(--line); }
-.clip figcaption > b { font-size: 14.5px; font-weight: 700; letter-spacing: -.005em; }
-.clip figcaption > p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
-.clip-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: 4px; }
+.fgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.fclip { margin: 0; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.fclip video { display: block; width: 100%; height: auto; aspect-ratio: 720 / 576; object-fit: contain; background: #0b0f19; }
+.fclip figcaption { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 11px 14px 13px; border-top: 1px solid var(--line); }
+.fclip figcaption > b { font-size: 15px; font-weight: 700; letter-spacing: -.005em; }
+.fclip figcaption > b::before { content: "✗ "; color: var(--bad); }
+.fclip.pass figcaption > b::before { content: "✓ "; color: var(--good); }
+.fclip figcaption > p { margin: 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.5; }
+.fclip-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: 4px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; background: var(--sunken); color: var(--ink-2); font-size: 12px; font-weight: 550; white-space: nowrap; }
-.clip-go { margin-left: auto; color: var(--agent-ink); font-size: 13px; font-weight: 650; text-decoration: none; white-space: nowrap; }
-.clip-go:hover { text-decoration: underline; }
+.chip.mode { background: var(--bad-soft); color: var(--bad-ink); font-weight: 650; }
+.fclip-go { margin-left: auto; color: var(--agent-ink); font-size: 13px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.fclip-go:hover { text-decoration: underline; }
 
 /* drivers */
 .dnote { margin: 0 0 16px; color: var(--ink-3); font-size: 13px; }
@@ -561,6 +562,7 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
   .board > .cond-cell::before { content: attr(data-cond); display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
   .players, .how { grid-template-columns: minmax(0, 1fr); }
   .os-top, .os-top.bare .facts { grid-template-columns: minmax(0, 1fr); }
+  .fgrid { grid-template-columns: minmax(0, 1fr); }
   .xcards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
   .controls { margin-left: 0; justify-content: flex-start; flex-basis: 100%; }
   .cmp-grid { grid-template-columns: minmax(112px, auto) repeat(2, minmax(0, 1fr)); }
