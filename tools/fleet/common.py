@@ -58,7 +58,11 @@ def ssm(instance, script, timeout=300, os_type="linux"):
 
 
 def ship(instance, local, remote, os_type="linux"):
-    """A small file copied to ``remote`` on the VM in base64 chunks an SSM command can hold, checked by sha256."""
+    """A small file copied to ``remote`` on the VM in base64 chunks an SSM command can hold, checked by sha256; nothing
+    is sent when the VM has it already."""
+    digest = hashlib.sha256(local.read_bytes()).hexdigest()
+    if ssm(instance, f"{HOSTS[os_type][3]} {remote} 2>/dev/null || true", os_type=os_type).split()[:1] == [digest]:
+        return
     data = base64.b64encode(local.read_bytes()).decode()
     ssm(instance, f"mkdir -p $(dirname {remote}) && rm -f {remote}.b64", os_type=os_type)
     for start in range(0, len(data), CHUNK):
