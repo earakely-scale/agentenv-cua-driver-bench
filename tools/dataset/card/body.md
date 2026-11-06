@@ -42,7 +42,8 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`) are those
    with Vercel Labs' agent-desktop or browser-use's macOS harness in cua-driver's place, and nothing else changed.
 2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver's MCP
-   server (on Linux with AgentEnv's `computer_*` tools beside cua-driver's own) and AgentEnv's `peer_agents` server,
+   server, its own tools alone (on Linux through `--set envs/<computer>.tools=driver`, since the Linux task files
+   keep the default, which adds AgentEnv's `computer_*` tools), and AgentEnv's `peer_agents` server,
    which no task uses, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns
    and 360 seconds.
 3. Start recording the screen (10 fps), arm the sentinel, prompt the agent, disarm the sentinel.

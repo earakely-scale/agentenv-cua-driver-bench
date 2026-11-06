@@ -10,7 +10,7 @@
   "media_base": "https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv/resolve/main",
   "space_local": "hero",
   "hero": {
-    "trial": "linux--haiku-5-5-2026-11-02--ir-02-r3-background",
+    "trial": "linux--cua-driver-sonnet-5-5-2026-11-06--ir-02-r3-background",
     "seconds": 24,
     "still_at": 0.56
   },
@@ -75,7 +75,8 @@
     }
   },
   "exclude_runs": ["macos/sonnet-5-5-2026-11-05",
-    "macos/sonnet-5-5-2026-11-05-multiapp", "macos/haiku-5-5-2026-11-05"],
+    "macos/sonnet-5-5-2026-11-05-multiapp", "macos/haiku-5-5-2026-11-05", "linux/sonnet-5-5-2026-11-03",
+    "linux/haiku-5-5-2026-11-02", "linux/sonnet-4-5-2026-11-02"],
   "drivers": {
     "cua-driver": {
       "name": "cua-driver",

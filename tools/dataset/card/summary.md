@@ -2,8 +2,7 @@
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
 90 trials of Bench v2, Claude Haiku 5.5 on the 60 BenchLab trials, macOS 26 on EC2 Macs). Through the three, Sonnet
-passes 39 of 50, 35 of 50 and 32 of 50 trials
-in the foreground, and 23 of 40, 8 of 40 and 1 of 40 in the background.
+passes 39 of 50, 35 of 50 and 32 of 50 trials in the foreground, and 23 of 40, 8 of 40 and 1 of 40 in the background.
 
 - **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 35 of 35 and
   16 of 25.** It never takes the user's keyboard, and raises a window over theirs in 6 of 65 background trials.
@@ -25,25 +24,22 @@ cua-driver's first macOS runs, which also offered its agents seven of AgentEnv's
 stay in the dataset (`sonnet-5-5-2026-11-05`, `sonnet-5-5-2026-11-05-multiapp`, `haiku-5-5-2026-11-05`) but not on
 the board.
 
-**Claude Sonnet 5.5 in Claude Code, every trial of Bench v2 on Linux** (run `sonnet-5-5-2026-11-03`: 10 tasks, 5 runs
-each, both conditions, on agentenv-framework 0.9.1412, with the tasks, limits and grade of the Haiku 5.5 run). 41 of
-its 90 trials pass, as many as Claude Haiku 5.5's (`haiku-5-5-2026-11-02`), for $57.31 at list price against
-Haiku's $7.46, and none leaves the GUI. Its mean task score is higher in both conditions. On Linux the agent was
-offered AgentEnv's seven `computer_*` tools beside cua-driver's own 66, and used them in 31 of the 50 foreground and
-10 of the 40 background trials (Haiku 32 and 10): 18 of the 36 foreground passes used them, and none of the 5
-background passes.
+**cua-driver on its own tools, every trial of Bench v2 on Linux** (run `cua-driver-sonnet-5-5-2026-11-06`: Claude
+Sonnet 5.5 in Claude Code, 10 tasks, 5 runs each, on agentenv-framework 0.9.1453 with
+`--set envs/<computer>.tools=driver`, Ubuntu 24.04 on EC2). 47 of its 90 trials pass, for $50.14 at list price, and
+none leaves the GUI.
 
-- **Foreground: 36 of 50, task score 0.86 (Haiku 0.84).** 34 of the 35 precision and interruption trials pass (in
-  IR-01's fifth run it submits twice), and 2 of the 15 multi-app trials, G02's fifth run and G04's third. On the
-  multi-app tasks it mostly runs out of its 45 turns, with mean task scores of 0.81 (G02), 0.53 (G03) and 0.32 (G04);
-  Haiku's were 0.59, 0.45 and 0.32.
-- **Background: 5 of 40, all IR-02, task score 0.75 (Haiku 0.66).** It does the task in 14 of the 15 trials of IR-01,
-  IR-03 and IR-04, but their modal dialog covers the user's window on Linux, so they can't pass (‡). MB-09 can't
-  pass without moving the user's pointer (§), though it does the task every time. It passes no multi-app task in the
-  background: in 12 of the
-  15 trials it stops and reports itself blocked, since the apps refuse input in the background; in 2 of G04's runs
-  it brings the apps to the front and finishes the task. It disturbs the user in 9 of the 15 (Haiku 10), and its
-  mean task score there is 0.38 (Haiku 0.28).
+- **Foreground: 42 of 50, task score 0.92.** Every precision and interruption trial passes (35 of 35), and 7 of the
+  15 multi-app trials: G02 3 of 5, G03 none, G04 4 of 5. Its 8 misses all end on the 45-turn limit.
+- **Background: 5 of 40, all IR-02, task score 0.63.** It does the task in all 15 trials of IR-01, IR-03 and IR-04,
+  but their modal dialog covers the user's window on Linux, so they can't pass (‡). cua-driver's drag on Linux needs
+  the focus: in MB-09 the agent stops and reports itself blocked in 4 of 5 runs, and in the fifth drags in the
+  foreground and disturbs the user (§). It passes no multi-app task and reports itself blocked in all 15, since the
+  apps refuse background input, though it raises a window over the user's in all five G04 runs. It disturbs the user
+  in 23 of the 40 trials.
 
-The Sonnet 4.5 pilot (`sonnet-4-5-2026-11-02`, the three multi-app tasks once per condition, none passing) is in the
-tables and the Space, but not on the board.
+cua-driver's first Linux runs, which also offered its agents AgentEnv's seven `computer_*` tools beside its own 66,
+stay in the dataset but not on the board: Claude Sonnet 5.5 (`sonnet-5-5-2026-11-03`) passed 36 of 50 in the
+foreground, 2 of them multi-app, and 5 of 40 in the background, Claude Haiku 5.5 (`haiku-5-5-2026-11-02`) 36 of 50
+and 5 of 40, and the Claude Sonnet 4.5 pilot (`sonnet-4-5-2026-11-02`, the three multi-app tasks once per condition)
+none.

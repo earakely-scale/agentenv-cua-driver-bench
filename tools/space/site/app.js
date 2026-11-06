@@ -236,9 +236,8 @@ function driversSection() {
       h("p", {}, d.detail || ""),
       h("div", { class: "apps" }, osesOf(d.id).map((o) => h("span", { class: "app" }, o.name)))))),
     h("p", { class: "dnote" }, "Every driver also serves AgentEnv's ", h("code", {}, "computer_*"),
-      " tools, which the grader and the recordings use. On macOS no driver's agents here see them; on Linux ",
-      "cua-driver's do, beside its own. cua-driver's first macOS runs, which offered seven of them too, are in the ",
-      "dataset but not here."),
+      " tools, which the grader and the recordings use; no driver's agents here see them. cua-driver's first runs on ",
+      "macOS and Linux, which offered seven of them too, are in the dataset but not here."),
     figures(CAT.driver_figures, (f) => (f.endsWith("task-score") ? "Task score by driver" : "Full pass by driver")),
     compareView());
 }
