@@ -21,7 +21,7 @@ from their Swift sources at the pinned commit.
 trycua's interruptions are simulated inside BenchLab; none is a real system prompt, banner or browser page. Every
 interruption brief ends with the same sentence, which doesn't say what will appear.
 
-Each task runs in both of trycua's conditions:
+Each task runs in both of trycua's conditions, MB-10 and MB-11 in the foreground only (below):
 
 - **foreground**: the agent may bring any window to the front. A small witness window carries the guard (below);
   the user's criteria aren't scored.
@@ -82,7 +82,7 @@ The A22 criteria:
 ## Dataset structure
 
 ```
-results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, whether it's scored, cost, turns, paths
+results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, cost, turns, paths
 results/calls.parquet        one row per tool call, keyed by os, run and trial_id as trials.parquet is: when it was issued and answered on the recording's clock, its input, its result
 results/missing.parquet      one row per trial whose re-runs were spent, so its run is incomplete
 tasks/tasks.parquet          one row per trial task: the prompt, the system prompt, the built-in tools, limits, the task file
@@ -132,11 +132,9 @@ runs/<os>/<run>/<trial>/
   IR-02's banner is drawn inside BenchLab's window, so it can pass.
 - trycua's text is kept as written: the BenchLab briefs say BenchLab "is already open on your Mac", and MB-10's
   brief names an "Actions" strip that their Linux BenchLab labels "Hover here to reveal actions".
-- MB-10's and MB-11's background trials are kept with their grades but not scored, and new runs leave them out, as
-  agreed with trycua, whose task list at the pinned commit still runs both conditions: every hover BenchLab saw in
-  these runs moved the user's pointer, so in the background no driver here can pass them.
-  MB-09 is scored in both conditions, though in the background its drag keeps the user undisturbed only through a
-  driver that drags without moving the user's pointer.
+- MB-10 and MB-11 run in the foreground only: a real hover and a native tooltip need the pointer, which in the
+  background is the user's. MB-09 runs in both conditions, though in the background its drag keeps the user
+  undisturbed only through a driver that drags without moving the user's pointer.
 - Claude Code's `num_turns` counts tool round trips, across a context compaction too, so it passes 45 when the model
   makes several calls in one message; the 45-turn limit holds on `model_calls`, the model's distinct messages.
 

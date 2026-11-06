@@ -5,7 +5,7 @@ system prompt for a Linux desktop, a browser task's allowing its localhost site,
 pack; on macOS the BenchLab trials alone, the same but on BenchLab's macOS computer with their system prompt as it is; with the sentinel in that condition and BenchLab in the task's mode with the run's seed, claude-code with no
 built-in tools but Skill and Read, the sentinel armed just around the prompt within the task's time and turns; its
 grade, whatever became of the agent: in a container of its own with no network, on the trial's snapshot, and the
-trajectory's half outside; and the whole of Bench v2 in trycua's schedule, less MB-10's and MB-11's background runs."""
+trajectory's half outside; and the whole of Bench v2 in trycua's schedule, MB-10 and MB-11 in the foreground alone."""
 import ast
 import importlib.util
 import json
@@ -20,10 +20,14 @@ TRIALS = {"cdb-g02": "cdb-s02", "cdb-g03": "cdb-s03", "cdb-g04": "cdb-s04"}
 LABS = ("MB-09", "MB-10", "MB-11", "IR-01", "IR-02", "IR-03", "IR-04")
 RUNS = (1, 2, 3, 4, 5)
 CONDITIONS = ("background", "foreground")
-#: The tasks run in the foreground alone: a hover or a resting pointer can't leave the user undisturbed.
+#: The tasks run in the foreground alone: a real hover and a native tooltip need the pointer, in the background the
+#: user's.
 FOREGROUND_ONLY = ("MB-10", "MB-11")
 LAB_TRIALS = tuple(f"{probe.lower()}-r{run}" for probe in LABS for run in RUNS)
-EVERY = tuple((name, os) for os in ("linux", "macos") for name in (*TRIALS, *LAB_TRIALS))
+LAB_CELLS = tuple((probe, run, condition) for probe in LABS for run in RUNS for condition in CONDITIONS
+                  if not (condition == "background" and probe in FOREGROUND_ONLY))
+EVERY = tuple((name, os, condition) for os in ("linux", "macos") for name in (*TRIALS, *LAB_TRIALS)
+              for condition in CONDITIONS if not (condition == "background" and name[:5].upper() in FOREGROUND_ONLY))
 #: Where each OS's computer keeps a task's workspace: its session user's home.
 HOMES = {"linux": "/home/user", "macos": "/Users/lume"}
 OSES = ("linux", "macos")
@@ -58,9 +62,7 @@ def test_each_trial_is_prompted_as_trycuas_runner_prompts_it(trycua, probe, cond
 
 
 @pytest.mark.parametrize("os", OSES)
-@pytest.mark.parametrize("probe", LABS)
-@pytest.mark.parametrize("run", RUNS)
-@pytest.mark.parametrize("condition", CONDITIONS)
+@pytest.mark.parametrize(("probe", "run", "condition"), LAB_CELLS)
 def test_each_benchlab_trial_is_seeded_and_prompted_as_trycuas_runner_does_it(trycua, probe, run, condition, os):
     seed = _module(PACK / "runner" / "bench_core.py").probe_seed(probe, run - 1)
     limits = json.loads((PACK / "probes" / probe / "task.json").read_text())
@@ -83,8 +85,7 @@ def test_trycuas_runner_prompts_with_the_brief_in_its_condition_and_tells_the_ti
     assert 'p.add_argument("--tell-budget", action=argparse.BooleanOptionalAction, default=True)' in runner
 
 
-@pytest.mark.parametrize(("name", "os"), EVERY)
-@pytest.mark.parametrize("condition", CONDITIONS)
+@pytest.mark.parametrize(("name", "os", "condition"), EVERY)
 def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and_grades_it(name, os, condition):
     trial = _trial(name, condition, os)
     env = f"desktop-{TRIALS[name].removeprefix('cdb-')}" if name in TRIALS else "desktop-benchlab"
@@ -103,8 +104,7 @@ def test_each_trial_arms_the_sentinel_in_its_condition_just_around_the_agent_and
     assert trial["task"]["fail_task_on_error"] is False and trial["disarm"]["fail_task_on_error"] is False
 
 
-@pytest.mark.parametrize(("name", "os"), EVERY)
-@pytest.mark.parametrize("condition", CONDITIONS)
+@pytest.mark.parametrize(("name", "os", "condition"), EVERY)
 def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_trajectory_outside(name, os, condition):
     trial = _trial(name, condition, os)
     container = {"sandbox_name": "grader", "container_name": "grade"}
@@ -123,11 +123,11 @@ def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_tr
         "env_outcome_verifier", "gui_only", "task")
 
 
-def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule_less_the_foreground_only_ones(trycua):
-    """trycua's schedule: the v2 tasks in order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, less the
-    background runs of MB-10 and MB-11, which trycua and the bench agree aren't run there. A CDB task's runs are one
-    task file, its seed unused; the eval runs each task file once, and a condition's eval its half. On macOS, the same
-    trials in the same order."""
+def test_bench_v2_is_each_task_five_runs_in_each_of_its_conditions_in_trycuas_schedule(trycua):
+    """trycua's schedule: the v2 tasks in order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, MB-10
+    and MB-11 in the foreground alone, with no background task file. A CDB task's runs are one task file, its seed
+    unused; the eval runs each task file once, and a condition's eval its half. On macOS, the same trials in the same
+    order."""
     trials = (ROOT / "evals" / "bench-v2-trials.txt").read_text().split()
     expected = [f"{task.lower()}-{condition}" if task.startswith("CDB-") else f"{task.lower()}-r{run}-{condition}"
                 for condition in ("foreground", "background") for runs in ((1, 2, 3), (4, 5))
@@ -135,6 +135,8 @@ def test_bench_v2_is_each_task_five_runs_in_each_condition_in_trycuas_schedule_l
                 if not (condition == "background" and task in FOREGROUND_ONLY)]
 
     assert trials == expected and len(trials) == 90
+    assert not [p.name for p in (ROOT / "tasks").glob("*-background.json")
+                if any(f"-{task.lower()}-r" in f"-{p.stem}" for task in FOREGROUND_ONLY)]
     assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in trials)
     assert tomllib.loads((ROOT / "evals" / "bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(trials))
     for condition in ("foreground", "background"):

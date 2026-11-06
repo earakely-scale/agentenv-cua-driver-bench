@@ -74,8 +74,7 @@ def _hero(catalog, trials):
 
 def _results(out, trials, missing, names):
     figures = "\n\n".join(_picture(name, alt) for name, alt in FIGURES.items())
-    scored = trials[trials.scored]
-    runs = scored.groupby(["run", "model", "driver"], sort=False).agg(
+    runs = trials.groupby(["run", "model", "driver"], sort=False).agg(
         trials=("trial_id", "count"), passed=("passed", "sum"), task_score=("task_score", "mean"),
         harness=("harness_version", "first")).reset_index()
     runs["cost"] = runs.run.map(trials.groupby("run").cost_usd.sum())
@@ -85,7 +84,7 @@ def _results(out, trials, missing, names):
         f"{_lost(lost.get(r.run, 0))} | {int(r.passed)} | {r.task_score:.2f} | ${r.cost:.2f} |" for r in runs.itertuples())
     per_trial = "\n".join(
         f"| {t.trial_id} | {t.os} | {t.model.rsplit('/', 1)[-1]} | {t.driver} | {t.task_score:.2f} | "
-        f"{_mark(t.gui_only)} | {_mark(t.user_undisturbed)} | {_mark(t.passed) if t.scored else 'not scored'} | "
+        f"{_mark(t.gui_only)} | {_mark(t.user_undisturbed)} | {_mark(t.passed)} | "
         f"{int(t.tool_calls)} | "
         f"{'' if pd.isna(t.cost_usd) else f'${t.cost_usd:.2f}'} |" for t in trials.itertuples())
     return f"""{figures}
@@ -96,8 +95,7 @@ def _results(out, trials, missing, names):
 |---|---|---|---|---:|---:|---:|---:|---:|
 {run_rows}
 
-Trials, Passed and Mean task score count the scored trials, the cost every trial (`scored` in
-`results/trials.parquet`). Cost is at list price from the tokens each trial's trajectory reports (Claude Code's own
+Cost is at list price from the tokens each trial's trajectory reports (Claude Code's own
 figure is in `cost_usd_reported`). A run with missing trials, which infrastructure cut short past their re-runs
 (`results/missing.parquet`), is incomplete and isn't ranked.
 

@@ -23,13 +23,12 @@ def main():
     trials = sorted(p.parent for p in dataset.glob("runs/*/*/*/trial.json"))
     tasks = [task_row(bench, path) for path in sorted(bench.glob("tasks/*.json")) if STEM.match(path.stem)]
     titles = {task["task"]: task["title"] for task in tasks}
-    off = unscored(bench)
     (dataset / "tasks").mkdir(exist_ok=True)
     (dataset / "results").mkdir(exist_ok=True)
     pd.DataFrame(tasks).to_parquet(dataset / "tasks" / "tasks.parquet", index=False)
     rows, calls = [], []
     for folder in trials:
-        row, trial_calls = trial_row(dataset, folder, titles, off)
+        row, trial_calls = trial_row(dataset, folder, titles)
         rows.append(row)
         calls.extend(trial_calls)
     missing = [missing_row(folder) for folder in sorted(p.parent for p in dataset.glob("runs/*/*/*/missing.json"))]
@@ -68,13 +67,7 @@ def task_row(bench, path):
     }
 
 
-def unscored(bench):
-    """The OS, condition and tasks of each cell the Space's config doesn't score, its trials kept but in no total."""
-    caveats = json.loads((bench / "tools" / "space" / "config.json").read_text()).get("caveats") or []
-    return [(cv.get("os"), cv["condition"], set(cv["tasks"])) for cv in caveats if cv.get("unscored")]
-
-
-def trial_row(dataset, folder, titles, off):
+def trial_row(dataset, folder, titles):
     facts = json.loads((folder / "trial.json").read_text())
     timeline = json.loads((folder / "timeline.json").read_text())
     grade = facts.get("grade") or {}
@@ -95,8 +88,6 @@ def trial_row(dataset, folder, titles, off):
         "harness_version": facts["harness_version"],
         "reward": facts["reward"],
         "passed": facts.get("passed"),
-        "scored": not any(os_ in (None, facts["os"]) and condition == facts["condition"] and facts["task"] in tasks
-                          for os_, condition, tasks in off),
         "run_index": facts.get("run_index"),
         "seed": facts.get("seed"),
         "task_file": facts.get("task_file"),

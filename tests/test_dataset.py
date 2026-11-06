@@ -119,14 +119,10 @@ def test_a_trials_row_holds_every_half_of_its_grade_and_where_its_files_are(tabl
         {"i": 0, "turn": 1, "t0": 6.0, "t1": 7.0, "tool": "click", "server": "desktop-benchlab", "input": {},
          "error": False, "result": "ok", "image": False}]}))
 
-    row, calls = tables.trial_row(tmp_path, folder, {"ir-02": "Set two fields and press Apply"},
-                                  [("macos", "background", {"ir-02"})])
-    unscored, _ = tables.trial_row(tmp_path, folder, {}, [(None, "background", {"ir-02"})])
+    row, calls = tables.trial_row(tmp_path, folder, {"ir-02": "Set two fields and press Apply"})
 
     assert (row["run"], row["passed"], row["gui_only"], row["user_undisturbed"], row["a22_pointer"]) == (
         "haiku-5-5-2026-11-02", True, True, True, True)
-    assert row["scored"] and not unscored["scored"]
-    assert tables.unscored(ROOT) == [(None, "background", {"mb-10", "mb-11"})]
     assert row["agent_window_s"] == 25.0 and row["recording"].endswith("ir-02-r3-background/recording.mp4")
     assert [(c["trial_id"], c["tool"]) for c in calls] == [(folder.name, "click")]
 
@@ -166,19 +162,19 @@ def test_a_board_row_and_a_card_run_with_a_missing_trial_are_labelled_incomplete
                                 "drivers": [{"id": "cua-driver", "name": "cua-driver"}]})
     (tmp_path / "results.md").write_text(table)
     trial = {"run": "m-run", "os": "macos", "model": "m", "driver": "cua-driver", "trial_id": "ir-02-r1-background",
-             "passed": True, "scored": True, "task_score": 1.0, "cost_usd": 0.5, "harness_version": "2.1",
+             "passed": True, "task_score": 1.0, "cost_usd": 0.5, "harness_version": "2.1",
              "gui_only": True, "user_undisturbed": True, "tool_calls": 9}
     runs = card._results(tmp_path, tables.pd.DataFrame([trial, {
-        **trial, "trial_id": "mb-10-r1-background", "passed": False, "scored": False, "task_score": 0.0,
+        **trial, "trial_id": "ir-02-r3-background", "passed": False, "task_score": 0.0,
         "cost_usd": 0.25}]), tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M"})
 
     assert missing == [{"os": "macos", "driver": "cua-driver", "run": "m-run", "name": folder.name, "task": "ir-02",
                         "condition": "background"}]
     assert {row["model"]: row["missing"] for row in rows} == {"m": 1, "n": 0}
     assert "| m (incomplete: 1 missing) | cua-driver | background |" in table and "isn't ranked" in table
-    assert "| `m-run` | M | cua-driver | Claude Code 2.1 | 1 | **1, incomplete** | 1 | 1.00 | $0.75 |" in runs
+    assert "| `m-run` | M | cua-driver | Claude Code 2.1 | 2 | **1, incomplete** | 1 | 0.50 | $0.75 |" in runs
     assert "| ir-02-r1-background | macos | m | cua-driver | 1.00 |" in runs
-    assert "| mb-10-r1-background | macos | m | cua-driver | 0.00 | ✓ | ✓ | not scored | 9 | $0.25 |" in runs
+    assert "| ir-02-r3-background | macos | m | cua-driver | 0.00 | ✓ | ✓ | ✗ | 9 | $0.25 |" in runs
 
 
 def test_the_cards_drivers_section_holds_the_drivers_figures_and_table_and_is_left_out_without_them(tables, tmp_path):

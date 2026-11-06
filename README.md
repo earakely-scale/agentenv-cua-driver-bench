@@ -4,7 +4,8 @@
 bundle: the bench's GUI tasks, run with `agent-env run` on a Linux computer that an agent drives through its
 computer-use driver.
 
-**Status:** all of trycua's Bench v2, its ten GUI-only tasks in both conditions, five runs each: the three multi-app
+**Status:** all of trycua's Bench v2, its ten GUI-only tasks in both conditions (MB-10 and MB-11 in the foreground
+only), five runs each: the three multi-app
 tasks G02 to G04, each on a computer of its own with its shared task's apps, s04's browser included (Chrome for Testing
 at the build agentenv's `chromium` app pins, pinned again here so the bench's browser stays the same whatever a
 framework release ships), and the seven BenchLab tasks, MB-09 to MB-11 and IR-01 to IR-04, in trycua's own Linux
@@ -30,7 +31,7 @@ a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-o
 | `tasks/cdb-g02-background.json` .. `tasks/cdb-g04-foreground.json`, `evals/trials.toml` | The bench's GUI-only tasks, each in both of trycua's conditions, with a model (below). |
 | `envs/benchlab/`, `envs/desktop-benchlab/` | trycua's BenchLab as a computer app, in a task's mode and seed, and its computer, with the sentinel (below). |
 | `tasks/benchlab-listdrag.json` .. `tasks/benchlab-irconsent.json`, `tasks/benchlab-solve-*.json`, `evals/benchlab.toml` | BenchLab in each mode in its computer (`artifacts/check_benchlab/`), and three of its tasks done through the driver and graded with no model. |
-| `tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` | The BenchLab tasks, five runs each, each run with its seed, in both conditions, with a model (below). |
+| `tasks/mb-09-r1-background.json` .. `tasks/ir-04-r5-foreground.json` | The BenchLab tasks, five runs each, each run with its seed, in both conditions (MB-10 and MB-11 in the foreground only), with a model (below). |
 | `evals/bench-v2.toml`, `evals/bench-v2-trials.txt` | All of Bench v2: each of its task files once, and its 90 trials in trycua's schedule (below). |
 | `evals/foreground.toml`, `evals/background.toml` | Bench v2's task files in one condition each. |
 | `tools/fleet/` | Runs the trials on a fleet of EC2 VMs, each trial exported and uploaded to the dataset as it finishes (below). |
@@ -208,9 +209,9 @@ their runner adds by default, "You have about 6 minutes and at most 45 turns." t
 "Actions" area reveals the buttons; their Linux BenchLab's zone reads "Hover here to reveal actions".
 
 `evals/bench-v2-trials.txt` lists Bench v2's 90 trials, one task file per line, in trycua's schedule: the v2 tasks in
-order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, the foreground's then the background's. MB-10's
-and MB-11's background runs are left out, as agreed with trycua: a hover or a resting pointer can't leave the user
-undisturbed, and the runs that have them don't score them.
+order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, the foreground's then the background's, MB-10
+and MB-11 in the foreground only: a real hover and a native tooltip need the pointer, which in the background is the
+user's.
 `evals/bench-v2.toml` runs each of those task files once, since an eval runs a task once; a runner that repeats a G
 task's file per line runs them all. `evals/foreground.toml` and `evals/background.toml` are its two halves, one
 condition each.

@@ -248,6 +248,9 @@
     },
     "mb-10": {
       "probe": "MB-10",
+      "conditions": [
+        "foreground"
+      ],
       "title": "Reveal a hover-only toolbar and click one action",
       "apps": [
         "BenchLab"
@@ -278,6 +281,9 @@
     },
     "mb-11": {
       "probe": "MB-11",
+      "conditions": [
+        "foreground"
+      ],
       "title": "Read a tooltip and type its code",
       "apps": [
         "BenchLab"
@@ -488,18 +494,6 @@
       "mark": "§",
       "short": "Needs the pointer",
       "reason": "A real drag moves the user's pointer, so in the background the task keeps the user undisturbed only through a driver that drags without it."
-    },
-    {
-      "os": null,
-      "condition": "background",
-      "tasks": [
-        "mb-10",
-        "mb-11"
-      ],
-      "mark": "¶",
-      "short": "Not scored",
-      "reason": "Agreed with trycua, whose task list at the pinned commit still runs both conditions: every hover BenchLab saw in these runs moved the user's pointer, so in the background no driver here can pass them. Their background trials stay in the dataset with their grades, outside every total, and new runs leave them out.",
-      "unscored": true
     }
   ]
 }
