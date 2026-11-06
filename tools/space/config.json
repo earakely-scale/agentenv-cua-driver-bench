@@ -9,6 +9,15 @@
   },
   "media_base": "https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv/resolve/main",
   "space_local": "hero",
+  "reel": {
+    "seconds": 7,
+    "scenes": [
+      {"os": "linux", "run": "cua-driver-sonnet-5-5-2026-11-06", "task": "ir-02", "run_index": 2},
+      {"os": "macos", "run": "cua-driver-sonnet-5-5-2026-11-05", "task": "ir-02", "run_index": 2},
+      {"os": "macos", "run": "agent-desktop-sonnet-5-5-2026-11-05", "task": "ir-02", "run_index": 2},
+      {"os": "macos", "run": "macos-harness-sonnet-5-5-2026-11-05", "task": "ir-02", "run_index": 2}
+    ]
+  },
   "pairs": [
     {"os": "linux", "run": "cua-driver-sonnet-5-5-2026-11-06", "task": "ir-02", "run_index": 4},
     {"os": "macos", "run": "cua-driver-sonnet-5-5-2026-11-05", "task": "cdb-g04", "run_index": 4}

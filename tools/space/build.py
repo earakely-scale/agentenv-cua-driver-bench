@@ -15,7 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from cdbviz import catalog, figures, hero, media, pair, trials  # noqa: E402
+from cdbviz import catalog, figures, hero, media, pair, reel, trials  # noqa: E402
 
 
 def pick_hero(metas, cfg):
@@ -30,13 +30,36 @@ def pick_hero(metas, cfg):
     return max(bg, key=score)["uid"]
 
 
+def scene(loaded, want, data_dir):
+    """The foreground and background trials of one run of one task, by condition."""
+    return {t["meta"]["condition"]: t for t in loaded if trials.run_of(t["folder"], data_dir) == f"{want['os']}/{want['run']}"
+            and t["meta"]["task"] == want["task"] and t["meta"].get("run_index") == want["run_index"]}
+
+
+def headline(loaded, cat, cfg, data_dir, assets, space):
+    """The configured reel's scenes, each one task's foreground and background trials of a run, as the card's hero GIF
+    and the Space's landing MP4; its catalog entry, or None when a scene lacks a trial."""
+    scenes = [scene(loaded, want, data_dir) for want in (cfg.get("reel") or {}).get("scenes") or []]
+    if not scenes or any(set(found) != {"foreground", "background"} for found in scenes):
+        print(f"reel: not every scene has both conditions: {[sorted(found) for found in scenes]}")
+        return None
+    gif, mp4 = reel.render([(found["foreground"], found["background"]) for found in scenes], cat, cfg, assets,
+                           (cfg.get("reel") or {}).get("seconds", 7))
+    (space / "media").mkdir(exist_ok=True)
+    shutil.copy2(mp4, space / "media" / mp4.name)
+    mp4.unlink()
+    print(f"reel: {gif} ({gif.stat().st_size / 1e6:.1f} MB), {mp4.name}")
+    return {"video": f"media/{mp4.name}", "scenes": [{"os": f["background"]["meta"]["os"],
+                                                       "driver": f["background"]["meta"]["driver"],
+                                                       **{c: f[c]["meta"]["uid"] for c in f}} for f in scenes]}
+
+
 def pairs(loaded, cat, cfg, data_dir, assets, space):
     """Each configured task's foreground and background trials of one run side by side: a GIF for the card and an MP4
     for the Space, as the catalog's ``pairs``."""
     out = []
     for want in cfg.get("pairs") or []:
-        found = {t["meta"]["condition"]: t for t in loaded if trials.run_of(t["folder"], data_dir) == f"{want['os']}/{want['run']}"
-                 and t["meta"]["task"] == want["task"] and t["meta"].get("run_index") == want["run_index"]}
+        found = scene(loaded, want, data_dir)
         if set(found) != {"foreground", "background"}:
             print(f"pair {want}: no trial for {sorted({'foreground', 'background'} - set(found))}")
             continue
@@ -140,6 +163,7 @@ def main():
         t = next(x for x in loaded if x["meta"]["uid"] == hero_uid)
         gif, still = hero.render(t, cat, cfg, assets)
         print(f"hero: {hero_uid} -> {gif} ({gif.stat().st_size / 1e6:.1f} MB), {still}")
+    cat["reel"] = None if args.no_gif else headline(loaded, cat, cfg, args.data, assets, space)
     cat["pairs"] = [] if args.no_gif else pairs(loaded, cat, cfg, args.data, assets, space)
     (data / "catalog.json").write_text(json.dumps(cat, separators=(",", ":"), ensure_ascii=False))
     print(f"catalog: {len(metas)} trials -> {data / 'catalog.json'}")

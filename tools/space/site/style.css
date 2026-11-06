@@ -102,6 +102,7 @@ button, select { font: inherit; color: inherit; }
 .pair video { display: block; width: 100%; height: auto; aspect-ratio: 960 / 462; background: #0b0f19; }
 .pair figcaption { padding: 11px 14px 12px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); background: var(--surface); border-top: 1px solid var(--line); }
 .pair figcaption b { color: var(--ink); font-weight: 650; }
+.landing .reel { margin: 26px 0 8px; }
 .fig { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; background: var(--surface); }
 .fig img { display: block; width: 100%; height: auto; }
 

@@ -91,12 +91,12 @@ def catalog_uid(uid):
 
 
 def _hero(catalog, trials):
+    if catalog.get("reel"):
+        return _reel(catalog, trials)
     *_, run, trial = ["", ""] + catalog["hero"].split("--")
     row = trials[(trials.trial_id == trial) & ((trials.run == run) | (run == ""))].iloc[0]
     model = _model(catalog, row.model)
-    model_id = urllib.parse.quote(row.model, safe="")
-    lead = "" if row.driver == DRIVER else f"{row.driver}/"
-    link = f"{SPACE}#/{lead}{row.os}/{row.task}/{row.condition}/{model_id}/r{int(row.run_index)}"
+    link = _link(row)
     broken = ", ".join(k[4:] for k in row.index if k.startswith("a22_") and row[k] is False)
     user = "keeps the user undisturbed" if row.user_undisturbed else f"disturbs the user ({broken})"
     ended = "runs out of turns" if "maximum number of turns" in str(row.agent_error) else \
@@ -112,6 +112,41 @@ def _hero(catalog, trials):
                f"{row.task_score:.2f}, {'a pass' if row.passed else 'not a pass'}.")
     return (f"[![{alt}](assets/hero.gif)]({link})\n\n<sub>{caption} **▶ [Watch it in the replay Space]({link})**, "
             f"with every other trial.</sub>")
+
+
+def _reel(catalog, trials):
+    """The hero as the reel: one task's run through each setup, foreground beside background, each scene's outcome
+    linked to its two trials in the Space."""
+    scenes = []
+    for scene in catalog["reel"]["scenes"]:
+        fg, bg = (trials[(trials.run == run) & (trials.trial_id == trial)].iloc[0]
+                  for run, trial in (catalog_uid(scene["foreground"]), catalog_uid(scene["background"])))
+        drivers = {d["id"]: d.get("label") or d["name"] for d in catalog["drivers"]}
+        setup = f"{OSES.get(bg.os, bg.os)} · {drivers.get(bg.driver, bg.driver)}"
+        broken = ", ".join(k[4:].replace("_", " ") for k in bg.index if k.startswith("a22_") and bg[k] is False)
+        said = "a pass" if bg.passed else f"the task done but the user disturbed ({broken})" if bg.task_score == 1 \
+            else "not a pass"
+        scenes.append((setup, fg, bg, said))
+    first = scenes[0][2]
+    model = _model(catalog, first.model)
+    setups = ", ".join(setup for setup, *_ in scenes)
+    alt = (f"{model} on {first.probe}, {first.title}, run {int(first.run_index)}, through {len(scenes)} setups "
+           f"({setups}): each setup's foreground trial beside its background one, then each setup's passes over the "
+           f"whole bench")
+    lines = "; ".join(f"**{setup}**: foreground {'a pass' if fg.passed else 'not a pass'} "
+                      f"([replay]({_link(fg)})), background {said} ([replay]({_link(bg)}))"
+                      for setup, fg, bg, said in scenes)
+    caption = (f"{model} on {first.probe} {first.title}, run {int(first.run_index)}, on each operating system and "
+               f"driver, the desktop to itself beside a person typing in their own window, sped up and ending on the "
+               f"grades. {lines}.")
+    return (f"[![{alt}](assets/hero.gif)]({SPACE})\n\n<sub>{caption} **▶ [Every trial is in the replay Space]({SPACE})**.</sub>")
+
+
+def _link(row):
+    """A trial's replay in the Space."""
+    lead = "" if row.driver == DRIVER else f"{row.driver}/"
+    return (f"{SPACE}#/{lead}{row.os}/{row.task}/{row.condition}/{urllib.parse.quote(row.model, safe='')}"
+            f"/r{int(row.run_index)}")
 
 
 def _results(out, trials, missing, names, drivers):

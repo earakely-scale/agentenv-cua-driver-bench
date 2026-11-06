@@ -201,58 +201,86 @@ def render(fg, bg, cat, cfg, out_dir, name, seconds=26):
     """``fg`` and ``bg``, loaded trials of one task, model and driver, side by side as ``name``.gif and ``name``.mp4."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    left, right = panels(fg, bg, cat, cfg)
+    speed = nice_speed(max(left.span, right.span), seconds)
+    gif, mp4 = out_dir / f"{name}.gif", out_dir / f"{name}.mp4"
+    with tempfile.TemporaryDirectory(dir=out_dir) as tmp:
+        save = saver(Path(tmp))
+        for k, img in enumerate(play(left, right, speed)):
+            if k == 0:
+                save(intro_card(img, left, right), 3.2)
+            save(img)
+        save(graded(img, left, right), 5)
+        encode(Path(tmp), gif, mp4, (cfg.get("pairs_max_mb") or 10) * 1e6)
+    return gif, mp4
+
+
+def panels(fg, bg, cat, cfg):
+    """The foreground trial's panel on the left and the background's on the right, both showing one region."""
     left, right = Panel(fg, cat, cfg, EDGE), Panel(bg, cat, cfg, EDGE + PW + GAP)
     left.view = right.view = view(left, right)
+    return left, right
+
+
+def play(left, right, speed, note="Recorded trials, sped up"):
+    """Each frame of the two panels' trials at ``speed`` from their start; a panel whose trial ended first holds its last
+    frame under its grade."""
     sw, sh = left.scene.sw, left.scene.sh
     crop = (left.view[0] / sw, left.view[1] / sh, left.view[2] / sw, left.view[3] / sh)
-    speed = nice_speed(max(left.span, right.span), seconds)
     n = {p: max(1, math.ceil(p.span * FPS / speed)) for p in (left, right)}
-    total = max(n.values())
     frames = {p: media.frames(p.trial["folder"] / "recording.mp4", p.scene.start, FPS / speed, n[p], (PW, PV), crop)
               for p in (left, right)}
     held = {p: Image.new("RGB", (PW, PV), C["bg"]) for p in (left, right)}
-    gif, mp4 = out_dir / f"{name}.gif", out_dir / f"{name}.mp4"
-    with tempfile.TemporaryDirectory(dir=out_dir) as tmp:
-        tmp = Path(tmp)
-        intro = int(FPS * 3.2)
-        k = 0
-        for k in range(total):
-            tau = k / FPS
-            img = Image.new("RGB", (W, H), C["bg"])
-            d = ImageDraw.Draw(img, "RGBA")
-            header(d, left, right, speed)
-            footer(d)
-            for p in (left, right):
-                if k < n[p] and (buf := next(frames[p], None)):
-                    held[p] = Image.frombytes("RGB", (PW, PV), buf)
-                t = p.at(tau, speed)
-                p.draw(img, d, held[p], t, speed)
-                if k >= n[p]:
-                    p.grade(img, d)
-            if k == 0:
-                card = intro_card(img, left, right)
-                for j in range(intro):
-                    card.save(tmp / f"{j:05d}.png", compress_level=1)
-            img.save(tmp / f"{intro + k:05d}.png", compress_level=1)
+    for k in range(max(n.values())):
+        img = Image.new("RGB", (W, H), C["bg"])
+        d = ImageDraw.Draw(img, "RGBA")
+        header(d, left, right, speed)
+        footer(d, note)
         for p in (left, right):
-            p.grade(img, d)
-        for j in range(int(FPS * 5)):
-            img.save(tmp / f"{intro + total + j:05d}.png", compress_level=1)
-        pattern = str(tmp / "%05d.png")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", pattern, "-c:v", "libx264",
-                        "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "slow", "-movflags", "+faststart", str(mp4)],
+            if k < n[p] and (buf := next(frames[p], None)):
+                held[p] = Image.frombytes("RGB", (PW, PV), buf)
+            p.draw(img, d, held[p], p.at(k / FPS, speed), speed)
+            if k >= n[p]:
+                p.grade(img, d)
+        yield img
+
+
+def graded(img, left, right):
+    """The last frame with both trials' grades over it."""
+    img = img.copy()
+    d = ImageDraw.Draw(img, "RGBA")
+    for p in (left, right):
+        p.grade(img, d)
+    return img
+
+
+def saver(folder):
+    """A function that writes a frame into ``folder`` as the next of a numbered sequence, held ``seconds`` when given."""
+    count = [0]
+
+    def save(img, seconds=None):
+        for _ in range(int(FPS * seconds) if seconds else 1):
+            img.save(folder / f"{count[0]:05d}.png", compress_level=1)
+            count[0] += 1
+    return save
+
+
+def encode(folder, gif, mp4, limit):
+    """The numbered frames in ``folder`` as an MP4 and a looping GIF of at most ``limit`` bytes, with fewer colours and
+    coarser dither as needed."""
+    pattern = str(folder / "%05d.png")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", pattern, "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", "-crf", "20", "-preset", "slow", "-movflags", "+faststart", str(mp4)],
+                   check=True)
+    pal = folder / "palette.png"
+    for colors, scale in ((256, 4), (192, 5), (128, 5)):
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", pattern, "-vf",
+                        f"palettegen=max_colors={colors}:stats_mode=full:reserve_transparent=0", str(pal)], check=True)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", pattern, "-i", str(pal), "-lavfi",
+                        f"paletteuse=dither=bayer:bayer_scale={scale}:diff_mode=rectangle", "-loop", "0", str(gif)],
                        check=True)
-        pal = tmp / "palette.png"
-        limit = (cfg.get("pairs_max_mb") or 10) * 1e6
-        for colors, scale in ((256, 4), (192, 5), (128, 5)):
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", pattern, "-vf",
-                            f"palettegen=max_colors={colors}:stats_mode=full:reserve_transparent=0", str(pal)], check=True)
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", pattern, "-i", str(pal), "-lavfi",
-                            f"paletteuse=dither=bayer:bayer_scale={scale}:diff_mode=rectangle", "-loop", "0", str(gif)],
-                           check=True)
-            if gif.stat().st_size <= limit:
-                break
-    return gif, mp4
+        if gif.stat().st_size <= limit:
+            break
 
 
 def view(*panels, margin=56):
@@ -296,7 +324,7 @@ def header(d, left, right, speed):
     d.line((EDGE, HDR - 2, W - EDGE, HDR - 2), fill=C["line"], width=1)
 
 
-def footer(d):
+def footer(d, note="Recorded trials, sped up"):
     y = H - FOOT + 9
     x = EDGE
     for lab, col, txt in (("AGENT", C["agent"], "what it acts on"), ("USER", C["user"], "their window"),
@@ -307,7 +335,6 @@ def footer(d):
         d.text((x + 6, y + 2.5), lab, font=f, fill=(29, 19, 0) if col == C["user"] else (255, 255, 255))
         d.text((x + w + 7, y + 1), txt, font=font(500, 12), fill=C["ink3"])
         x += w + 7 + d.textlength(txt, font=font(500, 12)) + 18
-    note = "Recorded trials, sped up"
     d.text((W - EDGE - d.textlength(note, font=font(500, 12)), y + 1), note, font=font(500, 12), fill=C["ink4"])
 
 

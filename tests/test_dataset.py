@@ -240,6 +240,29 @@ def test_the_heros_link_names_its_driver_first_unless_it_is_cua_driver(tables, d
     assert "in Claude Code on IR-02, Apply, in the background condition: the macOS desktop" in hero
 
 
+def test_a_reels_hero_names_each_setup_its_outcomes_and_links_its_two_replays(tables):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+    base = {"task": "ir-02", "probe": "IR-02", "title": "Apply", "model": "anthropic/claude-sonnet-5-5", "run_index": 2,
+            "harness": "claude-code", "task_score": 1.0, "passed": True}
+    fg = {**base, "condition": "foreground", "trial_id": "ir-02-r2-foreground", **{f"a22_{k}": None for k in tables.CRITERIA}}
+    bg = {**base, "condition": "background", "trial_id": "ir-02-r2-background", **{f"a22_{k}": True for k in tables.CRITERIA}}
+    rows = [{**fg, "run": "l", "os": "linux", "driver": "cua-driver"}, {**bg, "run": "l", "os": "linux", "driver": "cua-driver"},
+            {**fg, "run": "a", "os": "macos", "driver": "agent-desktop"},
+            {**bg, "run": "a", "os": "macos", "driver": "agent-desktop", "passed": False, "a22_key_focus": False}]
+    catalog = {"models": [{"id": base["model"], "name": "Claude Sonnet 5.5"}],
+               "drivers": [{"id": "cua-driver", "name": "cua-driver"}, {"id": "agent-desktop", "name": "agent-desktop"}],
+               "reel": {"scenes": [{"foreground": f"{os_}--{run}--ir-02-r2-foreground", "background": f"{os_}--{run}--ir-02-r2-background"}
+                                   for os_, run in (("linux", "l"), ("macos", "a"))]}}
+
+    hero = card._hero(catalog, tables.pd.DataFrame(rows))
+
+    assert "Claude Sonnet 5.5 on IR-02, Apply, run 2, through 2 setups (Linux · cua-driver, macOS · agent-desktop)" in hero
+    assert "**Linux · cua-driver**: foreground a pass" in hero
+    assert "**macOS · agent-desktop**: foreground a pass" in hero
+    assert "background the task done but the user disturbed (key focus)" in hero
+    assert "(#/agent-desktop/macos/ir-02/background/anthropic%2Fclaude-sonnet-5-5/r2)" in hero.replace(card.SPACE, "")
+
+
 def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables):
     g02 = tables.task_row(ROOT, ROOT / "tasks" / "cdb-g02-background.json")
 

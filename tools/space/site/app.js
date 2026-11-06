@@ -212,6 +212,7 @@ function landing() {
       hero && h("a", { class: "btn primary", href: hashOf(hero) }, h("span", { html: ICON_PLAY, style: { width: "14px", display: "inline-flex" } }), "Watch a background replay"),
       h("a", { class: "btn", href: "#results" }, "See the results"),
       CAT.comparisons.length ? h("a", { class: "btn", href: "#/drivers" }, "Compare drivers") : null),
+    reelFigure(),
     h("div", { class: "players" },
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot agent" }), "The agent"),
         h("p", {}, `${harnessPhrase() || "A model"}. It reads windows and acts through its computer-use driver's tools: click, type, press a key, open a menu. No terminal, no scripts, no side doors.`)),
@@ -219,6 +220,21 @@ function landing() {
         h("p", {}, "In the background condition a simulated user types into their own window, “User activity”, one character a second. A sentinel logs everything that reaches them.")),
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot judge" }), "The grade"),
         h("p", {}, "Every half must hold: the task, by trycua's own evaluator; GUI only, no way out of the GUI; and in the background, the user undisturbed on all eight of trycua's criteria."))));
+}
+
+function reelFigure() {
+  const scenes = (CAT.reel?.scenes || []).map((s) => ({ ...s, fg: CAT.trials.find((t) => t.uid === s.foreground),
+    bg: CAT.trials.find((t) => t.uid === s.background) })).filter((s) => s.fg && s.bg);
+  if (!scenes.length) return null;
+  const first = scenes[0].bg, task = TASKS[first.task] || {};
+  const setup = (s) => `${OSES[s.os]?.name || s.os} · ${driverLabel(s.driver)}`;
+  const video = h("video", { src: CAT.reel.video, autoplay: true, muted: true, loop: true, playsinline: true, preload: "metadata",
+    "aria-label": `${first.model_name} on ${task.probe || first.task} ${task.title || ""}, run ${first.run_index}, through ${scenes.map(setup).join(", ")}: each setup's foreground trial beside its background one, then each setup's passes over the whole bench` });
+  video.muted = true;
+  return h("figure", { class: "pair reel" }, video,
+    h("figcaption", {}, h("b", {}, `${task.probe || first.task} ${task.title || ""}, run ${first.run_index}`),
+      ` — ${first.model_name} on each operating system and driver, the desktop to itself beside a person typing in their own window. Background replays: `,
+      ...scenes.flatMap((s, i) => [i ? " · " : "", h("a", { href: hashOf(s.bg) }, setup(s))])));
 }
 
 function pairsSection() {
