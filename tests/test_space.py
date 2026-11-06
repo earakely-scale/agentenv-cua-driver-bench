@@ -1,10 +1,11 @@
 """The replay Space's catalog and figures per driver, offline: a trial's driver, cua-driver when its trial.json names
 none; a missing trial's from its task file; the board, the replay keys and the trial order per driver; each OS and
 model that several drivers ran compared over the tasks all of them ran in both conditions; the card's tables with
-their drivers; the results figures of cua-driver's rows alone, and a drivers figure's panel per comparison; and the
-other drivers' calls as the replay's lane says them."""
+their drivers; the results figures of cua-driver's rows alone, and a drivers figure's panel per comparison; the
+other drivers' calls as the replay's lane says them; and a gallery clip's moment, span and callouts."""
 import importlib
 import json
+import types
 from pathlib import Path
 
 import pytest
@@ -239,3 +240,56 @@ def test_a_pairs_panels_show_one_region_of_the_screen_holding_every_window_at_it
     assert abs(w / h - 16 / 9) < 1e-6 and x <= 65 - 56 + 1 and y <= 81 and x + w >= 1320 and y + h >= 860
     assert x >= 0 and y >= 0 and x + w <= 1920 and y + h <= 1080
     assert pair.view(Fake("foreground", [])) == (0, 0, 1920, 1080)
+
+
+def _calls(*rows):
+    keys = ("i", "t0", "tool", "verb", "obj", "kind", "err", "pt")
+    return [dict(zip(keys, row)) for row in rows]
+
+
+def test_a_clip_plays_its_modes_moment_or_the_whole_run_sped_up(space):
+    pytest.importorskip("PIL")
+    clip = space("clip")
+    refused = "Background delivery is not available: the target has no focus-free input backend"
+    events = [{"t": 9.0, "c": "typing"}, {"t": 12.0, "c": "window_raised"}, {"t": 11.5, "c": "key_focus"}]
+    calls = _calls((0, 5.0, "click", "Click", "", "act", refused, None), (1, 8.0, "click", "Click", "", "act", refused, [3, 4]),
+                   (2, 20.0, "launch_app", "Launch app", "", "act", None, None))
+    sc = types.SimpleNamespace(start=2.0, end=60.0, user={"events": events}, calls=calls)
+    m = {"grade": {"gui_only": {"violations": ["mcp__desktop-s04__launch_app:launch_path"]}}}
+
+    assert [clip.moment(sc, m, mode) for mode in ("focus", "raise", "dialog", "refused", "gui", "turns")] == [
+        11.5, 12.0, 11.5, 8.0, 20.0, None]
+    assert clip.window(sc, m, {"mode": "focus"}) == (8.5, 16.0, 1, 11.5)
+    assert clip.window(sc, m, {"mode": "focus", "at": 3.0}) == (2.0, 7.5, 1, 3.0)
+    assert clip.window(sc, m, {"mode": "refused"}) == (6.0, 24.5, 2, 8.0)
+    assert clip.window(sc, m, {"mode": "turns"}) == (2.0, 60.0, 10, None)
+
+
+def test_a_clips_callouts_name_each_new_kind_of_disturbance_the_modes_first_and_each_failed_driver_call(space, tmp_path):
+    pytest.importorskip("PIL")
+    clip = space("clip")
+    (tmp_path / "timeline.json").write_text(json.dumps({"calls": [
+        {"i": 0, "input": {"action": "execute_javascript", "pid": 8}}, {"i": 1, "input": {"file_path": "/x"}},
+        {"i": 2, "input": {"launch_path": "sh -c 'cp a b'"}}]}))
+    seen = lambda t, *items: {"t": t, "items": [{"c": c, "what": what} for c, what in items]}
+    moments = [seen(3.0, ("key_focus", "the user's window lost keyboard focus"),
+                    ("window_raised", "BenchLab raised over the user's window")),
+               seen(4.0, ("typing", "the user's keystroke was blocked")),
+               seen(5.0, ("typing", "the user's keystroke was blocked"))]
+    calls = _calls((0, 6.0, "page", "Page", "", "act", "disabled by default", None),
+                   (1, 7.0, "Read", "Read file", "/x", "setup", "File does not exist", None),
+                   (2, 8.0, "launch_app", "Launch app", "", "act", "no new window", None))
+    criteria = [{"id": k} for k in ("key_focus", "window_raised", "typing")]
+    panel = types.SimpleNamespace(scene=types.SimpleNamespace(moments=moments, calls=calls, cat={"criteria": criteria}),
+                                  m={"grade": {"gui_only": {"violations": ["mcp__desktop__launch_app:launch_path"]}}},
+                                  trial={"folder": tmp_path})
+
+    raised = clip.callouts(panel, "raise")
+    door = clip.callouts(panel, "gui")[-1]
+
+    assert [(x["t"], x["head"], x.get("lines")) for x in raised[:2]] == [
+        (3.0, "BenchLab raised over the user's window", ["The user's window lost keyboard focus"]),
+        (4.0, "The user's keystroke was blocked", [])]
+    assert [(x["head"], x["text"]) for x in raised[2:]] == [("Page execute_javascript", "disabled by default"),
+                                                           ("Launch app sh -c 'cp a b'", "no new window")]
+    assert (door["head"], door["text"], door["mono"]) == ("launch_app, called with", "launch_path: sh -c 'cp a b'", True)
