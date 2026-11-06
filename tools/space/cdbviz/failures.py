@@ -175,7 +175,10 @@ def drivers_disturb(cat, trials, mode_of, o):
     if len(parts) < 2:
         return None
     (_, name, hit, n, how), *rest = sorted(parts)
-    return (f"**On {o['name']} the driver decides whether the user is disturbed.** In the background, {name} disturbs "
+    rates = [-p[0] for p in parts]
+    lead = ("the driver decides whether the user is disturbed" if max(rates) - min(rates) >= 0.3
+            else "its drivers disturb the user about as often")
+    return (f"**On {o['name']} {lead}.** In the background, {name} disturbs "
             f"them in {hit} of its {n} trials{how}; " + "; ".join(f"{name} in {hit} of {n}{how}"
                                                                 for _, name, hit, n, how in rest) + ".")
 
@@ -232,7 +235,7 @@ def stops(cat, trials, mode_of):
     stopped = sum(sum(v) for v in by.values())
     if not stopped:
         return None
-    parts = [f"{sum(v)} of the {len(v)} in {HARNESSES.get(h, h)}"
+    parts = [f"{sum(v)} of {HARNESSES.get(h, h)}'s {len(v)}"
              for h, v in sorted(by.items(), key=lambda kv: -sum(kv[1]) / len(kv[1]))]
     short = {t["id"]: catalog.short(t) for t in cat["tasks"]}
     always = []
