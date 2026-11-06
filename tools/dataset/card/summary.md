@@ -26,8 +26,9 @@ the board.
 
 **cua-driver on its own tools, every trial of Bench v2 on Linux** (run `cua-driver-sonnet-5-5-2026-11-06`: Claude
 Sonnet 5.5 in Claude Code, 10 tasks, 5 runs each, on agentenv-framework 0.9.1453 with
-`--set envs/<computer>.tools=driver`, Ubuntu 24.04 on EC2). 47 of its 90 trials pass, for $50.14 at list price, and
-none leaves the GUI.
+`--set envs/<computer>.tools=driver`, Ubuntu 24.04 on EC2). 47 of its 90 trials pass, for $50.14 at list price. One
+leaves the GUI: in G04's second background run the agent tries to copy a log file with a shell command through
+cua-driver's `launch_app`, which trycua's scan counts as leaving it.
 
 - **Foreground: 42 of 50, task score 0.92.** Every precision and interruption trial passes (35 of 35), and 7 of the
   15 multi-app trials: G02 3 of 5, G03 none, G04 4 of 5. Its 8 misses all end on the 45-turn limit.
