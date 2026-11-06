@@ -193,6 +193,7 @@ function boardView() {
   wrap.append(landing());
   if ((CAT.pairs || []).length) wrap.append(pairsSection());
   wrap.append(resultsSection());
+  if ((CAT.compare_figures || []).length) wrap.append(compareSection());
   if (CAT.comparisons.length) wrap.append(driversSection());
   wrap.append(trialsSection(), howSection());
   $("#app").replaceChildren(wrap);
@@ -270,6 +271,18 @@ function resultsSection() {
     h("div", { class: "section-head", id: "results" }, h("h2", { id: "results-h" }, "Results"),
       h("p", {}, `All through ${driverName(CAT.driver)}: a panel per OS${lines}.`)),
     figures(CAT.figures, (f) => (f === "task-score" ? "Task score by condition" : "Full pass by condition")));
+}
+
+function compareSection() {
+  const alt = { "models-tasks": "Passes by task and model", pareto: "Passes against cost", "os-gap": "Full pass by operating system" };
+  return h("section", { class: "cmp-figs", "aria-labelledby": "cmp-figs-h" },
+    h("div", { class: "section-head", id: "compare" }, h("h2", { id: "cmp-figs-h" }, "How models, operating systems and drivers compare"),
+      h("p", {}, "Every task's passes model by model, what a pass costs, and what changes when only the operating system does.")),
+    CAT.compare_figures.map((f) => {
+      const box = figures([f], () => alt[f] || f);
+      box.querySelector(".fig").append(h("p", { class: "fnote" }, (CAT.compare_notes?.[f] || []).join(" ")));
+      return box;
+    }));
 }
 
 function driversSection() {

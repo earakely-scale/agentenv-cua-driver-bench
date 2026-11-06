@@ -105,6 +105,9 @@ button, select { font: inherit; color: inherit; }
 .landing .reel { margin: 26px 0 8px; }
 .fig { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; background: var(--surface); }
 .fig img { display: block; width: 100%; height: auto; }
+.cmp-figs .figs { grid-template-columns: minmax(0, 1fr); margin-bottom: 16px; }
+.cmp-figs .fig img { max-width: 920px; margin: 0 auto; }
+.fnote { max-width: 920px; margin: 10px auto 4px; padding: 0 6px; color: var(--ink-2); font-size: 14px; line-height: 1.55; }
 
 /* drivers */
 .dcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 10px; }
