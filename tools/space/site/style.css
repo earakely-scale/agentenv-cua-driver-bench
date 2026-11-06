@@ -129,6 +129,7 @@ button, select { font: inherit; color: inherit; }
 .xcard .what { margin: -8px 0 0; color: var(--ink-3); font-size: 13px; line-height: 1.45; }
 .xline { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
 p.xline { display: block; }
+.xline.pace { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12.5px; }
 .xline b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
 .xline > span:first-child { flex-basis: 100%; }
 .xline a { color: var(--agent-ink); font-weight: 600; }
@@ -168,10 +169,10 @@ a.sq:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
 .fact h3 { margin: 0; font-size: 15.5px; letter-spacing: -.01em; }
 .fsub { margin: 2px 0 14px; color: var(--ink-3); font-size: 13px; }
 .fnums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
-.fnum small { display: block; color: var(--ink-3); font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.fnum small { display: block; color: var(--ink-2); font-size: 13px; font-weight: 650; }
 .fnum b { display: block; font-size: 44px; font-weight: 820; letter-spacing: -.04em; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .fnum span:last-child { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.meter { display: block; height: 6px; margin: 8px 0 6px; border-radius: 3px; background: var(--sunken); overflow: hidden; }
+.meter { display: block; height: 6px; margin: 8px 0 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .meter i { display: block; height: 100%; border-radius: 3px; background: var(--ink-2); }
 .fnote { margin: 12px 0 0; color: var(--ink-3); font-size: 12.5px; line-height: 1.5; }
 .fnote b { color: var(--ink-2); }
@@ -181,7 +182,7 @@ a.sq:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
 .tstrip .rc { padding-left: 8px; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tc { height: 28px; display: grid; place-items: center; border-radius: 6px; color: var(--ink-3); font-size: 13px; font-weight: 800; }
 .tc.ok { background: var(--good); color: #fff; }
-.tc.no { background: var(--sunken); }
+.tc.no { background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); }
 
 /* failures */
 .gallery { display: grid; gap: 14px; margin-top: 16px; }
@@ -616,6 +617,9 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
   .snav a { padding: 6px 11px; font-size: 13px; }
   .xcard { padding: 13px 14px 14px; }
   .wpair { --sq: 12px; gap: 12px 20px; }
+  .wlab { width: 0; min-width: 100%; flex-wrap: wrap; row-gap: 0; }
+  .wlab span { flex-basis: 100%; }
+  .wlab b { margin-left: 0; font-size: 18px; }
   .wf { gap: 6px; }
   .fact { padding: 14px 14px 15px; }
   .fnum b { font-size: 34px; }
@@ -623,6 +627,8 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
   .tstrip .th { font-size: 9px; }
   .tstrip .rl, .tstrip .rc { font-size: 12px; }
   .tc { height: 26px; font-size: 12px; }
+  .tabs.modes { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tabs.modes button { flex: none; white-space: nowrap; }
 }
 @container (max-width: 620px) {
   .endcard { padding: 8px; place-items: center; }

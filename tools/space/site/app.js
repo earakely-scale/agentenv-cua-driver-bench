@@ -302,7 +302,7 @@ function resultsSection() {
 }
 
 function driversSection() {
-  const c = CAT.comparisons[0];
+  const c = CAT.comparisons.find((x) => x.model === leadModel() && x.tasks.length === CAT.comparisons[0].tasks.length) || CAT.comparisons[0];
   const runs = CAT.trials.filter((t) => t.os === c.os && t.model === c.model && c.tasks.includes(t.task) && c.drivers.some((d) => d.id === t.driver));
   const depth = Math.max(...runs.map((t) => t.of));
   const cards = h("div", { class: "xcards" }, c.drivers.map((d) => driverCard(d, runs.filter((t) => t.driver === d.id), c.tasks, depth)));
@@ -331,7 +331,7 @@ function driverCard(d, runs, tasks, depth) {
     waffles(runs, tasks, depth),
     bg.length ? h("div", { class: "xline" }, h("span", {}, "Disturbed the user in ", h("b", {}, `${hurt.length} of ${bg.length}`), " background trials"),
       broke.map(([c, n]) => h("span", { class: "cchip", title: `${c.broken} in ${n} of them` }, c.short, h("b", {}, n)))) : null,
-    topFailure(runs));
+    topFailure(runs), pace(runs));
 }
 
 function topFailure(runs) {
@@ -346,6 +346,10 @@ function topFailure(runs) {
   return h("p", { class: "xline" }, "Most common failure: ", h("b", { title: mode.description || null }, mode.name),
     ` in ${n} of its ${runs.filter((t) => !t.passed).length} failed trials. `, h("a", { href: hashOf(ex) }, "Watch one"));
 }
+
+/** The landing replay's model, which the drivers cards and the OS facts follow when it ran there too, so the page
+ * keeps to one model where it can. */
+const leadModel = () => CAT.trials.find((t) => t.uid === CAT.hero)?.model;
 
 const KEY = { pass: "Pass", user: "User disturbed", task: "Task not done", gui: "Left the GUI", other: "Grade incomplete", gap: "No trial yet" };
 const SAID = { pass: "pass", user: "fail, the user was disturbed", task: "fail, the task wasn't done", gui: "fail, it left the GUI", other: "not a full pass" };
@@ -390,7 +394,7 @@ function square(t) {
   const k = outcome(t);
   const mode = CAT.failures?.modes.find((m) => m.id === CAT.failures.by_trial[t.uid]);
   const say = `${probeOf(t.task)} ${TASKS[t.task]?.title || ""}, run ${t.run_index ?? t.nth}: ${SAID[k]}${mode ? ` (${mode.name})` : ""}`;
-  return h("a", { class: `sq ${k}`, href: hashOf(t), title: say, "aria-label": `${say}. Replay it` });
+  return h("a", { class: `sq ${k}`, href: hashOf(t), title: say, "aria-label": `${say}. Replay it`, tabindex: "-1" });
 }
 
 function outcomeKey(cards) {
@@ -422,7 +426,7 @@ function osGap() {
   const shared = CAT.models.filter((m) => CAT.conditions.every((k) => oses.every((o) => row(o, m.id, k.id))));
   if (!shared.length) return null;
   const size = (m) => rows.filter((r) => r.model === m.id).reduce((s, r) => s + r.n_trials, 0);
-  const model = shared.reduce((a, b) => (size(b) > size(a) ? b : a));
+  const model = shared.find((m) => m.id === leadModel()) || shared.reduce((a, b) => (size(b) > size(a) ? b : a));
   const conds = Object.fromEntries(CAT.conditions.map((k) => {
     const both = oses.map((o) => row(o, model.id, k.id));
     const tasks = Object.keys(both[0].tasks).filter((t) => t in both[1].tasks);
@@ -495,14 +499,17 @@ function modelsSection() {
 
 function modelCard(m, runs, tasks, depth) {
   const effort = runs.find((t) => t.effort)?.effort || (m.harness === "claude-code" ? "medium" : null);
-  const times = runs.map((t) => t.duration).filter((v) => v != null).sort((a, b) => a - b);
-  const capped = runs.filter((t) => /^Hit the \d+-turn limit/.test(t.ending || "")).length;
   return h("article", { class: "xcard", style: { "--dc": `var(--s${(m.slot ?? 0) % 8})` } },
     h("h3", {}, h("span", { class: "dot" }), m.name),
     h("p", { class: "what" }, [HARNESS_NAMES[m.harness] || m.harness, effort && `${effort} effort`].filter(Boolean).join(" · ")),
-    waffles(runs, tasks, depth),
-    h("p", { class: "xline" }, `Median trial ${mins(times[times.length >> 1])} · ${Math.round(meanOf(runs.map((t) => t.tool_calls)))} tool calls on average`,
-      capped ? ` · hit the turn limit in ${capped} of ${runs.length}` : ""));
+    waffles(runs, tasks, depth), pace(runs));
+}
+
+function pace(runs) {
+  const times = runs.map((t) => t.duration).filter((v) => v != null).sort((a, b) => a - b);
+  const capped = runs.filter((t) => /^Hit the \d+-turn limit/.test(t.ending || "")).length;
+  return h("p", { class: "xline pace" }, `Median trial ${mins(times[times.length >> 1])} · ${Math.round(meanOf(runs.map((t) => t.tool_calls)))} tool calls on average`,
+    capped ? ` · out of turns in ${capped} of ${runs.length}` : "");
 }
 
 function failuresSection() {
