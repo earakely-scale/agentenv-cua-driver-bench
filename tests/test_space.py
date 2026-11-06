@@ -34,7 +34,8 @@ def _meta(driver, task, condition, run_index, passed, score, os="macos", model=S
     return {"uid": f"{os}--{run}--{task}-r{run_index}-{condition}", "id": f"{task}-r{run_index}-{condition}",
             "os": os, "driver": driver, "task": task, "probe": task.upper(), "condition": condition, "model": model,
             "model_name": CONFIG["models"][model]["name"], "run": run, "run_index": run_index,
-            "started_at": f"2026-11-05T0{run_index}:00:00Z", "passed": passed, "grade": {"task": {"score": score}}}
+            "started_at": f"2026-11-05T0{run_index}:00:00Z", "passed": passed, "grade": {"task": {"score": score}},
+            "cost": None}
 
 
 def _catalog(space, metas, cfg=CONFIG):
@@ -412,7 +413,10 @@ def test_the_comparison_figures_are_written_with_their_notes_and_one_without_dat
         "cua-driver", [("ir-01", "foreground", [(True, 1.0)] * 2), ("ir-01", "background", [(False, 1.0), (True, 1.0)])],
         os="linux", model=model)]
 
-    written = space("figures").write_all(_catalog(space, metas), [tmp_path])
+    cat = _catalog(space, metas)
+    cat["failures"] = {"modes": [], "by_trial": {}, "examples": {}}
+
+    written = space("figures").write_all(cat, [tmp_path])
 
     assert written["compare_figures"] == ["models-tasks", "pareto"] and set(written["compare_notes"]) == {
         "models-tasks", "pareto"}
