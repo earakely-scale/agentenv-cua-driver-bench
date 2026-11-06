@@ -573,6 +573,9 @@ function frontierLine(p) {
   const front = p.points.filter((q) => q.frontier).sort((a, b) => a.cost - b.cost);
   const said = (q) => [h("b", {}, setupName(q, multi)), ` (${pct(q.share)} at ${usd(q.cost)})`];
   if (!front.length) return "No setup shown here passes a trial.";
+  if (p.points.length > 1 && new Set(p.points.map((q) => q.share)).size === 1) {
+    return [`Every setup shown here passes ${pct(front[0].share)}, so the cheapest, `, h("b", {}, setupName(front[0], multi)), ` at ${usd(front[0].cost)} a trial, is the whole frontier.`];
+  }
   const off = p.points.length - front.length;
   const rest = off ? ` The other ${off === 1 ? "point passes" : `${off} pass`} no more than a cheaper one.` : "";
   if (front.length === 1) return [...said(front[0]), p.points.length > 1 ? " passes the most, and nothing passes as much for less." : ".", rest];
