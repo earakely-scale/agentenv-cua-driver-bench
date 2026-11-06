@@ -189,13 +189,38 @@ function driverClause() {
 function boardView() {
   document.title = CAT.title;
   VIEW.board = true;
-  const wrap = h("div", { class: "wrap" });
-  wrap.append(landing());
-  if ((CAT.pairs || []).length) wrap.append(pairsSection());
-  wrap.append(resultsSection());
-  if (CAT.comparisons.length) wrap.append(driversSection());
-  wrap.append(trialsSection(), howSection());
-  $("#app").replaceChildren(wrap);
+  const os = osSection();
+  const wrap = h("div", { class: "wrap" },
+    !os && (CAT.pairs || []).length ? pairsSection() : null,
+    resultsSection(),
+    CAT.comparisons.length ? driversSection() : null,
+    os, modelsSection(), failuresSection(), trialsSection(), howSection());
+  $("#app").replaceChildren(h("div", { class: "wrap" }, landing()), sectionNav(wrap), wrap);
+}
+
+function sectionNav(root) {
+  const heads = [...root.querySelectorAll("[data-nav]")];
+  const links = heads.map((el) => h("a", { href: `#${el.id}` }, el.dataset.nav));
+  const row = h("div", { class: "wrap" }, links);
+  const nav = h("nav", { class: "snav", "aria-label": "Sections" }, row);
+  let cur = -1;
+  const spy = () => {
+    if (!nav.isConnected) {
+      window.removeEventListener("scroll", spy);
+      return;
+    }
+    const line = nav.getBoundingClientRect().bottom + 32;
+    const i = heads.reduce((at, el, k) => (el.getBoundingClientRect().top <= line ? k : at), -1);
+    if (i === cur) return;
+    links[cur]?.removeAttribute("aria-current");
+    cur = i;
+    if (i < 0) return;
+    links[i].setAttribute("aria-current", "true");
+    row.scrollTo({ left: links[i].offsetLeft - (row.clientWidth - links[i].offsetWidth) / 2, behavior: "smooth" });
+  };
+  window.addEventListener("scroll", spy, { passive: true });
+  requestAnimationFrame(spy);
+  return nav;
 }
 
 function landing() {
@@ -241,19 +266,23 @@ function pairsSection() {
   return h("section", { class: "pairs", "aria-labelledby": "pairs-h" },
     h("div", { class: "section-head", id: "pairs" }, h("h2", { id: "pairs-h" }, "The same task in both conditions"),
       h("p", {}, "One run of a task in the foreground, left, and in the background, right: the same model, driver, task and seed, at one speed.")),
-    h("div", { class: "pair-list" }, CAT.pairs.map((p) => {
-      const fg = CAT.trials.find((t) => t.uid === p.foreground), bg = CAT.trials.find((t) => t.uid === p.background);
-      if (!fg || !bg) return null;
-      const task = TASKS[fg.task] || {};
-      const said = (t) => (t.passed ? "pass" : "not a pass") + (t.condition === "background" && t.grade?.user_undisturbed?.result ? ", the user undisturbed" : "");
-      const video = h("video", { src: p.video, autoplay: true, muted: true, loop: true, playsinline: true, preload: "metadata",
-        "aria-label": `${fg.model_name} through ${driverName(fg.driver)} on ${OSES[p.os]?.name || p.os}, ${task.probe || fg.task} ${task.title || ""}: the foreground and background trials side by side` });
-      video.muted = true;
-      return h("figure", { class: "pair" }, video,
-        h("figcaption", {}, h("b", {}, `${OSES[p.os]?.name || p.os} · ${(task.probe || fg.task).replace("CDB-", "")} ${task.title || ""}`),
-          ` — ${fg.model_name} through ${driverName(fg.driver)}, run ${p.run_index}. Foreground ${said(fg)}; background ${said(bg)}. `,
-          h("a", { href: hashOf(fg) }, "Replay the foreground"), " · ", h("a", { href: hashOf(bg) }, "Replay the background")));
-    })));
+    pairList());
+}
+
+function pairList() {
+  return h("div", { class: "pair-list" }, CAT.pairs.map((p) => {
+    const fg = CAT.trials.find((t) => t.uid === p.foreground), bg = CAT.trials.find((t) => t.uid === p.background);
+    if (!fg || !bg) return null;
+    const task = TASKS[fg.task] || {};
+    const said = (t) => (t.passed ? "pass" : "not a pass") + (t.condition === "background" && t.grade?.user_undisturbed?.result ? ", the user undisturbed" : "");
+    const video = h("video", { src: p.video, autoplay: true, muted: true, loop: true, playsinline: true, preload: "metadata",
+      "aria-label": `${fg.model_name} through ${driverName(fg.driver)} on ${OSES[p.os]?.name || p.os}, ${task.probe || fg.task} ${task.title || ""}: the foreground and background trials side by side` });
+    video.muted = true;
+    return h("figure", { class: "pair" }, video,
+      h("figcaption", {}, h("b", {}, `${OSES[p.os]?.name || p.os} · ${(task.probe || fg.task).replace("CDB-", "")} ${task.title || ""}`),
+        ` — ${fg.model_name} through ${driverName(fg.driver)}, run ${p.run_index}. Foreground ${said(fg)}; background ${said(bg)}. `,
+        h("a", { href: hashOf(fg) }, "Replay the foreground"), " · ", h("a", { href: hashOf(bg) }, "Replay the background")));
+  }));
 }
 
 function figures(keys, alt) {
@@ -267,28 +296,305 @@ function figures(keys, alt) {
 function resultsSection() {
   const lines = CAT.models.filter((m) => m.board).length > 1 ? ", a line per model" : "";
   return h("section", { "aria-labelledby": "results-h" },
-    h("div", { class: "section-head", id: "results" }, h("h2", { id: "results-h" }, "Results"),
+    h("div", { class: "section-head", id: "results", "data-nav": "Results" }, h("h2", { id: "results-h" }, "Results"),
       h("p", {}, `All through ${driverName(CAT.driver)}: a panel per OS${lines}.`)),
     figures(CAT.figures, (f) => (f === "task-score" ? "Task score by condition" : "Full pass by condition")));
 }
 
 function driversSection() {
+  const c = CAT.comparisons.find((x) => x.model === leadModel() && x.tasks.length === CAT.comparisons[0].tasks.length) || CAT.comparisons[0];
+  const runs = CAT.trials.filter((t) => t.os === c.os && t.model === c.model && c.tasks.includes(t.task) && c.drivers.some((d) => d.id === t.driver));
+  const depth = Math.max(...runs.map((t) => t.of));
+  const cards = tips(h("div", { class: "xcards" }, c.drivers.map((d) => driverCard(d, runs.filter((t) => t.driver === d.id), c.tasks, depth))));
+  const extra = (CAT.failure_figures || []).filter((f) => f === "disturbances");
   return h("section", { class: "drivers", "aria-labelledby": "drivers-h" },
-    h("div", { class: "section-head", id: "drivers" }, h("h2", { id: "drivers-h" }, "Drivers"),
-      h("p", {}, "The same OS, model and tasks; only the computer-use driver changes.")),
-    h("div", { class: "dcards" }, CAT.drivers.map((d) => h("article", { class: "dcard", style: { "--dc": `var(--s${d.slot % 8})` } },
-      h("h3", {}, h("span", { class: "dot" }), d.name),
-      h("p", {}, d.detail || ""),
-      h("div", { class: "apps" }, osesOf(d.id).map((o) => h("span", { class: "app" }, o.name)))))),
+    h("div", { class: "section-head", id: "drivers", "data-nav": "Drivers" }, h("h2", { id: "drivers-h" }, "How the drivers differ"),
+      h("p", {}, `${OSES[c.os]?.name || c.os} · ${MODELS[c.model]?.name || c.model} · the same ${c.tasks.length} tasks and seeds; only the computer-use driver changes.`)),
+    cards, outcomeKey(cards),
+    figures(CAT.driver_figures, (f) => (f.endsWith("task-score") ? "Task score by driver" : "Full pass by driver")),
+    extra.length ? h("div", { class: "solo" }, figures(extra, () => "Which of the user's eight criteria each driver broke in the background")) : null,
     h("p", { class: "dnote" }, "Every driver also serves AgentEnv's ", h("code", {}, "computer_*"),
       " tools, which the grader and the recordings use; no driver's agents here see them. cua-driver's first runs on ",
       "macOS and Linux, which offered seven of them too, are in the dataset but not here."),
-    figures(CAT.driver_figures, (f) => (f.endsWith("task-score") ? "Task score by driver" : "Full pass by driver")),
     compareView());
 }
 
+function driverCard(d, runs, tasks, depth) {
+  const dv = DRIVERS[d.id] || { name: d.id };
+  const bg = runs.filter((t) => t.condition === "background" && t.grade?.user_undisturbed);
+  const hurt = bg.filter((t) => !t.grade.user_undisturbed.result);
+  const broke = CRIT.map((c) => [c, hurt.filter((t) => t.grade.user_undisturbed.criteria[c.id] === false).length])
+    .filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  return h("article", { class: "xcard", style: { "--dc": `var(--s${(dv.slot ?? 0) % 8})` } },
+    h("h3", {}, h("span", { class: "dot" }), dv.name),
+    dv.detail && h("p", { class: "what", title: dv.detail }, dv.detail.split(";")[0]),
+    waffles(runs, tasks, depth),
+    bg.length ? h("div", { class: "xline" }, h("span", {}, "Disturbed the user in ", h("b", {}, `${hurt.length} of ${bg.length}`), " background trials"),
+      broke.map(([c, n]) => h("span", { class: "cchip", title: `${c.broken} in ${n} of them` }, c.short, h("b", {}, n)))) : null,
+    topFailure(runs), pace(runs));
+}
+
+function topFailure(runs) {
+  const F = CAT.failures;
+  const failed = runs.filter((t) => F?.by_trial[t.uid]);
+  if (!failed.length) return null;
+  const tally = {};
+  for (const t of failed) tally[F.by_trial[t.uid]] = (tally[F.by_trial[t.uid]] || 0) + 1;
+  const [id, n] = Object.entries(tally).reduce((a, b) => (b[1] > a[1] ? b : a));
+  const mode = F.modes.find((m) => m.id === id) || { name: id };
+  const ex = (F.examples?.[id] || []).map((uid) => failed.find((t) => t.uid === uid)).find(Boolean) || failed.find((t) => F.by_trial[t.uid] === id);
+  return h("p", { class: "xline" }, "Most common failure: ", h("b", { title: mode.description || null }, mode.name),
+    ` in ${n} of its ${runs.filter((t) => !t.passed).length} failed trials. `, h("a", { href: hashOf(ex) }, "Watch one"));
+}
+
+/** The landing replay's model, which the drivers cards and the OS facts follow when it ran there too, so the page
+ * keeps to one model where it can. */
+const leadModel = () => CAT.trials.find((t) => t.uid === CAT.hero)?.model;
+
+const KEY = { pass: "Pass", user: "User disturbed", task: "Task not done", gui: "Left the GUI", other: "Grade incomplete", gap: "No trial yet" };
+const SAID = { pass: "pass", user: "fail, the user was disturbed", task: "fail, the task wasn't done", gui: "fail, it left the GUI", other: "not a full pass" };
+const probeOf = (id) => (TASKS[id]?.probe || id).replace("CDB-", "");
+
+function outcome(t) {
+  const g = t.grade || {};
+  if (t.passed) return "pass";
+  if (g.gui_only && !g.gui_only.result) return "gui";
+  if (t.condition === "background" && g.user_undisturbed && !g.user_undisturbed.result) return "user";
+  return g.task && !g.task.result ? "task" : "other";
+}
+
+function waffles(runs, tasks, depth) {
+  return h("div", { class: "wpair" }, CAT.conditions.map((k) => {
+    const ids = tasks.filter((id) => TASKS[id]?.conditions.includes(k.id));
+    if (!ids.length) return null;
+    const mine = runs.filter((t) => t.condition === k.id);
+    const pass = mine.filter((t) => t.passed).length;
+    return h("div", { class: "wblk" },
+      h("div", { class: "wlab" }, h("span", {}, k.name), h("b", {}, mine.length ? pct(pass / mine.length) : "–"), h("small", {}, `${pass}/${mine.length}`)),
+      waffle(mine, ids, depth, `${k.name}: ${pass} of ${mine.length} trials pass`));
+  }));
+}
+
+function waffle(runs, ids, depth, label) {
+  const fams = [];
+  for (const id of ids) {
+    if (fams[fams.length - 1]?.id !== TASKS[id].family) fams.push({ id: TASKS[id].family, ids: [] });
+    fams[fams.length - 1].ids.push(id);
+  }
+  return h("div", { class: "wf", role: "group", "aria-label": label }, fams.map((f) => h("div", { class: "wfg" },
+    h("div", { class: "wcols" }, f.ids.map((id) => {
+      const col = runs.filter((t) => t.task === id);
+      return h("div", { class: "wc" }, col.map(square),
+        Array.from({ length: Math.max(0, depth - col.length) }, () => h("i", { class: "sq gap", "data-tip": `${probeOf(id)}: no trial yet` })));
+    })),
+    h("span", { class: "wfam" }, f.id))));
+}
+
+function square(t) {
+  const k = outcome(t);
+  const mode = CAT.failures?.modes.find((m) => m.id === CAT.failures.by_trial[t.uid]);
+  const say = `${probeOf(t.task)} ${TASKS[t.task]?.title || ""}, run ${t.run_index ?? t.nth}: ${SAID[k]}${mode ? ` (${mode.name})` : ""}`;
+  return h("a", { class: `sq ${k}`, href: hashOf(t), "data-tip": say, "aria-label": `${say}. Replay it`, tabindex: "-1" });
+}
+
+function tips(root) {
+  const tip = h("div", { class: "tip", hidden: true });
+  root.append(tip);
+  root.addEventListener("pointerover", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (!el) return;
+    tip.textContent = el.dataset.tip;
+    tip.hidden = false;
+    const r = el.getBoundingClientRect(), box = root.getBoundingClientRect(), half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.min(Math.max(r.left + r.width / 2 - box.left, half), box.width - half)}px`;
+    tip.style.top = `${r.top - box.top}px`;
+  });
+  root.addEventListener("pointerout", (e) => {
+    if (e.target.closest("[data-tip]")) tip.hidden = true;
+  });
+  return root;
+}
+
+function outcomeKey(cards) {
+  return h("div", { class: "okey" },
+    Object.entries(KEY).filter(([k]) => cards.querySelector(`.sq.${k}`)).map(([k, label]) => h("span", {}, h("i", { class: `sq ${k}` }), label)),
+    h("span", { class: "okey-note" }, "A square per trial: a column per task, a row per run. A trial that broke several halves shows the first of GUI only, the user and the task. Click one to replay it."));
+}
+
+function osSection() {
+  const gap = osGap();
+  if (!gap) return null;
+  const label = gap.oses.map((o) => o.name).join(" vs ");
+  const figs = (CAT.compare_figures || []).filter((f) => f === "os-gap");
+  return h("section", { class: "oses", "aria-labelledby": "os-h" },
+    h("div", { class: "section-head", id: "os", "data-nav": label }, h("h2", { id: "os-h" }, label),
+      h("p", {}, `The same driver, model and tasks on two desktops: ${driverName(CAT.driver)} and ${gap.model.name}.`)),
+    h("div", { class: `os-top${figs.length ? "" : " bare"}` },
+      h("div", { class: "facts" }, gapFact(gap), taskFact(gap.oses)),
+      figs.length ? figures(figs, () => `Full pass on ${label}, in the foreground and the background`) : null),
+    (CAT.pairs || []).length ? [h("div", { class: "subhead" }, h("h3", {}, "One run on each, foreground beside background"),
+      h("p", {}, "The same model, driver, task and seed in both conditions, at one speed.")), pairList()] : null);
+}
+
+function osGap() {
+  const rows = CAT.board.filter((r) => r.driver === CAT.driver);
+  const oses = CAT.oses.filter((o) => rows.some((r) => r.os === o.id));
+  if (oses.length !== 2) return null;
+  const row = (os, model, cond) => rows.find((r) => r.os === os.id && r.model === model && r.condition === cond);
+  const shared = CAT.models.filter((m) => CAT.conditions.every((k) => oses.every((o) => row(o, m.id, k.id))));
+  if (!shared.length) return null;
+  const size = (m) => rows.filter((r) => r.model === m.id).reduce((s, r) => s + r.n_trials, 0);
+  const model = shared.find((m) => m.id === leadModel()) || shared.reduce((a, b) => (size(b) > size(a) ? b : a));
+  const conds = Object.fromEntries(CAT.conditions.map((k) => {
+    const both = oses.map((o) => row(o, model.id, k.id));
+    const tasks = Object.keys(both[0].tasks).filter((t) => t in both[1].tasks);
+    return [k.id, { tasks, by: both.map((r) => ({ k: tasks.reduce((s, t) => s + r.tasks[t].passed, 0), n: tasks.reduce((s, t) => s + r.tasks[t].n, 0) })) }];
+  }));
+  return { oses, model, conds };
+}
+
+function gapFact({ oses, model, conds }) {
+  const share = (x) => (x.n ? x.k / x.n : null);
+  const { background: bg, foreground: fg } = conds;
+  return h("article", { class: "fact" },
+    h("h3", {}, "Background full pass"),
+    h("p", { class: "fsub" }, `${model.name} through ${driverName(CAT.driver)}, the same ${bg.tasks.length} tasks while a user types`),
+    h("div", { class: "fnums" }, oses.map((o, i) => h("div", { class: "fnum" },
+      h("small", {}, o.name), h("b", {}, pct(share(bg.by[i]))),
+      h("span", { class: "meter" }, h("i", { style: { width: pct(share(bg.by[i]) || 0) } })),
+      h("span", {}, `${bg.by[i].k} of ${bg.by[i].n} trials`)))),
+    h("p", { class: "fnote" }, `In the foreground, the desktop to itself: ${oses.map((o, i) => `${pct(share(fg.by[i]))} on ${o.name}`).join(", ")}.`));
+}
+
+function taskFact(oses) {
+  const rows = CAT.board.filter((r) => r.driver === CAT.driver && r.condition === "background");
+  const tasks = CAT.tasks.filter((k) => oses.every((o) => rows.some((r) => r.os === o.id && r.tasks[k.id])));
+  const lines = oses.map((o) => {
+    const mine = rows.filter((r) => r.os === o.id);
+    return { o, models: mine.length, cells: tasks.map((k) => mine.map((r) => r.tasks[k.id]).filter(Boolean)) };
+  });
+  const marks = new Map();
+  const cell = (l, k, i) => {
+    const passed = l.cells[i].reduce((s, p) => s + p.passed, 0), n = l.cells[i].reduce((s, p) => s + p.n, 0);
+    const cv = caveatOf(l.o.id, "background", k.id);
+    if (cv && !passed) marks.set(cv.mark, cv);
+    return h("span", { class: `tc ${passed ? "ok" : "no"}`, "data-tip": `${probeOf(k.id)} on ${l.o.name}: ${passed} of ${n} background trials pass${cv ? `. ${cv.short}` : ""}` },
+      passed ? "✓" : cv ? cv.mark : "");
+  };
+  const grid = tips(h("div", { class: "tstrip", style: { "--n": tasks.length } },
+    h("span"), tasks.map((k) => h("span", { class: "th" }, probeOf(k.id))), h("span"),
+    lines.map((l) => [h("span", { class: "rl" }, l.o.name), tasks.map((k, i) => cell(l, k, i)),
+      h("b", { class: "rc" }, `${l.cells.filter((ps) => ps.some((p) => p.passed)).length} of ${tasks.length}`)])));
+  return h("article", { class: "fact" },
+    h("h3", {}, "Background tasks any model passed"),
+    h("p", { class: "fsub" }, `Through ${driverName(CAT.driver)}: ${lines.map((l) => `${l.models} model${l.models === 1 ? "" : "s"} on ${l.o.name}`).join(", ")}`),
+    grid,
+    [...marks.values()].map((cv) => h("p", { class: "fnote", title: cv.reason }, h("b", {}, `${cv.mark} ${cv.short}. `),
+      cv.reason.replace(/\s*\([^)]*\)/g, "").split(/(?<=\.)\s+/).slice(0, 2).join(" "))));
+}
+
+const HARNESS_NAMES = { "claude-code": "Claude Code", "codex-cli": "Codex CLI" };
+
+function modelsSection() {
+  const rows = CAT.board.filter((r) => r.driver === CAT.driver);
+  const count = (o) => new Set(rows.filter((r) => r.os === o.id).map((r) => r.model)).size;
+  const os = CAT.oses.reduce((a, b) => (count(b) > count(a) ? b : a));
+  const models = CAT.models.filter((m) => m.board && rows.some((r) => r.os === os.id && r.model === m.id));
+  if (models.length < 2) return null;
+  const runs = CAT.trials.filter((t) => t.os === os.id && t.driver === CAT.driver && models.some((m) => m.id === t.model));
+  const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
+  const depth = Math.max(...runs.map((t) => t.of));
+  const cards = tips(h("div", { class: "xcards" }, models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth))));
+  const figs = (CAT.compare_figures || []).filter((f) => f === "models-tasks" || f === "pareto");
+  return h("section", { class: "models", "aria-labelledby": "models-h" },
+    h("div", { class: "section-head", id: "models", "data-nav": "Models" }, h("h2", { id: "models-h" }, "How the models differ"),
+      h("p", {}, `${os.name} · ${driverName(CAT.driver)} · the same ${tasks.length} tasks; only the model and its harness change.`)),
+    cards, outcomeKey(cards),
+    models.some((m) => m.harness === "codex-cli") ? h("p", { class: "dnote" }, "Codex CLI hands the model a tool's structured result alone, so GPT never sees ",
+      `${driverName(CAT.driver)}'s window screenshots, only its accessibility tree.`) : null,
+    figs.length ? figures(figs, (f) => (f === "pareto" ? "Cost per trial against full pass, a point per model" : "Full pass on each task, a line per model")) : null);
+}
+
+function modelCard(m, runs, tasks, depth) {
+  const effort = runs.find((t) => t.effort)?.effort || (m.harness === "claude-code" ? "medium" : null);
+  return h("article", { class: "xcard", style: { "--dc": `var(--s${(m.slot ?? 0) % 8})` } },
+    h("h3", {}, h("span", { class: "dot" }), m.name),
+    h("p", { class: "what" }, [HARNESS_NAMES[m.harness] || m.harness, effort && `${effort} effort`].filter(Boolean).join(" · ")),
+    waffles(runs, tasks, depth), pace(runs));
+}
+
+function pace(runs) {
+  const times = runs.map((t) => t.duration).filter((v) => v != null).sort((a, b) => a - b);
+  const capped = runs.filter((t) => /^Hit the \d+-turn limit/.test(t.ending || "")).length;
+  return h("p", { class: "xline pace" }, `Median trial ${mins(times[times.length >> 1])} · ${Math.round(meanOf(runs.map((t) => t.tool_calls)))} tool calls on average`,
+    capped ? ` · out of turns in ${capped} of ${runs.length}` : "");
+}
+
+function failuresSection() {
+  const F = CAT.failures;
+  const figs = (CAT.failure_figures || []).filter((f) => f === "failure-modes");
+  const clips = CAT.gallery || [];
+  if (!F && !figs.length && !clips.length) return null;
+  return h("section", { class: "failures", "aria-labelledby": "failures-h" },
+    h("div", { class: "section-head", id: "failures", "data-nav": "Failures" }, h("h2", { id: "failures-h" }, "Where trials fail"),
+      h("p", {}, "What broke in the trials that failed, and a clip of each kind.")),
+    figs.length ? h("div", { class: "solo" }, figures(figs, () => "Failed trials by what broke")) : null,
+    gallery(F, clips));
+}
+
+function gallery(F, clips) {
+  const failed = F ? CAT.trials.map((t) => F.by_trial[t.uid]).filter(Boolean) : [];
+  const count = (id) => failed.filter((x) => x === id).length;
+  const modes = (F?.modes || []).filter((m) => count(m.id) || clips.some((g) => g.mode === m.id)).sort((a, b) => count(b.id) - count(a.id));
+  const grid = h("div", { class: "fgrid" }, clips.map(clip));
+  const desc = h("p", { class: "mdesc" });
+  const chips = h("div", { class: "tabs modes", role: "group", "aria-label": "Failure modes" },
+    [null, ...modes].map((m) => h("button", { "aria-pressed": "false", onclick: () => pick(m) }, m ? m.name : "All", h("small", {}, m ? count(m.id) : failed.length))));
+  const pick = (m) => {
+    [null, ...modes].forEach((x, i) => chips.children[i].setAttribute("aria-pressed", String(x === m)));
+    for (const el of grid.children) el.hidden = !!m && el.dataset.mode !== m.id;
+    const none = m && !clips.some((g) => g.mode === m.id);
+    const ex = none ? (F.examples?.[m.id] || []).map((uid) => CAT.trials.find((t) => t.uid === uid)).filter(Boolean).slice(0, 4) : [];
+    desc.replaceChildren(h("span", {}, m?.description, ex.length ? [" No clip of this one yet; replay ", ex.map((t, i) => [i ? " · " : "",
+      h("a", { href: hashOf(t) }, `${probeOf(t.task)} on ${OSES[t.os]?.name || t.os}, ${driverLabel(t.driver)}, ${t.model_name}`)]), "."] : null));
+    desc.hidden = !m;
+  };
+  pick(null);
+  playWhenSeen(grid.querySelectorAll("video"));
+  return h("div", { class: "gallery" }, modes.length ? chips : null, desc, grid);
+}
+
+function clip(g) {
+  const t = CAT.trials.find((x) => x.uid === g.uid);
+  const mode = CAT.failures?.modes.find((m) => m.id === g.mode);
+  const video = h("video", { src: g.video, muted: true, loop: true, playsinline: true, preload: "none", "aria-label": `${g.title}: ${g.caption}` });
+  video.muted = true;
+  return h("figure", { class: `fclip${t?.passed ? " pass" : ""}`, "data-mode": g.mode }, video,
+    h("figcaption", {}, h("b", {}, g.title), g.caption ? h("p", {}, g.caption) : null,
+      h("div", { class: "fclip-foot" },
+        mode ? h("span", { class: "chip mode" }, mode.name) : null,
+        h("span", { class: "chip" }, OSES[g.os]?.name || g.os),
+        h("span", { class: "chip", title: driverName(g.driver) }, driverDot(g.driver), driverLabel(g.driver)),
+        h("span", { class: "chip" }, h("span", { class: "dot", style: { background: `var(--s${(MODELS[g.model]?.slot ?? 0) % 8})` } }), MODELS[g.model]?.name || g.model),
+        t ? h("a", { class: "fclip-go", href: hashOf(t) }, "Replay the trial →") : null)));
+}
+
+function playWhenSeen(videos) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    for (const v of videos) v.controls = true;
+    return;
+  }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) e.target.play().catch(() => {});
+      else e.target.pause();
+    }
+  }, { threshold: 0.35 });
+  for (const v of videos) io.observe(v);
+}
+
 function trialsSection() {
-  const head = h("div", { class: "section-head", id: "trials" }, h("h2", {}, "Every trial"), h("p", {}, resultsNote()));
+  const head = h("div", { class: "section-head", id: "trials", "data-nav": "Trials" }, h("h2", {}, "Every trial"), h("p", {}, resultsNote()));
   const ranOn = (driver, os) => osesOf(driver).some((o) => o.id === os);
   let osSel = store.get("cdb-os", CAT.oses[0]?.id);
   if (!OSES[osSel]) osSel = CAT.oses[0]?.id;
