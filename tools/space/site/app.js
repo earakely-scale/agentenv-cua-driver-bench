@@ -167,6 +167,7 @@ function osPhrase() {
 const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const osesOf = (driver) => CAT.oses.filter((o) => CAT.trials.some((t) => t.driver === driver && t.os === o.id));
 const driverName = (id) => DRIVERS[id]?.name || id;
+const driverLabel = (id) => DRIVERS[id]?.label || driverName(id);
 const driverDot = (id) => h("span", { class: "dot", style: { background: `var(--s${(DRIVERS[id]?.slot ?? 0) % 8})` } });
 
 function driverClause() {
@@ -433,7 +434,7 @@ function compareGrid(c) {
     const leads = Object.fromEntries(conds.map((k) => [k.id, rank(results[k.id])]));
     c.drivers.forEach((d, i) => {
       const first = i === 0 ? " first" : "";
-      grid.append(h("div", { class: `cd${first}` }, driverDot(d.id), h("span", {}, driverName(d.id))));
+      grid.append(h("div", { class: `cd${first}`, title: driverName(d.id) }, driverDot(d.id), h("span", {}, driverLabel(d.id))));
       for (const k of conds) {
         const lost = missingOf(d.id, c.os, task.id, k.id, [c.model]);
         grid.append(cmpCell(results[k.id][i], leads[k.id][i], lost, d.id, first, task.conditions.includes(k.id) ? null : onlyIn(task)));
@@ -470,7 +471,7 @@ function totalsRows(c, conds) {
   c.drivers.forEach((d, i) => {
     const first = i === 0 ? " first" : "";
     const style = { "--dc": `var(--s${(DRIVERS[d.id]?.slot ?? 0) % 8})` };
-    out.push(h("div", { class: `cd total${first}` }, driverDot(d.id), h("span", {}, driverName(d.id))));
+    out.push(h("div", { class: `cd total${first}`, title: driverName(d.id) }, driverDot(d.id), h("span", {}, driverLabel(d.id))));
     for (const k of conds) {
       const v = d[k.id];
       const delta = (a, b) => {
