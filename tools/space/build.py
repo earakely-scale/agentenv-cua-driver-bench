@@ -185,7 +185,6 @@ def main():
     (args.out / "failures.md").write_text(failures.markdown(cat))
     count = sum(len(cat[k]) for k in ("figures", "driver_figures", "compare_figures", "failure_figures"))
     print(f"figures: {4 * count} SVGs in {assets}")
-          f"{assets}")
     if hero_uid and not args.no_gif:
         t = next(x for x in loaded if x["meta"]["uid"] == hero_uid)
         gif, still = hero.render(t, cat, cfg, assets)
