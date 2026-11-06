@@ -41,25 +41,20 @@ On Linux, with Docker:
 
 ```bash
 pip install 'agentenv-framework>=0.9.1446'
-mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
-[model]
-base_url = "https://your-litellm-or-openai-compatible-proxy"
-api_key = "env:LITELLM_API_KEY"
-default = "anthropic/claude-sonnet-5-5"
-EOF
-agent-env run hf://{{REPO}} --task cdb-g02-background   # one trial
-agent-env run hf://{{REPO}} --eval bench-v2             # every task of Bench v2 once
+export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
+agent-env run hf://{{REPO}} --task cdb-g02-background --model anthropic/claude-sonnet-5-5   # one trial
+agent-env run hf://{{REPO}} --eval bench-v2 --model anthropic/claude-sonnet-5-5             # every task of Bench v2 once
 # GPT-6 in OpenAI's Codex CLI (agentenv-framework 0.9.1454 or later), on cua-driver's own tools as the board ran it
 agent-env run hf://{{REPO}} --task codex-cdb-g02-background --model openai/gpt-6.1-sol --set envs/desktop-s02.tools=driver
 ```
 
 On an Apple silicon Mac, the same tasks run on macOS 26, in a logged-in session with
-[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do). Add a `[sandbox]` table to the config, then run the `macos-` tasks:
+[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do). Select the Lume sandbox in a two-line config, which only a config can do, then run the `macos-` tasks:
 
 ```bash
-printf '\n[sandbox]\ndefault = "lume"\n' >> .agentenv/config.toml
-agent-env run hf://{{REPO}} --task macos-ir-01-r1-foreground
-agent-env run hf://{{REPO}} --eval macos-bench-v2
+mkdir -p .agentenv && printf '[sandbox]\ndefault = "lume"\n' > .agentenv/config.toml   # only a config picks the sandbox
+agent-env run hf://{{REPO}} --task macos-ir-01-r1-foreground --model anthropic/claude-sonnet-5-5
+agent-env run hf://{{REPO}} --eval macos-bench-v2 --model anthropic/claude-sonnet-5-5
 ```
 
 The first run builds each task's computer, a few minutes on Linux and about 7 on macOS, where it first pulls Cua's

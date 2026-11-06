@@ -77,17 +77,13 @@ OpenAI-compatible endpoint for the model:
 
 ```bash
 pip install 'agentenv-framework>=0.9.1454'
-mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
-[model]
-base_url = "https://your-litellm-or-openai-compatible-proxy"
-api_key = "env:LITELLM_API_KEY"
-default = "anthropic/claude-sonnet-5-5"
-EOF
-export LITELLM_API_KEY=...
+export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
 # One trial, as the board's Linux rows ran it: cua-driver on its own tools alone
-agent-env run hf://earakely-scale/cua-driver-bench --task cdb-g02-background --set envs/desktop-s02.tools=driver
+agent-env run hf://earakely-scale/cua-driver-bench --task cdb-g02-background --model anthropic/claude-sonnet-5-5 \
+  --set envs/desktop-s02.tools=driver
 # Every task of Bench v2 once, the same way
-agent-env run hf://earakely-scale/cua-driver-bench --eval bench-v2 --set envs/desktop-benchlab.tools=driver \
+agent-env run hf://earakely-scale/cua-driver-bench --eval bench-v2 --model anthropic/claude-sonnet-5-5 \
+  --set envs/desktop-benchlab.tools=driver \
   --set envs/desktop-s02.tools=driver --set envs/desktop-s03.tools=driver --set envs/desktop-s04.tools=driver
 # GPT-6 in OpenAI's Codex CLI
 agent-env run hf://earakely-scale/cua-driver-bench --task codex-cdb-g02-background --model openai/gpt-6.1-sol \
@@ -96,11 +92,12 @@ agent-env run hf://earakely-scale/cua-driver-bench --task codex-cdb-g02-backgrou
 
 The first run builds each task's computer, a few minutes; later runs reuse it. On an Apple silicon Mac the same tasks
 run on macOS 26 (we used EC2 mac2-m2.metal hosts), in a logged-in session with
-[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do). Add
-`[sandbox]` with `default = "lume"` to the config and run the `macos-` tasks: `macos-cua-driver-…` for
-cua-driver on its own tools, `macos-agent-desktop-…` for Vercel Labs' agent-desktop and `macos-macos-harness-…` for
-browser-use's macOS harness, as the drivers comparison ran them, for example
-`agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background`.
+[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do). Select the
+Lume sandbox in a two-line config, `[sandbox]` with `default = "lume"` in `.agentenv/config.toml`, and run the
+`macos-` tasks: `macos-cua-driver-…` for cua-driver on its own tools, `macos-agent-desktop-…` for Vercel Labs'
+agent-desktop and `macos-macos-harness-…` for browser-use's macOS harness, as the drivers comparison ran them, for
+example `agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background --model
+anthropic/claude-sonnet-5-5`.
 
 Load our results:
 
@@ -141,14 +138,9 @@ tooling and tests; `agent-env run .` in a clone takes the same arguments as `hf:
 pip install 'agentenv-framework>=0.9.1412'
 git clone https://github.com/earakely-scale/agentenv-cua-driver-bench && cd agentenv-cua-driver-bench
 python tools/taskpack.py                       # fetch trycua's task pack at the pinned commit
-mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
-[model]
-base_url = "https://your-litellm-or-openai-compatible-proxy"
-api_key = "env:LITELLM_API_KEY"
-default = "anthropic/claude-sonnet-5-5"
-EOF
-agent-env run . --task cdb-g02-background      # one trial
-agent-env run . --eval bench-v2                # every task of Bench v2 once (66 task files)
+export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
+agent-env run . --task cdb-g02-background --model anthropic/claude-sonnet-5-5   # one trial
+agent-env run . --eval bench-v2 --model anthropic/claude-sonnet-5-5           # every task of Bench v2 once
 ```
 
 The board's Linux rows run each trial with cua-driver's own tools alone, `--set envs/<computer>.tools=driver` (below).
@@ -168,17 +160,10 @@ will do):
 
 ```bash
 pip install 'agentenv-framework>=0.9.1446'
-mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
-[sandbox]
-default = "lume"
-
-[model]
-base_url = "https://your-litellm-or-openai-compatible-proxy"
-api_key = "env:LITELLM_API_KEY"
-default = "anthropic/claude-sonnet-5-5"
-EOF
-agent-env run . --task macos-ir-01-r1-foreground   # one trial
-agent-env run . --eval macos-bench-v2              # every task of Bench v2 once (66 task files)
+mkdir -p .agentenv && printf '[sandbox]\ndefault = "lume"\n' > .agentenv/config.toml   # only a config picks the sandbox
+export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
+agent-env run . --task macos-ir-01-r1-foreground --model anthropic/claude-sonnet-5-5   # one trial
+agent-env run . --eval macos-bench-v2 --model anthropic/claude-sonnet-5-5              # every task of Bench v2 once
 ```
 
 The first run pulls Cua's macOS base (about 29 GB) and composes the task's computer, about 7 minutes. The drivers
