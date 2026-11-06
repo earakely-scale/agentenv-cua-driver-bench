@@ -1,7 +1,7 @@
 """The dataset's exporter, tables and card, offline: a trial's cost at list price from the tokens its trajectory reports
 (a flat price from the totals, a tiered one call by call, the calls' own counts when the run was cut off before Claude
 Code's result), its timeline on the recording's clock, the rows the tables take from a trial folder and a task file,
-and the card's runs with their drivers, its drivers section and its hero's link."""
+and the card's runs with their drivers, its drivers section, its failure section and its hero's link."""
 import importlib.util
 import json
 from datetime import datetime, timezone
@@ -223,6 +223,27 @@ def test_the_cards_drivers_section_holds_the_drivers_figures_and_table_and_is_le
     section = card._drivers(tmp_path, {"driver_figures": ["drivers-full-pass"]})
     assert section.startswith("### Drivers") and "assets/figures/drivers-full-pass-dark.svg" in section
     assert "drivers-task-score" not in section and section.endswith("| OS | Model | Driver |")
+
+
+def test_the_cards_failure_section_holds_its_figures_findings_and_a_replay_of_each_modes_examples(tables, tmp_path):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+    trial = {"uid": "macos--a-run--ir-01-r2-background", "probe": "IR-01", "os": "macos", "driver": "agent-desktop",
+             "task": "ir-01", "condition": "background", "model": "anthropic/claude-sonnet-5-5", "run_index": 2}
+    catalog = {"failure_figures": ["failure-modes", "disturbances"], "trials": [trial],
+               "oses": [{"id": "macos", "name": "macOS"}], "drivers": [{"id": "agent-desktop", "name": "agent-desktop"}],
+               "failures": {"modes": [{"id": "pass", "name": "Passed", "description": "All held."},
+                                      {"id": "disturbed", "name": "Disturbed the user", "description": "Took focus."}],
+                            "examples": {"disturbed": [trial["uid"]]}}}
+
+    assert card._failures(tmp_path, catalog) == ""
+    (tmp_path / "failures.md").write_text("- **1 of 2 pass.**\n\n| OS |\n|---|\n")
+    section = card._failures(tmp_path, catalog)
+
+    assert section.startswith("## Where trials fail") and "assets/figures/failure-modes-dark.svg" in section
+    assert "- **1 of 2 pass.**" in section and "<summary>Every setup's outcomes</summary>\n\n| OS |" in section
+    assert "- **Passed**: All held.\n" in section
+    assert ("Watch [IR-01 on macOS · agent-desktop](" in section
+            and "#/agent-desktop/macos/ir-01/background/anthropic%2Fclaude-sonnet-5-5/r2)." in section)
 
 
 @pytest.mark.parametrize(("driver", "lead"), [("cua-driver", ""), ("agent-desktop", "agent-desktop/")])
