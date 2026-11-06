@@ -5,6 +5,8 @@ that changes a score."""
 import hashlib
 import importlib.util
 import json
+import sqlite3
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -216,6 +218,40 @@ def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_d
 
 def test_setup_and_health_check_failures_are_re_run_twice_before_a_trial_is_missing(worker):
     assert worker.LIMITS == {"rate": 6, "server": 3, "setup": 2}
+
+
+def test_a_runs_settings_reach_each_trial_and_its_export_and_its_instance_is_found_by_its_task_file(
+        worker, tmp_path, monkeypatch):
+    monkeypatch.setattr(worker, "FLEET", tmp_path)
+    monkeypatch.setattr(worker, "DB", tmp_path / "local.db")
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "settings.txt").write_text("envs/desktop-benchlab.tools=driver\n")
+    con = sqlite3.connect(tmp_path / "local.db")
+    con.execute("create table docs_task_instances (doc text)")
+    con.execute("insert into docs_task_instances values (?)", (json.dumps(
+        {"instance_id": "plain", "task_id": "@local/~/bench/ir-01-r1-foreground"}),))
+    con.commit()
+    ran, exported = [], []
+
+    def run(argv, log):
+        ran.append(argv)
+        con.execute("insert into docs_task_instances values (?)", (json.dumps({
+            "instance_id": "varied", "task_id": "@local/~/bench/ir-01-r1-background(desktop-benchlab.tools driver)",
+            "created_at_utc": "2026-11-06T00:00:00"}),))
+        con.commit()
+        return 0
+
+    monkeypatch.setattr(worker, "_run", run)
+    monkeypatch.setattr(worker, "failure", lambda instance: None)
+    monkeypatch.setattr(worker.subprocess, "run", lambda argv, **kw: exported.append((argv, kw["env"]))
+                        or subprocess.CompletedProcess(argv, 1, "", "stopped here"))
+
+    worker._trial(None, "run-1", "ir-01-r1-background", "ir-01-r1-background", 1, None)
+
+    assert ran[0][-4:] == ["--task", "ir-01-r1-background", "--set", "envs/desktop-benchlab.tools=driver"]
+    assert exported[0][0][-1] == "varied|ir-01-r1-background|1"
+    assert exported[0][1]["RUN_SETTINGS"] == "envs/desktop-benchlab.tools=driver"
+    assert set(worker._instances("ir-01-r1-background")) == {"varied"} and set(worker._instances("ir-01-r1-foreground")) == {"plain"}
 
 
 @pytest.fixture

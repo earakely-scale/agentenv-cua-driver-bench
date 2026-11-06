@@ -13,6 +13,7 @@ Progress goes to ~/fleet/progress.jsonl, which a restart resumes from. A file ~/
 next trial, the one running left to finish."""
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -67,7 +68,8 @@ def _trial(api, run, stem, name, index, finished):
     while not finished:
         before = _instances(stem)
         with open(FLEET / "logs" / f"{name}.log", "a") as log:
-            code = _run([str(AGENT_ENV), "run", ".", "--task", stem], log)
+            code = _run([str(AGENT_ENV), "run", ".", "--task", stem,
+                         *(arg for setting in _settings() for arg in ("--set", setting))], log)
         instance = max((d for i, d in _instances(stem).items() if i not in before),
                        key=lambda d: d.get("created_at_utc") or "", default=None)
         kind = failure(instance)
@@ -79,7 +81,8 @@ def _trial(api, run, stem, name, index, finished):
         time.sleep(60 * tries[kind] if kind == "rate" else 10)
     export = subprocess.run([str(PYTHON), str(BENCH / "tools" / "dataset" / "export.py"), str(OUT),
                              f"{instance['instance_id']}|{name}|{index}"],
-                            capture_output=True, text=True, env={**os.environ, "BENCH": str(BENCH)})
+                            capture_output=True, text=True,
+                            env={**os.environ, "BENCH": str(BENCH), "RUN_SETTINGS": "\n".join(_settings())})
     if export.returncode != 0:
         return _record(name, stem, index, instance, "export_failed", error=export.stderr[-2000:], tries=tries)
     summary = json.loads(export.stdout.strip().splitlines()[-1])
@@ -144,7 +147,8 @@ def _upload_manifest(api, run, done=()):
                        and (facts := json.loads(path.read_text())).get("harness_version")})
     built = manifest.build(BENCH, run, OS, os.environ.get("RUN_MODEL"), (FLEET / "run-specs.txt").read_text().split(),
                            {"setup_steps": list(SETUP_STEPS), "reruns": LIMITS}, manifest.installed_drivers(),
-                           state=DB.parents[2], harness={"name": "claude-code", "versions": versions, "effort": None})
+                           state=DB.parents[2], harness={"name": "claude-code", "versions": versions, "effort": None},
+                           settings=_settings())
     built = _merged(built, _uploaded(run))
     (OUT / "manifest.json").write_text(json.dumps(built, indent=1))
     api.upload_file(path_or_fileobj=str(OUT / "manifest.json"), path_in_repo=f"runs/{OS}/{run}/manifest.json",
@@ -197,7 +201,18 @@ def _instances(stem):
         rows = [json.loads(doc) for (doc,) in con.execute("select doc from docs_task_instances")]
     finally:
         con.close()
-    return {d["instance_id"]: d for d in rows if d.get("task_id", "").endswith("/" + stem)}
+    return {d["instance_id"]: d for d in rows if _task_file(d.get("task_id", "")) == stem}
+
+
+def _task_file(task_id):
+    """The task file a task id names: its last segment, less the settings a ``--set`` run's ids end in."""
+    return re.sub(r"\(.*\)$", "", task_id).rsplit("/", 1)[-1]
+
+
+def _settings():
+    """The ``agent-env run --set`` settings start.py gave the run, one a line in FLEET/settings.txt."""
+    path = FLEET / "settings.txt"
+    return [line for line in path.read_text().splitlines() if line] if path.exists() else []
 
 
 def _record(name, stem, index, instance, status, **details):

@@ -44,11 +44,14 @@ def main():
     parser.add_argument("--taskpack", type=Path)
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--fresh", action="store_true")
+    parser.add_argument("--set", dest="settings", action="append", default=[], metavar="envs/NAME.KEY=VALUE",
+                        help="a setting agent-env run gives each trial (agentenv-framework 0.9.1453 or later); repeatable")
     args = parser.parse_args()
     venv, bench = setting("FLEET_VENV", "~/venv"), setting("FLEET_BENCH", "~/bench")
     os_type, keys, home = args.os, KEYS[args.os], HOSTS[args.os][2]
     if args.taskpack:
         ship(args.instance, args.taskpack, f"{home}/fleet/taskpack.tgz", os_type)
+    settings = base64.b64encode("".join(line + "\n" for line in args.settings).encode()).decode()
     seal = sealer(args.instance, keys, os_type)
     key, token = seal(setting("FLEET_MODEL_KEY")), seal(get_token())
     pull = "" if args.keep else "git fetch -q origin && git reset -q --hard origin/main && "
@@ -62,6 +65,7 @@ rm -f ~/fleet/stop
 mkdir -p ~/fleet/logs ~/fleet/out
 echo '{base64.b64encode(args.specs.read_bytes()).decode()}' | base64 -d > ~/fleet/specs.txt
 echo '{base64.b64encode((args.run_specs or args.specs).read_bytes()).decode()}' | base64 -d > ~/fleet/run-specs.txt
+echo '{settings}' | base64 -d > ~/fleet/settings.txt
 printf %s '{key}' > {keys}/model.enc
 printf %s '{token}' > {keys}/hf.enc
 cat > ~/fleet/config.toml <<'CFG'

@@ -72,6 +72,36 @@ the bench at one commit of its [GitHub repo](https://github.com/earakely-scale/a
 tooling, tests and history live: this one is
 [{{COMMIT}}](https://github.com/earakely-scale/agentenv-cua-driver-bench/commit/{{COMMIT}}).
 
+## Run another driver or tool set
+
+With agentenv-framework 0.9.1453 or later, `--set envs/NAME.KEY=VALUE` changes one of the bench's computer envs for a
+single run and leaves the bench as written. Each task deploys one computer env: `desktop-benchlab` for the precision
+and interruption tasks on Linux, `desktop-s02`, `desktop-s03` and `desktop-s04` for the multi-app tasks, and the same
+names ending in `-macos` on macOS. What a setting changes runs under ids ending in it, such as
+`desktop-benchlab(desktop-benchlab.driver reference)`, so its trials stay apart from the bench's own.
+
+```bash
+pip install 'agentenv-framework>=0.9.1453'
+# Linux: cua-driver on its own tools alone, as the dataset's macOS runs ran it
+agent-env run hf://{{REPO}} --task ir-01-r1-background --set envs/desktop-benchlab.tools=driver
+# Linux: AgentEnv's reference driver in cua-driver's place
+agent-env run hf://{{REPO}} --task ir-01-r1-background --set envs/desktop-benchlab.driver=reference
+# macOS: Vercel Labs' agent-desktop, or browser-use's macOS harness, on cua-driver's task and its own tools alone
+agent-env run hf://{{REPO}} --task macos-ir-01-r1-background --set envs/desktop-benchlab-macos.driver=agent-desktop \
+  --set envs/desktop-benchlab-macos.tools=driver
+agent-env run hf://{{REPO}} --task macos-ir-01-r1-background --set envs/desktop-benchlab-macos.driver=macos-harness \
+  --set envs/desktop-benchlab-macos.tools=driver
+```
+
+`tools` is `standard` (AgentEnv's `computer_*` tools alone), `driver` (the driver's own alone) or `both`, the default;
+the Linux runs in the
+[CuaDriverBench-AgentEnv dataset](https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv) ran with `both`. An eval deploys several envs, so set each one, for example
+`--eval bench-v2 --set envs/desktop-benchlab.driver=reference --set envs/desktop-s02.driver=reference
+--set envs/desktop-s03.driver=reference --set envs/desktop-s04.driver=reference`. The `macos-agent-desktop-…`,
+`macos-macos-harness-…` and `macos-cua-driver-…` task files are these settings written out, and they are what the
+dataset's macOS runs ran; in the foreground they also start agent-desktop headed, which `--set` can't. A driver that doesn't run
+on the computer, such as macos-harness on Linux, is refused before any task runs.
+
 ## What's here
 
 | Path | What it is |

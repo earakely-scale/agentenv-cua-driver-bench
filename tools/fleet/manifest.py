@@ -25,12 +25,13 @@ FRAMEWORK_FLOOR = (0, 9, 1412)
 
 def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], policy: dict,
           drivers: Path | None, image: dict | None = None, state: Path | None = None,
-          harness: dict | None = None) -> dict:
+          harness: dict | None = None, settings: list[str] = ()) -> dict:
     """The manifest of ``run`` on ``os_type``: ``specs`` are its `stem|name|run` lines, ``policy`` the worker's setup
     steps and re-run limits, ``drivers`` the installed framework's driver folders (each with its mcp.json), ``image``
     the identity of the image the computers boot, where it records one, ``state`` agent-env's state folder, whose
-    store records how each computer was composed, and ``harness`` the agent's harness: its name, the versions its trials
-    ran and its effort, None being the model's default."""
+    store records how each computer was composed, ``harness`` the agent's harness: its name, the versions its trials
+    ran and its effort, None being the model's default, and ``settings`` the ``agent-env run --set`` settings each trial
+    ran with."""
     framework = {name: _version(name) for name in ("agentenv-framework", "agentenv-framework-protocol")}
     _require_floor(framework["agentenv-framework"])
     if commit := _checkout_commit("agentenv-framework"):
@@ -44,6 +45,7 @@ def build(bench: Path, run: str, os_type: str, model: str, specs: list[str], pol
         "run": run,
         "os": os_type,
         "trials": len(specs),
+        "settings": list(settings),
         "task_pack": {"repo": lock["repo"], "commit": lock["commit"], "sha256": lock["sha256"]},
         "bench": {"commit": subprocess.run(["git", "-C", str(bench), "rev-parse", "HEAD"], capture_output=True,
                                            text=True).stdout.strip() or None},

@@ -26,6 +26,12 @@ def export():
     return _module(ROOT / "tools" / "dataset" / "export.py")
 
 
+def test_an_entity_is_named_by_its_ids_last_segment_less_a_set_runs_settings(export):
+    assert export.named("@local/~/bench/ir-01-r1-background") == "ir-01-r1-background"
+    assert export.named("@hf/earakely-scale/cua-driver-bench/desktop-benchlab(desktop-benchlab.tools driver, "
+                        "desktop-benchlab.driver reference)") == "desktop-benchlab"
+
+
 @pytest.fixture
 def tables():
     pytest.importorskip("pandas")

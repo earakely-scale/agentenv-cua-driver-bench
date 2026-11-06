@@ -44,7 +44,7 @@ def main():
 
 def export(instance, artifacts, out, name, run_index):
     ctx, md = instance["context"], instance["context"]["metadata"]
-    stem = instance["task_id"].rsplit("/", 1)[-1]
+    stem = named(instance["task_id"])
     task, condition, driver = STEM.match(stem).group("task", "condition", "driver")
     steps = {s["id"]: s for s in json.loads((BENCH / "tasks" / f"{stem}.json").read_text())}
     env_step = steps["env"]
@@ -111,7 +111,8 @@ def export(instance, artifacts, out, name, run_index):
         "timeout_s": steps["task"].get("timeout_seconds"),
         "os": os.environ.get("RUN_OS") or "linux",
         "driver": driver or "cua-driver",
-        "computer": ctx["deployed_envs"][0]["env_id"].rsplit("/", 1)[-1],
+        "computer": named(ctx["deployed_envs"][0]["env_id"]),
+        "settings": [setting for setting in os.environ.get("RUN_SETTINGS", "").splitlines() if setting],
         "app": workspace_app,
         "model": response.get("model"),
         "harness": "claude-code",
@@ -146,6 +147,11 @@ def export(instance, artifacts, out, name, run_index):
               and KEY.search(p.read_text(errors="ignore"))]
     print(json.dumps({"trial": name, "reward": facts["reward"], "passed": facts["passed"], "calls": facts["tool_calls"],
                       "cost": facts["cost_usd"], "leaked": leaked}))
+
+
+def named(entity_id):
+    """An entity's name: the last segment of its id, less the settings an ``agent-env run --set`` run's ids end in."""
+    return re.sub(r"\(.*\)$", "", entity_id).rsplit("/", 1)[-1]
 
 
 def timeline(events, sentinel, start, end, scripts):
