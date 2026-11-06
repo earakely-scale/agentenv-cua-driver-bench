@@ -230,13 +230,14 @@ def test_the_heros_link_names_its_driver_first_unless_it_is_cua_driver(tables, d
     card = _module(ROOT / "tools" / "dataset" / "card.py")
     row = {"trial_id": "ir-02-r3-background", "run": "a-run", "os": "macos", "driver": driver, "task": "ir-02",
            "probe": "IR-02", "title": "Apply", "condition": "background", "model": "anthropic/claude-haiku-5-5",
-           "run_index": 3, "tool_calls": 9, "model_calls": 8, "tool_errors": 0, "gui_only": True,
+           "harness": "claude-code", "run_index": 3, "tool_calls": 9, "model_calls": 8, "tool_errors": 0, "gui_only": True,
            "user_undisturbed": True, "agent_error": None, "task_score": 1.0, "passed": True,
            **{f"a22_{key}": True for key in tables.CRITERIA}}
 
     hero = card._hero({"hero": "macos--a-run--ir-02-r3-background", "models": []}, tables.pd.DataFrame([row]))
 
     assert f"#/{lead}macos/ir-02/background/anthropic%2Fclaude-haiku-5-5/r3)" in hero
+    assert "in Claude Code on IR-02, Apply, in the background condition: the macOS desktop" in hero
 
 
 def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables):
