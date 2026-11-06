@@ -1,28 +1,25 @@
 **On macOS the driver decides whether the user stays undisturbed.** Three computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
-90 trials of Bench v2, Claude Haiku 5.5 on the 60 BenchLab trials, macOS 26 on EC2 Macs). Through the three, Sonnet
+90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06, macOS 26 on EC2 Macs). Through the three, Sonnet
 passes 39 of 50, 35 of 50 and 32 of 50 trials in the foreground, and 23 of 40, 8 of 40 and 1 of 40 in the background.
 
-- **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 35 of 35 and
-  16 of 25.** It never takes the user's keyboard, and raises a window over theirs in 6 of 65 background trials.
+- **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 38 of 50 and 18 of 40.** Of 80 background trials it takes the user's keyboard in 1 and raises a window over theirs in 7.
   Its background misses are the tasks: MB-09's drag moves the user's pointer (§), and it passes 1 of the 10 G02 and
   G03 trials, five of the others ending on the 45-turn limit.
-- **agent-desktop (Vercel Labs): Sonnet 35 of 50 and 8 of 40, Haiku 32 of 35 and 10 of 25.** With Sonnet it passes
+- **agent-desktop (Vercel Labs): Sonnet 35 of 50 and 8 of 40, Haiku 32 of 50 and 10 of 40.** With Sonnet it passes
   every BenchLab trial in the foreground and none of the 15 multi-app ones, running out of its 45 turns in all of
   them: it makes about 75 tool calls a trial, against cua-driver's 52 and browser-use's 43, and loses turns to
   element references that go stale after each change and to its own checks, which refuse clicks they judge covered
   and report values the Electron apps didn't take. In the background it disturbs the user in 19 of Sonnet's 40
   trials, mostly taking their keyboard or raising a window over theirs.
-- **browser-use (macos-harness): Sonnet 32 of 50 and 1 of 40, Haiku 21 of 35 and 1 of 25.** It is the only
+- **browser-use (macos-harness): Sonnet 32 of 50 and 1 of 40, Haiku 26 of 50 and 1 of 40.** It is the only
   driver to pass G04 every time in the foreground (5 of 5, chaining a few commands in each call), but it has
   no hover, so MB-10 and MB-11 fail. In the background it does the task in 32 of Sonnet's 40 trials and still
   disturbs the user in 39 of them: its set_value, click, drag and key commands bring the app forward over the
   user's window.
 
-Two macOS runs of 2026-11-06 join the board as their trials arrive, each row marked incomplete until all are in:
-Claude Opus 5.5 with cua-driver on every trial (`cua-driver-opus-5-5-2026-11-06`), and Claude Haiku 5.5 on the three
-multi-app tasks with each driver (`*-haiku-5-5-2026-11-06-multiapp`).
+**Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.
 
 cua-driver's first macOS runs, which also offered its agents seven of AgentEnv's `computer_*` tools beside its own,
 stay in the dataset (`sonnet-5-5-2026-11-05`, `sonnet-5-5-2026-11-05-multiapp`, `haiku-5-5-2026-11-05`) but not on
