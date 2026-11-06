@@ -60,8 +60,8 @@ It covers Linux (Ubuntu 24.04) and macOS 26, with Claude in Claude Code. Each ru
 driver on one operating system at one commit of the bench, is a folder of its own under `runs/`, so other operating
 systems, models and drivers are added beside it.
 
-These are not trycua's results and are not comparable with them: trycua runs the bench with its own runner, on macOS
-and, since 31 October 2026, on Linux too.
+These are AgentEnv's runs of trycua's tasks, not trycua's own: trycua runs the bench with its own runner, on macOS,
+Linux and Windows, and results from the two runners aren't like-for-like.
 
 ## Results
 
