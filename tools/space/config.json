@@ -41,7 +41,7 @@
      "title": "Every click refused, so it gives up",
      "caption": "On Linux cua-driver can't send clicks or keys to a covered Electron, Chromium or Calc window. Each try at the mail app is refused, so the agent replies BLOCKED: the user is never disturbed, and the task is never done."},
     {"os": "linux", "run": "cua-driver-sonnet-5-5-2026-11-06", "trial": "cdb-g04-r2-background", "mode": "gui",
-     "title": "Tries a shell command through launch_app",
+     "title": "Tries a shell through launch_app",
      "caption": "It can't open a log file through the apps, so it asks cua-driver's launch_app to run sh -c 'cp …'. A shell is a way out of the GUI, so the trial fails GUI-only whether or not the command ran."},
     {"os": "macos", "run": "agent-desktop-sonnet-5-5-2026-11-05", "trial": "cdb-g02-r3-foreground", "mode": "turns",
      "title": "Runs out of turns mid-task",
