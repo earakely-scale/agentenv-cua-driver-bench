@@ -415,14 +415,16 @@ function costSection() {
     else if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); showTip(el.dataset.key, true); }
   });
 
-  const paint = () => {
+  const paint = (force) => {
     const all = panels.flatMap((p) => p.points);
     if (!all.length) return;
     const costs = all.map((q) => q.cost);
     const lo = Math.min(...costs) / 1.6, hi = Math.max(...costs) * 1.6;
     for (const [i, fig] of [...host.children].entries()) {
       const plot = fig.querySelector(".pplot");
-      if (plot?.clientWidth) plot.replaceChildren(costPlane(panels[i], lo, hi, plot.clientWidth, prev, measure));
+      if (!plot?.clientWidth || (!force && +plot.dataset.w === plot.clientWidth)) continue;
+      plot.dataset.w = plot.clientWidth;
+      plot.replaceChildren(costPlane(panels[i], lo, hi, plot.clientWidth, prev, measure));
     }
     requestAnimationFrame(() => {
       for (const g of stage.querySelectorAll(".pt")) { g.style.transform = g.dataset.to; prev.set(g.dataset.key, g.dataset.to); }
@@ -437,14 +439,14 @@ function costSection() {
       h("div", { class: "pplot" }),
       h("p", { class: "pline" }, frontierLine(p)))));
     host.classList.toggle("one", panels.length === 1);
-    paint();
+    paint(true);
     table.replaceChildren(costTable(panels, sort, (key) => {
       sort = key === sort.key ? { key, dir: -sort.dir } : { key, dir: key === "name" || key === "cost" || key === "per" ? 1 : -1 };
       draw();
     }));
     sync.forEach((f) => f());
   };
-  new ResizeObserver(() => requestAnimationFrame(paint)).observe(host);
+  new ResizeObserver(() => requestAnimationFrame(() => paint(false))).observe(host);
   table.addEventListener("pointerover", (e) => { const tr = e.target.closest("tr[data-key]"); if (tr && !pinned) highlight((k) => k === tr.dataset.key); });
   table.addEventListener("pointerleave", () => { if (!pinned) highlight(null); });
 
