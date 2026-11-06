@@ -210,8 +210,8 @@ their runner adds by default, "You have about 6 minutes and at most 45 turns." t
 
 `evals/bench-v2-trials.txt` lists Bench v2's 90 trials, one task file per line, in trycua's schedule: the v2 tasks in
 order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, the foreground's then the background's, MB-10
-and MB-11 in the foreground only: a real hover and a native tooltip need the pointer, which in the background is the
-user's.
+and MB-11 in the foreground only, as trycua's task manifest lists them ([`taskpack/v2-taskset.json`](https://github.com/trycua/cua/blob/60ed3eb5f038e090629f39687ec8b937724548f9/libs/cua-driver-bench/taskpack/v2-taskset.json), added in [trycua/cua#6574](https://github.com/trycua/cua/pull/6574) after the commit
+this bench pins): a real hover and a native tooltip need the pointer, which in the background is the user's.
 `evals/bench-v2.toml` runs each of those task files once, since an eval runs a task once; a runner that repeats a G
 task's file per line runs them all. `evals/foreground.toml` and `evals/background.toml` are its two halves, one
 condition each.

@@ -133,7 +133,8 @@ runs/<os>/<run>/<trial>/
   IR-02's banner is drawn inside BenchLab's window, so it can pass.
 - trycua's text is kept as written: the BenchLab briefs say BenchLab "is already open on your Mac", and MB-10's
   brief names an "Actions" strip that their Linux BenchLab labels "Hover here to reveal actions".
-- MB-10 and MB-11 run in the foreground only: a real hover and a native tooltip need the pointer, which in the
+- MB-10 and MB-11 run in the foreground only, as trycua's task manifest lists them ([`taskpack/v2-taskset.json`](https://github.com/trycua/cua/blob/60ed3eb5f038e090629f39687ec8b937724548f9/libs/cua-driver-bench/taskpack/v2-taskset.json), added in
+  [trycua/cua#6574](https://github.com/trycua/cua/pull/6574) after the commit this bench pins): a real hover and a native tooltip need the pointer, which in the
   background is the user's. MB-09 runs in both conditions, though in the background its drag keeps the user
   undisturbed only through a driver that drags without moving the user's pointer.
 - Claude Code's `num_turns` counts tool round trips, across a context compaction too, so it passes 45 when the model

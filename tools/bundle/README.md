@@ -24,9 +24,9 @@ windows without taking their focus, raising a window over theirs, moving their p
 losing one of their keystrokes; in the **foreground** condition the desktop is the agent's alone. Either way it may use
 only the GUI.
 
-All ten tasks of trycua's Bench v2, five runs each, in both conditions (MB-10 and MB-11 in the foreground only): the
-multi-app workflows G02 to G04, and the
-BenchLab tasks MB-09 to MB-11 and IR-01 to IR-04. Each trial runs on a computer AgentEnv composes for it, Ubuntu 24.04
+All ten tasks of trycua's Bench v2, five runs each, in both conditions (MB-10 and MB-11 in the foreground only, as
+trycua's task manifest lists them: [`taskpack/v2-taskset.json`](https://github.com/trycua/cua/blob/60ed3eb5f038e090629f39687ec8b937724548f9/libs/cua-driver-bench/taskpack/v2-taskset.json), added in [trycua/cua#6574](https://github.com/trycua/cua/pull/6574) after the commit this bench pins): the multi-app
+workflows G02 to G04, and the BenchLab tasks MB-09 to MB-11 and IR-01 to IR-04. Each trial runs on a computer AgentEnv composes for it, Ubuntu 24.04
 or macOS 26, with the task's apps, a computer-use driver and the bench's sentinel, the user's window; it is graded
 outside the computer by trycua's own evaluator, A22 criteria and GUI-only scan.
 
