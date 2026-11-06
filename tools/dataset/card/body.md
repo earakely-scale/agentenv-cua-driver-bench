@@ -152,9 +152,6 @@ runs/<os>/<run>/<trial>/
   GPT-6 models either, so they run on its generic ones (no code mode, no parallel tool calls, its default
   instructions), as a warning in each trajectory says. trycua's runner has published no Codex numbers, and runs its
   Codex arms on macOS only.
-- **The GPT-6 runs pin agentenv-framework at commit 9ee4cc17** ([PR #513](https://github.com/scaleapi/agentenv-framework/pull/513)), not yet a release: its `codex` agent
-  stops a turn at the task's 45-turn limit and records when each event arrived and the turn's usage. Their limit
-  counts tool calls; `model_calls` is Codex's own count of model requests.
 - **Setup differences from trycua's runner**, found auditing these runs and not corrected in them: cua-driver's arm
   offers `run_script`, as trycua's `cc-cua-driver-script` arm does, without the short `run_script` paragraph that arm
   adds to the system prompt; agent-desktop's foreground trials run every command headed, with real pointer and keys,
