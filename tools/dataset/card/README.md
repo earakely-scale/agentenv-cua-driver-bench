@@ -68,6 +68,55 @@ and drivers are added beside it.
 These are AgentEnv's runs of trycua's tasks, not trycua's own: trycua runs the bench with its own runner, on macOS,
 Linux and Windows, and results from the two runners aren't like-for-like.
 
+## How to run
+
+The bench is on the Hugging Face Hub as an AgentEnv bundle,
+[earakely-scale/cua-driver-bench](https://huggingface.co/datasets/earakely-scale/cua-driver-bench), so `agent-env`
+runs it by name. On a Linux machine with Docker (we used an EC2 c6i.4xlarge on Ubuntu 24.04) and any
+OpenAI-compatible endpoint for the model:
+
+```bash
+pip install 'agentenv-framework>=0.9.1454'
+docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2   # where the task computers are built
+mkdir -p .agentenv && cat > .agentenv/config.toml <<'EOF'
+[model]
+base_url = "https://your-litellm-or-openai-compatible-proxy"
+api_key = "env:LITELLM_API_KEY"
+default = "anthropic/claude-sonnet-5-5"
+EOF
+export LITELLM_API_KEY=...
+# One trial, as the board's Linux rows ran it: cua-driver on its own tools alone
+agent-env run hf://earakely-scale/cua-driver-bench --task cdb-g02-background --set envs/desktop-s02.tools=driver
+# Every task of Bench v2 once, the same way
+agent-env run hf://earakely-scale/cua-driver-bench --eval bench-v2 --set envs/desktop-benchlab.tools=driver \
+  --set envs/desktop-s02.tools=driver --set envs/desktop-s03.tools=driver --set envs/desktop-s04.tools=driver
+# GPT-6 in OpenAI's Codex CLI
+agent-env run hf://earakely-scale/cua-driver-bench --task codex-cdb-g02-background --model openai/gpt-6.1-sol \
+  --set envs/desktop-s02.tools=driver
+```
+
+The first run builds each task's computer, a few minutes; later runs reuse it. On an Apple silicon Mac the same tasks
+run on macOS 26 (we used EC2 mac2-m2.metal hosts), in a logged-in session with
+[Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do) with the same
+registry. Add `[sandbox]` with `default = "lume"` to the config and run the `macos-` tasks: `macos-cua-driver-…` for
+cua-driver on its own tools, `macos-agent-desktop-…` for Vercel Labs' agent-desktop and `macos-macos-harness-…` for
+browser-use's macOS harness, as the drivers comparison ran them, for example
+`agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background`.
+
+Load our results:
+
+```python
+from datasets import load_dataset
+
+trials = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "trials", split="eval")   # one row per trial
+calls = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "calls", split="eval")     # one row per tool call
+tasks = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "tasks", split="eval")     # prompts and settings
+board = trials.filter(lambda t: t["on_board"])   # the trials the card's board and the replay Space count
+```
+
+Running from a clone of the bench, other drivers and tool sets, and the sentinel's own checks are
+[further down](#running-from-a-clone).
+
 {{PAIRS}}## Results
 
 {{SUMMARY}}
@@ -84,20 +133,10 @@ Linux and Windows, and results from the two runners aren't like-for-like.
 
 {{PARTIAL}}
 
-## Quick start
+## Running from a clone
 
-Load the tables:
-
-```python
-from datasets import load_dataset
-
-trials = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "trials", split="eval")   # one row per trial
-calls = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "calls", split="eval")     # one row per tool call
-tasks = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "tasks", split="eval")     # prompts and settings
-board = trials.filter(lambda t: t["on_board"])   # the trials the card's board and the replay Space count
-```
-
-Run a trial yourself, on a Linux machine with Docker (we used an EC2 c6i.4xlarge on Ubuntu 24.04):
+The [bench's GitHub repo](https://github.com/earakely-scale/agentenv-cua-driver-bench) holds the same bundle with its
+tooling and tests; `agent-env run .` in a clone takes the same arguments as `hf://` above. On Linux:
 
 ```bash
 pip install 'agentenv-framework>=0.9.1412'
