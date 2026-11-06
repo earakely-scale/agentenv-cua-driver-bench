@@ -183,7 +183,8 @@ def main():
     (args.out / "results.md").write_text(catalog.results_md(cat))
     (args.out / "drivers.md").write_text(catalog.drivers_md(cat))
     (args.out / "failures.md").write_text(failures.markdown(cat))
-    print(f"figures: {4 * (len(cat['figures']) + len(cat['driver_figures']) + len(cat['failure_figures']))} SVGs in "
+    count = sum(len(cat[k]) for k in ("figures", "driver_figures", "compare_figures", "failure_figures"))
+    print(f"figures: {4 * count} SVGs in {assets}")
           f"{assets}")
     if hero_uid and not args.no_gif:
         t = next(x for x in loaded if x["meta"]["uid"] == hero_uid)
