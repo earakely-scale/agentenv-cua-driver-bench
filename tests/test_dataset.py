@@ -103,6 +103,38 @@ def test_the_timeline_puts_calls_text_and_the_users_lane_on_the_recordings_clock
     assert len(timeline["samples"]) == 3 and (timeline["armed_at"], timeline["disarmed_at"]) == (5, 20)
 
 
+def test_codexs_events_read_as_claude_codes_its_calls_timed_its_usage_priced_and_its_requests_its_turns(export):
+    def item(kind, t, item_id, **fields):
+        return {"type": kind, "timestamp": _stamp(t), "item": {"id": item_id, **fields}}
+
+    shot = {"content": [{"type": "image", "data": "iVBO", "mimeType": "image/png"}, {"type": "text", "text": "{}"}],
+            "structured_content": {"tree_markdown": "- [0] frame"}}
+    zoom = {"content": [{"type": "image", "data": "iVBO", "mimeType": "image/jpeg"}], "structured_content": None}
+    call = {"type": "mcp_tool_call", "server": "desktop-s02", "tool": "get_window_state", "arguments": {"pid": 87}}
+    recorded = [{"type": "thread.started", "thread_id": "t-1", "timestamp": _stamp(9)},
+                item("item.started", 10, "item_0", **call, status="in_progress"),
+                item("item.completed", 12, "item_0", **call, status="completed", result=shot),
+                item("item.started", 13, "item_1", **{**call, "tool": "zoom"}, status="in_progress"),
+                item("item.completed", 14, "item_1", **{**call, "tool": "zoom"}, status="completed", result=zoom),
+                item("item.completed", 15, "item_2", type="command_execution", command="ls", exit_code=2,
+                     aggregated_output="ls: denied"),
+                item("item.completed", 16, "item_3", type="agent_message", text="Done."),
+                {"type": "turn.completed", "timestamp": _stamp(16)},
+                {"type": "agentenv.usage", "timestamp": _stamp(17), "model_requests": 4,
+                 "usage": {"input_tokens": 50_000, "cached_input_tokens": 40_000, "output_tokens": 2_000}}]
+
+    events = export.from_codex(recorded, "openai/gpt-6.1-sol")
+    timeline = export.timeline(events, [], START, START + 30, {})
+    result = events[-1]
+
+    assert [(c["tool"], c["server"], c["t0"], c["t1"], c["error"], c["image"]) for c in timeline["calls"]] == [
+        ("get_window_state", "desktop-s02", 10, 12, False, False), ("zoom", "desktop-s02", 13, 14, False, True),
+        ("Bash", None, 15, 15, True, False)]
+    assert timeline["calls"][2]["result"] == "ls: denied" and timeline["texts"][0]["text"] == "Done."
+    assert (result["num_turns"], result["duration_ms"]) == (4, 8000)
+    assert export.cost(result["modelUsage"], events) == round((10_000 * 2 + 40_000 * 0.1 + 2_000 * 10) / 1e6, 4)
+
+
 def test_a_trials_row_holds_every_half_of_its_grade_and_where_its_files_are(tables, tmp_path):
     folder = tmp_path / "runs" / "linux" / "haiku-5-5-2026-11-02" / "ir-02-r3-background"
     folder.mkdir(parents=True)

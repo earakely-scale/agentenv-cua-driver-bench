@@ -193,6 +193,8 @@ def test_a_workers_manifest_pins_the_whole_run_and_keeps_what_other_workers_uplo
     assert written["computers"]["desktop-s02-macos"]["composed"] == theirs
     assert written["harness"] == {"name": "claude-code", "versions": ["2.1.300", "2.1.314"], "effort": None}
     assert uploaded[0]["path_in_repo"] == "runs/macos/run-1/manifest.json"
+    (tmp_path / "run-specs.txt").write_text("codex-ir-01-r1-foreground|ir-01-r1-foreground|1\n")
+    assert worker._harness() == {"name": "codex-cli", "effort": "medium"}
 
 
 def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_dataset(worker, tmp_path, monkeypatch):

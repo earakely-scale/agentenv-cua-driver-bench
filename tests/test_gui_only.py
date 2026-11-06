@@ -1,7 +1,8 @@
 """The trajectory's half of the GUI-only check, offline, with trycua's scan from the fetched task pack in its cache: it
 holds for claude-code offered and calling only the computer env's tools and Skill and Read, with no code in a tool
 input and no command run through launch_app; a call to a tool the CLI never offered ran nothing; and a trajectory that
-isn't claude-code's stream-json can't be checked. Also its table: trycua's scan at the lock's commit."""
+isn't claude-code's stream-json can't be checked; codex-cli's events read as trycua's runner reads its Codex arm's.
+Also its table: trycua's scan at the lock's commit."""
 import asyncio
 import importlib.util
 import json
@@ -109,6 +110,48 @@ def test_without_claude_codes_tool_calls_it_doesnt_hold(gui_only, trajectory):
     result = gui_only(trajectory)
 
     assert result["result"] is False and result["trajectory_checked"] is False
+
+
+def _codex(*items):
+    """codex-cli's exec events for its items, each started and completed, after its thread's start."""
+    events = [{"type": "thread.started", "thread_id": "t-1"}, {"type": "turn.started"}]
+    for item in items:
+        if item == "resume":
+            events.append({"type": "thread.started", "thread_id": "t-1"})
+            continue
+        events += [{"type": "item.started", "item": {**item, "status": "in_progress"}},
+                   {"type": "item.completed", "item": {**item, "status": "completed"}}]
+    return [events + [{"type": "turn.completed"}, {"type": "agentenv.usage", "model_requests": 2}]]
+
+
+def _mcp(item_id, tool, **arguments):
+    return {"id": item_id, "type": "mcp_tool_call", "server": "desktop-s02", "tool": tool, "arguments": arguments}
+
+
+def test_codexs_mcp_calls_and_text_are_gui_only_each_call_once_across_a_resumed_run(gui_only):
+    trajectory = _codex({"id": "item_0", "type": "reasoning", "text": "look first"},
+                        _mcp("item_1", "launch_app", launch_path="/usr/share/applications/libreoffice-calc.desktop"),
+                        "resume", _mcp("item_1", "launch_app", name="bash -c 'cat ~/x'"),
+                        {"id": "item_2", "type": "agent_message", "text": "done"})
+
+    result = gui_only(trajectory)
+
+    assert (result["result"], result["trajectory_checked"], result["refused_calls"]) == (False, True, {})
+    assert result["violations"] == ["mcp__desktop-s02__launch_app:bash -c"]
+    assert gui_only(_codex(_mcp("item_0", "click", x=1, y=2)))["result"] is True
+
+
+@pytest.mark.parametrize("item, violation", [
+    ({"type": "command_execution", "command": "ls ~"}, "builtin:Bash"),
+    ({"type": "file_change", "changes": [{"path": "/app/x", "kind": "add"}]}, "builtin:Edit"),
+    ({"type": "web_search", "query": "calendar"}, "builtin:WebSearch"),
+    ({"type": "collab_tool_call", "tool": "spawn_agent"}, "builtin:Agent"),
+    ({"type": "image_generation"}, "builtin:Task"),
+], ids=["shell", "patch", "web search", "sub-agent", "any other item"])
+def test_codexs_own_tools_fail_as_trycuas_runner_reads_them(gui_only, item, violation):
+    result = gui_only(_codex(_mcp("item_0", "click", x=1, y=2), {"id": "item_1", **item}))
+
+    assert (result["result"], result["violations"]) == (False, [violation])
 
 
 def test_its_table_pins_trycuas_scan_at_the_locks_commit():

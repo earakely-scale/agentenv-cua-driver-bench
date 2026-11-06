@@ -86,6 +86,7 @@ def trial_row(dataset, folder, titles):
         "model": facts["model"],
         "harness": facts["harness"],
         "harness_version": facts["harness_version"],
+        "effort": facts.get("effort"),
         "reward": facts["reward"],
         "passed": facts.get("passed"),
         "run_index": facts.get("run_index"),

@@ -159,6 +159,14 @@ function userBox(cls) {
   return h("span", { class: cls, style: { left: `${(100 * x) / W}%`, top: `${(100 * y) / H}%`, width: `${(100 * w) / W}%`, height: `${(100 * hh) / H}%` } });
 }
 
+const HARNESSES = { "claude-code": "the claude-code CLI", "codex-cli": "OpenAI's Codex CLI" };
+
+function harnessPhrase() {
+  const by = {};
+  CAT.models.filter((m) => m.board).forEach((m) => (by[m.harness] ||= []).push(m.name));
+  return Object.entries(by).map(([harness, names]) => `${names.join(", ")} in ${HARNESSES[harness] || harness}`).join("; ");
+}
+
 function osPhrase() {
   const names = CAT.oses.map((o) => o.name);
   return names.length === 1 ? `a ${names[0]} desktop` : `a ${names.slice(0, -1).join(", ")} or ${names[names.length - 1]} desktop`;
@@ -192,7 +200,6 @@ function boardView() {
 
 function landing() {
   const hero = CAT.trials.find((t) => t.uid === CAT.hero);
-  const models = CAT.models.filter((m) => m.board).map((m) => m.name);
   return h("section", { class: "landing" },
     h("p", { class: "kicker" }, "trycua's Cua Driver Bench · run on AgentEnv computers"),
     h("h1", {}, "Can an AI agent do the office work without getting in your way?"),
@@ -207,7 +214,7 @@ function landing() {
       CAT.comparisons.length ? h("a", { class: "btn", href: "#/drivers" }, "Compare drivers") : null),
     h("div", { class: "players" },
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot agent" }), "The agent"),
-        h("p", {}, `${models.join(", ") || "A model"} in the claude-code CLI. It reads windows and acts through its computer-use driver's tools: click, type, press a key, open a menu. No terminal, no scripts, no side doors.`)),
+        h("p", {}, `${harnessPhrase() || "A model"}. It reads windows and acts through its computer-use driver's tools: click, type, press a key, open a menu. No terminal, no scripts, no side doors.`)),
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot user" }), "The user"),
         h("p", {}, "In the background condition a simulated user types into their own window, “User activity”, one character a second. A sentinel logs everything that reaches them.")),
       h("div", { class: "player-card" }, h("h3", {}, h("span", { class: "dot judge" }), "The grade"),

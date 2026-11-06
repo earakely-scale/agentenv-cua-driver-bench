@@ -1,11 +1,13 @@
 """The trajectory's half of the bench's GUI-only check, outside the computer: trycua's scan of the agent's tool calls
 (their ``bench_v2``, fetched at the lock's commit and checked against its sha256, as ``TRYCUA`` pins it, written by
-``python tools/taskpack.py grader``), on claude-code's stream-json; the grade in its container is the guard's half.
+``python tools/taskpack.py grader``), on claude-code's stream-json, or codex-cli's exec events read as trycua's runner
+reads its Codex arm's: its own tools as the built-ins trycua forbids; the grade in its container is the guard's half.
 
 It holds when claude-code was offered no built-in tool but Skill and Read beside the computer env's, tried none trycua
 forbids, put no code in a tool input, and ran no command through cua-driver's ``launch_app``, which on Linux runs one
-where macOS's opens apps only, nor through agent-desktop's ``launch``, alone or in a batch. A trial whose agent's trajectory the verifier isn't given, or isn't claude-code's
-stream-json, doesn't hold, since its tool calls can't be checked."""
+where macOS's opens apps only, nor through agent-desktop's ``launch``, alone or in a batch. A trial whose agent's trajectory the verifier isn't given, or is neither claude-code's
+stream-json nor codex-cli's events, doesn't hold, since its tool calls can't be checked. Codex's events don't list the
+tools it was offered: that its own were off rests on the task's agent step, which deploy checks against its card."""
 import hashlib
 import importlib.util
 import json
@@ -19,6 +21,11 @@ from pathlib import Path
 #: CLI hasn't: its skills, and Read, which reads only the agent's own container, never the computer.
 ALLOWED_BUILTINS = ("Skill", "Read")
 CACHE = Path.home() / ".cache" / "agentenv-cua-driver-bench"
+#: codex-cli's items that are tool calls of its own, as the built-in trycua's runner maps each to, with the field it
+#: passes on; an item neither these, an MCP call nor text is a ``Task``, as trycua's runner fails closed on it.
+CODEX_TOOLS = {"command_execution": ("Bash", "command"), "file_change": ("Edit", "changes"),
+               "web_search": ("WebSearch", "query"), "collab_tool_call": ("Agent", None)}
+CODEX_TEXT = ("agent_message", "reasoning", "todo_list", "error")
 #: A launch_app name that a shell would read as more than an app's name.
 _COMMAND = re.compile(r"[;|&$`<>]|^[/.~]")
 
@@ -42,14 +49,41 @@ async def verify(mcp_url, env_url, trajectory=None):
 
 
 def _events(trajectory):
-    """claude-code's stream-json events, every turn's document a list of them that opens with the CLI's init; None
+    """claude-code's stream-json events, every turn's document a list of them that opens with the CLI's init, or
+    codex-cli's tool calls as claude-code's, every turn's document its exec events from its thread's start; None
     without one, since the scan reads claude-code's tool calls and can't vouch for a turn it can't read."""
     documents = list(trajectory or [])
-    if not documents or not all(isinstance(document, list) and document and isinstance(document[0], dict)
-                                and (document[0].get("type"), document[0].get("subtype")) == ("system", "init")
-                                for document in documents):
+    if documents and all(_opens(document, ("thread.started", None)) for document in documents):
+        return [event for document in documents for event in _codex_calls(document)]
+    if not documents or not all(_opens(document, ("system", "init")) for document in documents):
         return None
     return [event for document in documents for event in document]
+
+
+def _opens(document, kind):
+    return (isinstance(document, list) and bool(document) and isinstance(document[0], dict)
+            and (document[0].get("type"), document[0].get("subtype")) == kind)
+
+
+def _codex_calls(document):
+    """codex-cli's tool calls as claude-code's assistant events: an MCP call as ``mcp__SERVER__TOOL``, its own tools as
+    CODEX_TOOLS maps them. Each item once, by its id within its CLI run, which numbers them afresh (a turn resumed
+    after a transient error runs the CLI again, from a thread.started of its own)."""
+    seen, run, calls = set(), 0, []
+    for event in document:
+        run += event.get("type") == "thread.started"
+        item = event.get("item") if event.get("type") in ("item.started", "item.completed") else None
+        if not isinstance(item, dict) or item.get("type") in CODEX_TEXT or (run, item.get("id")) in seen:
+            continue
+        seen.add((run, item.get("id")))
+        if item.get("type") == "mcp_tool_call":
+            name, tool_input = f"mcp__{item.get('server')}__{item.get('tool')}", item.get("arguments")
+        else:
+            name, field = CODEX_TOOLS.get(item.get("type"), ("Task", None))
+            tool_input = {field: item.get(field)} if field else item
+        calls.append({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name,
+                                                                     "input": tool_input}]}})
+    return calls
 
 
 def _scan(v2, events):
@@ -95,9 +129,12 @@ def _batch(tool_input):
 
 
 def _refused(v2, events):
-    """The tools the agent called that the CLI never offered it, which ran nothing, with how often."""
+    """The tools the agent called that the CLI never offered it, which ran nothing, with how often; none for Codex,
+    whose events don't say what it was offered."""
     offered = {name for event in events if (event.get("type"), event.get("subtype")) == ("system", "init")
                for name in event.get("tools") or []}
+    if not offered:
+        return {}
     refused = {}
     for event in events:
         for name, _ in v2.tool_uses(event):

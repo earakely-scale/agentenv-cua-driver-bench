@@ -142,10 +142,34 @@ def test_bench_v2_is_each_task_five_runs_in_each_of_its_conditions_in_trycuas_sc
     for condition in ("foreground", "background"):
         assert tomllib.loads((ROOT / "evals" / f"{condition}.toml").read_text())["tasks"] == [
             name for name in dict.fromkeys(trials) if name.endswith(f"-{condition}")]
+    assert (ROOT / "evals" / "codex-bench-v2-trials.txt").read_text().split() == [f"codex-{name}" for name in trials]
     macos = (ROOT / "evals" / "macos-bench-v2-trials.txt").read_text().split()
     assert macos == [f"macos-{name}" for name in trials]
     assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in macos)
     assert tomllib.loads((ROOT / "evals" / "macos-bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(macos))
+
+
+@pytest.mark.parametrize("path", sorted((ROOT / "tasks").glob("codex-*.json")), ids=lambda path: path.stem)
+def test_each_codex_trial_is_its_linux_twin_with_codex_as_the_agent_its_own_tools_off_at_medium_effort(path):
+    """GPT runs on Codex, the agent `codex` ships: the trial is its Linux twin's but for the agent, whose own tools
+    (shell, patch, web search, sub-agents) are off, leaving the computer env's, and the effort it asks for."""
+    codex = {step["id"]: step for step in json.loads(path.read_text())}
+    twin = {step["id"]: step for step in json.loads(path.with_name(path.name.removeprefix("codex-")).read_text())}
+    agent = twin["agent"]
+
+    assert list(codex) == list(twin)
+    assert {k: v for k, v in codex.items() if k not in ("agent", "task")} == {
+        k: v for k, v in twin.items() if k not in ("agent", "task")}
+    assert codex["agent"] == {"id": "agent", "type": "deploy_agent", "a2a_agent_id": "codex",
+                              "env_ids": agent["env_ids"], "builtin_tools": {"disable": "*"},
+                              "system_prompt": agent["system_prompt"], "depends_on": agent["depends_on"]}
+    assert codex["task"] == {**twin["task"], "effort": "medium"}
+
+
+def test_every_linux_trial_has_its_codex_twin():
+    trials = set((ROOT / "evals" / "bench-v2-trials.txt").read_text().split())
+
+    assert {path.stem for path in (ROOT / "tasks").glob("codex-*.json")} == {f"codex-{name}" for name in trials}
 
 
 def _prompt(v2, brief, condition, limits):

@@ -1,10 +1,10 @@
 """export.py OUT INSTANCE|NAME|RUN...: each finished trial in this machine's agent-env store as a folder OUT/NAME of
 what the dataset publishes, its task file read from the bench's checkout at $BENCH (default ~/bench).
 
-trial.json (the facts), trajectory.json (claude-code's stream-json, as recorded), sentinel.jsonl and devtools.jsonl
-(from the trial's snapshot), grade.json (both verifications), workspace/ (the task app's final files),
-recording.mp4 (the segments joined) with manifest.json, and timeline.json (calls, texts and the user's lane on the
-recording's clock)."""
+trial.json (the facts), trajectory.json (claude-code's stream-json, or codex-cli's exec events, as recorded),
+sentinel.jsonl and devtools.jsonl (from the trial's snapshot), grade.json (both verifications), workspace/ (the task
+app's final files), recording.mp4 (the segments joined) with manifest.json, and timeline.json (calls, texts and the
+user's lane on the recording's clock)."""
 import json
 import os
 import re
@@ -14,14 +14,15 @@ import subprocess
 import sys
 import tomllib
 from datetime import datetime
-from importlib import metadata
+from importlib import metadata, util
 from pathlib import Path
 
 STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "agent-env"
 DB = STATE / "document_store" / "local.db"
 KEY = re.compile(r"sk-[A-Za-z0-9_\-]{12,}")
 PRICES = {"claude-sonnet-4-5": (3.0, 15.0, 0.30), "claude-sonnet-5-5": (2.0, 10.0, 0.20),
-          "claude-opus-5-5": (4.0, 20.0, 0.40)}
+          "claude-opus-5-5": (4.0, 20.0, 0.40), "gpt-6-luna": (0.10, 0.50, 0.01), "gpt-6.1-terra": (1.0, 5.0, 0.05),
+          "gpt-6.1-sol": (2.0, 10.0, 0.10), "gpt-6-astra": (10.0, 50.0, 1.0)}
 TIERED = {"claude-haiku-5-5": (100_000, (0.10, 0.50, 0.01), (0.50, 2.50, 0.05))}
 BENCH = Path(os.environ.get("BENCH", Path.home() / "bench"))
 STEM = re.compile(r"^(?:macos-)?(?:(?P<driver>agent-desktop|macos-harness|cua-driver)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?"
@@ -52,8 +53,10 @@ def export(instance, artifacts, out, name, run_index):
     folder = out / name
     folder.mkdir(parents=True, exist_ok=True)
     response = ctx["prompt_responses"][-1]
-    events = json.loads(_path(response["agent_trajectory_object_url"]).read_text())
-    (folder / "trajectory.json").write_text(json.dumps(events, indent=1))
+    recorded = json.loads(_path(response["agent_trajectory_object_url"]).read_text())
+    (folder / "trajectory.json").write_text(json.dumps(recorded, indent=1))
+    codex = bool(recorded) and recorded[0].get("type") == "thread.started"
+    events = from_codex(recorded, response.get("model")) if codex else recorded
 
     snapshot = md.get("env_snapshotted_universes", {}).get("snapshot")
     workspace_app = None
@@ -90,7 +93,7 @@ def export(instance, artifacts, out, name, run_index):
     (folder / "timeline.json").write_text(json.dumps(track, indent=1))
 
     result = next((e for e in reversed(events) if e.get("type") == "result"), {})
-    init = next(e for e in events if (e.get("type"), e.get("subtype")) == ("system", "init"))
+    init = next((e for e in events if (e.get("type"), e.get("subtype")) == ("system", "init")), {})
     graded = verifications.get("grade", {})
     grade = {r["id"]: r for r in (graded.get("extracted_files") or {}).get("/grade/result.json", {}).get("results")
              or graded.get("results", [])}
@@ -115,8 +118,9 @@ def export(instance, artifacts, out, name, run_index):
         "settings": [setting for setting in os.environ.get("RUN_SETTINGS", "").splitlines() if setting],
         "app": workspace_app,
         "model": response.get("model"),
-        "harness": "claude-code",
-        "harness_version": init.get("claude_code_version"),
+        "harness": "codex-cli" if codex else "claude-code",
+        "harness_version": codex_version() if codex else init.get("claude_code_version"),
+        "effort": steps["task"].get("effort"),
         "framework_version": metadata.version("agentenv-framework"),
         "bench_commit": subprocess.run(["git", "-C", str(BENCH), "rev-parse", "HEAD"], capture_output=True,
                                        text=True).stdout.strip(),
@@ -126,7 +130,8 @@ def export(instance, artifacts, out, name, run_index):
         "status": instance.get("status"),
         "steps": instance.get("completed_steps"),
         "agent_error": response.get("error_message"),
-        "cost_usd": cost(result.get("modelUsage") or from_calls(events), events),
+        "cost_usd": cost(usage, events) if (usage := result.get("modelUsage") or (
+            None if codex else from_calls(events))) else None,
         "cost_from_calls": not result.get("modelUsage"),
         "cost_usd_reported": result.get("total_cost_usd"),
         "tokens": {model: {k: usage.get(k) for k in ("inputTokens", "outputTokens", "cacheReadInputTokens",
@@ -134,7 +139,8 @@ def export(instance, artifacts, out, name, run_index):
                    for model, usage in (result.get("modelUsage") or {}).items()},
         "num_turns": result.get("num_turns"),
         "duration_s": (result.get("duration_ms") or 0) / 1000 or None,
-        "model_calls": len({(e.get("message") or {}).get("id") for e in events if e.get("type") == "assistant"}),
+        "model_calls": result.get("num_turns") if codex else
+        len({(e.get("message") or {}).get("id") for e in events if e.get("type") == "assistant"}),
         "tool_calls": len(track["calls"]),
         "tool_errors": sum(c["error"] for c in track["calls"]),
         "reward": reward,
@@ -195,6 +201,58 @@ def timeline(events, sentinel, start, end, scripts):
     return {"duration": end - start, "armed_at": arm.get("t", 0) / 1000 - start if arm else None,
             "disarmed_at": disarm.get("t", 0) / 1000 - start if disarm else None, "calls": calls, "texts": texts,
             "compactions": compactions, "user": user, "samples": samples}
+
+
+def from_codex(recorded, model):
+    """codex-cli's exec events as claude-code's stream-json, for the timeline and the facts: each tool call a tool_use
+    at the time its item started and its tool_result when it completed, its own tools named as trycua's runner maps
+    them; each message a text; and the usage the agent recorded last a result, the model requests its turns. Each item
+    once, by its id within its CLI run, which numbers them afresh. A result's image counts as the model's only when the
+    result has no structured content, which the CLI sends the model instead."""
+    names = {"command_execution": "Bash", "file_change": "Edit", "web_search": "WebSearch", "collab_tool_call": "Agent"}
+    events, run, started = [], 0, set()
+    for e in recorded:
+        run += e.get("type") == "thread.started"
+        item = e.get("item") if e.get("type") in ("item.started", "item.completed") else None
+        if not isinstance(item, dict) or item.get("type") in ("reasoning", "todo_list", "error"):
+            continue
+        key, t = f"{run}:{item.get('id')}", e.get("timestamp")
+        if item.get("type") == "agent_message":
+            if e["type"] == "item.completed":
+                events.append({"type": "assistant", "timestamp": t,
+                               "message": {"id": key, "content": [{"type": "text", "text": item.get("text") or ""}]}})
+            continue
+        if key not in started:
+            started.add(key)
+            mcp = item.get("type") == "mcp_tool_call"
+            name = f"mcp__{item.get('server')}__{item.get('tool')}" if mcp else names.get(item.get("type"), "Task")
+            tool_input = item.get("arguments") if mcp else {k: v for k, v in item.items() if k not in ("id", "type")}
+            events.append({"type": "assistant", "timestamp": t, "message": {"id": key, "content": [
+                {"type": "tool_use", "id": key, "name": name, "input": tool_input}]}})
+        if e["type"] == "item.completed":
+            result = item.get("result") or {}
+            content = [p for p in result.get("content") or [] if p.get("type") == "text" or not result.get(
+                "structured_content")] or [{"type": "text", "text": str((item.get("error") or {}).get("message")
+                                                                         or item.get("aggregated_output") or "")}]
+            failed = item.get("status") == "failed" or bool(item.get("error")) or (item.get("exit_code") or 0) != 0
+            events.append({"type": "user", "timestamp": t, "message": {"content": [
+                {"type": "tool_result", "tool_use_id": key, "is_error": failed, "content": content}]}})
+    recorded_usage = next((e for e in reversed(recorded) if e.get("type") == "agentenv.usage"), {})
+    usage = recorded_usage.get("usage") or {}
+    times = [_epoch(e["timestamp"]) for e in recorded if e.get("timestamp")]
+    cached = usage.get("cached_input_tokens", 0)
+    model_usage = {model: {"inputTokens": usage.get("input_tokens", 0) - cached, "cacheReadInputTokens": cached,
+                           "cacheCreationInputTokens": 0, "outputTokens": usage.get("output_tokens", 0),
+                           "thinkingTokens": usage.get("reasoning_output_tokens")}} if usage and model else None
+    events.append({"type": "result", "num_turns": recorded_usage.get("model_requests"), "modelUsage": model_usage,
+                   "duration_ms": (times[-1] - times[0]) * 1000 if times else None})
+    return events
+
+
+def codex_version():
+    """The Codex CLI the installed framework's agent pins."""
+    package = Path(util.find_spec("agent_env").origin).parent / "agents" / "agents" / "codex" / "package.json"
+    return json.loads(package.read_text())["dependencies"]["@openai/codex"]
 
 
 def cost(model_usage, events):

@@ -11,7 +11,8 @@ POINTER_STILL_PX = 1.0
 LOOK_PREFIXES = ("get_", "list_", "check_", "verify_", "read_", "find_")
 LOOK_TOOLS = {"computer_screenshot", "zoom", "clipboard_read", "screenshot"}
 WAIT_TOOLS = {"computer_wait", "wait", "wait_for", "sleep"}
-SETUP_TOOLS = {"Skill", "Read", "ToolSearch", "TodoWrite"}
+SETUP_TOOLS = {"Skill", "Read", "ToolSearch", "TodoWrite", "tool_search", "update_plan", "list_mcp_resources",
+               "list_mcp_resource_templates", "read_mcp_resource"}
 KEYBOARD_TOOLS = {"type_text", "computer_type", "press_key", "hotkey", "computer_key", "set_value"}
 APP_NAMES = {"soffice": "LibreOffice", "libreoffice-calc": "LibreOffice Calc", "gnucash": "GnuCash",
              "chromium": "Chromium", "google-chrome": "Chromium", "chrome": "Chromium", "xfdesktop": "Desktop",
@@ -31,8 +32,9 @@ ARM_LOOKS = {"snapshot", "get_app_state", "find", "get", "is", "screenshot", "li
              "status", "version", "permissions"}
 #: The driver of a trial whose trial.json names none: the bench's first, which every trial before the macOS arms ran on.
 DRIVER = "cua-driver"
-#: A task file's stem: the OS but Linux, then the driver but cua-driver, as macos-agent-desktop-ir-01-r1-background.
-STEM = re.compile(r"^(?:macos-)?(?:(?P<driver>[a-z0-9-]+?)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d+)?"
+#: A task file's stem: the OS but Linux or the harness but claude-code, then the driver but cua-driver, as
+#: macos-agent-desktop-ir-01-r1-background or codex-ir-01-r1-background.
+STEM = re.compile(r"^(?:macos-|codex-)?(?:(?P<driver>[a-z0-9-]+?)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d+)?"
                   r"-(?P<condition>foreground|background)$")
 
 

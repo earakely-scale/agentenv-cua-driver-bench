@@ -39,7 +39,8 @@ PYTHON = VENV / "bin/python"
 SETUP_STEPS = ("env", "sandbox", "box", "pack", "agent", "skills", "record", "arm", "snapshot", "trial", "grade",
                "gui_only")
 RATE = ("rate limit", "rate_limit", "api error: 429", "too many requests")
-SERVER = ("overloaded", "api error: 5", "internal server error", "service unavailable", "bad gateway")
+SERVER = ("overloaded", "api error: 5", "internal server error", "service unavailable", "bad gateway", "gateway timeout",
+          "stream disconnected", "error sending request", "stalled")
 LIMITS = {"rate": 6, "server": 3, "setup": 2}
 TRIAL_S, STOP_S = 3600, 120
 
@@ -147,12 +148,20 @@ def _upload_manifest(api, run, done=()):
                        and (facts := json.loads(path.read_text())).get("harness_version")})
     built = manifest.build(BENCH, run, OS, os.environ.get("RUN_MODEL"), (FLEET / "run-specs.txt").read_text().split(),
                            {"setup_steps": list(SETUP_STEPS), "reruns": LIMITS}, manifest.installed_drivers(),
-                           state=DB.parents[2], harness={"name": "claude-code", "versions": versions, "effort": None},
-                           settings=_settings())
+                           state=DB.parents[2], harness={**_harness(), "versions": versions}, settings=_settings())
     built = _merged(built, _uploaded(run))
     (OUT / "manifest.json").write_text(json.dumps(built, indent=1))
     api.upload_file(path_or_fileobj=str(OUT / "manifest.json"), path_in_repo=f"runs/{OS}/{run}/manifest.json",
                     repo_id=REPO, repo_type="dataset", commit_message=f"{run}: manifest")
+
+
+def _harness():
+    """The harness the run's trials name in their agent step, Codex's or else claude-code, and the effort they ask
+    for, None leaving it to the harness."""
+    stem = (FLEET / "run-specs.txt").read_text().split()[0].split("|")[0]
+    steps = {s["id"]: s for s in json.loads((BENCH / "tasks" / f"{stem}.json").read_text())}
+    codex = steps["agent"].get("a2a_agent_id") == "codex"
+    return {"name": "codex-cli" if codex else "claude-code", "effort": steps["task"].get("effort")}
 
 
 def _uploaded(run):

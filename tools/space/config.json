@@ -73,6 +73,21 @@
     "anthropic/claude-sonnet-5-5": {
       "name": "Claude Sonnet 5.5"
     },
+    "anthropic/claude-opus-5-5": {
+      "name": "Claude Opus 5.5"
+    },
+    "openai/gpt-6-luna": {
+      "name": "GPT-6 Luna"
+    },
+    "openai/gpt-6.1-terra": {
+      "name": "GPT-6.1 Terra"
+    },
+    "openai/gpt-6.1-sol": {
+      "name": "GPT-6.1 Sol"
+    },
+    "openai/gpt-6-astra": {
+      "name": "GPT-6 Astra"
+    },
     "claude-fake-1": {
       "name": "Scripted test agent",
       "board": false

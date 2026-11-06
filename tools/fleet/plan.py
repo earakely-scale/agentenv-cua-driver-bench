@@ -4,7 +4,7 @@ computer so that it builds one, in the list's order, and the whole run's lines i
 manifest pins. A trial's name is its stem with its run: cdb-g02-background's third line is cdb-g02-r3-background; a
 stem that names its run keeps it. A macOS trial's name is its Linux twin's, the OS being its run's folder
 (runs/macos/RUN), and so is an arm's: macos-agent-desktop-ir-01-r1-foreground is ir-01-r1-foreground, its driver in
-its run's trials."""
+its run's trials; and a Codex trial's, codex-ir-01-r1-foreground's, its harness in its run's trials."""
 import json
 import re
 import sys
@@ -13,9 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 RUN = re.compile(r"-r(\d)-(foreground|background)$")
-#: A macOS trial's OS and its driver, an arm's or cua-driver's on its own tools, which its name leaves to its run's
-#: folder.
-PREFIX = re.compile(r"^macos-(?:agent-desktop-|macos-harness-|cua-driver-)?")
+#: A macOS trial's OS and its driver, an arm's or cua-driver's on its own tools, and a Codex trial's harness, which its
+#: name leaves to its run's folder.
+PREFIX = re.compile(r"^(?:codex-|macos-(?:agent-desktop-|macos-harness-|cua-driver-)?)")
 
 
 def main():
