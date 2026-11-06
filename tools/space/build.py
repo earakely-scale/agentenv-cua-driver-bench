@@ -15,7 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from cdbviz import catalog, figures, hero, media, pair, reel, trials  # noqa: E402
+from cdbviz import catalog, clip, figures, hero, media, pair, reel, trials  # noqa: E402
 
 
 def pick_hero(metas, cfg):
@@ -70,6 +70,29 @@ def pairs(loaded, cat, cfg, data_dir, assets, space):
         mp4.unlink()
         out.append({"name": name, "video": f"media/{mp4.name}", "gif": gif.name, "os": want["os"], "task": want["task"],
                     "run_index": want["run_index"], **{c: found[c]["meta"]["uid"] for c in found}})
+        print(f"{name}: {gif} ({gif.stat().st_size / 1e6:.1f} MB), {mp4.name}")
+    return out
+
+
+def gallery(loaded, cat, cfg, assets, space):
+    """Each configured trial's failure as a short clip, a GIF for the card and an MP4 for the Space, as the catalog's
+    ``gallery`` with what goes wrong in it."""
+    by = {(t["meta"]["os"], t["meta"]["run"], t["meta"]["id"]): t for t in loaded}
+    out = []
+    for want in cfg.get("gallery") or []:
+        t = by.get((want["os"], want["run"], want["trial"]))
+        if not t:
+            print(f"gallery {want['mode']}: no trial {want['os']}/{want['run']}/{want['trial']}")
+            continue
+        name = f"gallery-{want['mode']}"
+        gif, mp4 = clip.render(t, want, cat, cfg, assets, name)
+        (space / "media").mkdir(exist_ok=True)
+        shutil.copy2(mp4, space / "media" / mp4.name)
+        mp4.unlink()
+        m = t["meta"]
+        out.append({"name": name, "video": f"media/{mp4.name}", "gif": gif.name, "uid": m["uid"], "mode": want["mode"],
+                    "title": want["title"], "caption": want["caption"], "os": m["os"], "driver": m["driver"],
+                    "model": m["model"]})
         print(f"{name}: {gif} ({gif.stat().st_size / 1e6:.1f} MB), {mp4.name}")
     return out
 
@@ -165,6 +188,7 @@ def main():
         print(f"hero: {hero_uid} -> {gif} ({gif.stat().st_size / 1e6:.1f} MB), {still}")
     cat["reel"] = None if args.no_gif else headline(loaded, cat, cfg, args.data, assets, space)
     cat["pairs"] = [] if args.no_gif else pairs(loaded, cat, cfg, args.data, assets, space)
+    cat["gallery"] = [] if args.no_gif else gallery(loaded, cat, cfg, assets, space)
     (data / "catalog.json").write_text(json.dumps(cat, separators=(",", ":"), ensure_ascii=False))
     print(f"catalog: {len(metas)} trials -> {data / 'catalog.json'}")
 

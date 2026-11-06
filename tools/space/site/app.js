@@ -194,6 +194,7 @@ function boardView() {
   if ((CAT.pairs || []).length) wrap.append(pairsSection());
   wrap.append(resultsSection());
   if (CAT.comparisons.length) wrap.append(driversSection());
+  if ((CAT.gallery || []).length) wrap.append(gallerySection());
   wrap.append(trialsSection(), howSection());
   $("#app").replaceChildren(wrap);
 }
@@ -253,6 +254,24 @@ function pairsSection() {
         h("figcaption", {}, h("b", {}, `${OSES[p.os]?.name || p.os} · ${(task.probe || fg.task).replace("CDB-", "")} ${task.title || ""}`),
           ` — ${fg.model_name} through ${driverName(fg.driver)}, run ${p.run_index}. Foreground ${said(fg)}; background ${said(bg)}. `,
           h("a", { href: hashOf(fg) }, "Replay the foreground"), " · ", h("a", { href: hashOf(bg) }, "Replay the background")));
+    })));
+}
+
+function gallerySection() {
+  return h("section", { class: "gallery", "aria-labelledby": "gallery-h" },
+    h("div", { class: "section-head", id: "gallery" }, h("h2", { id: "gallery-h" }, "What failing looks like"),
+      h("p", {}, "Recorded trials at the moment they go wrong, in real time or sped up, each ending on its grade; one clean pass for contrast.")),
+    h("div", { class: "clip-list" }, CAT.gallery.map((g) => {
+      const t = CAT.trials.find((x) => x.uid === g.uid);
+      if (!t) return null;
+      const task = TASKS[t.task] || {};
+      const setup = `${OSES[t.os]?.name || t.os} · ${driverLabel(t.driver)} · ${t.model_name} · ${(task.probe || t.task).replace("CDB-", "")} ${task.title || ""}, ${(CONDS[t.condition]?.name || t.condition).toLowerCase()}`;
+      const video = h("video", { src: g.video, autoplay: true, muted: true, loop: true, playsinline: true, preload: "metadata",
+        "aria-label": `${g.title}: ${setup}. The recording from just before the moment, ending on the trial's grade.` });
+      video.muted = true;
+      return h("figure", { class: `clip ${t.passed ? "pass" : "fail"}` }, video,
+        h("figcaption", {}, h("b", {}, g.title), h("span", { class: "setup" }, setup),
+          h("span", {}, g.caption, " ", h("a", { href: hashOf(t) }, "Replay the trial"))));
     })));
 }
 
