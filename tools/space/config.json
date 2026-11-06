@@ -132,6 +132,7 @@
     "cdb-g02": {
       "probe": "CDB-G02",
       "title": "Lighthouse program schedule replan",
+      "label": "schedule replan",
       "apps": [
         "Copperfield Mail",
         "Signal Quay Chat",
@@ -173,6 +174,7 @@
     "cdb-g03": {
       "probe": "CDB-G03",
       "title": "Kestrel Wharf payment review",
+      "label": "payment review",
       "apps": [
         "Ledger Lantern Mail",
         "LibreOffice Calc",
@@ -213,6 +215,7 @@
     "cdb-g04": {
       "probe": "CDB-G04",
       "title": "Morrowglass linked-case review",
+      "label": "linked cases",
       "apps": [
         "Rillwatch Cases",
         "Margin Lantern Manual",
@@ -249,6 +252,7 @@
     "mb-09": {
       "probe": "MB-09",
       "title": "Reorder a list by drag and drop",
+      "label": "drag to reorder",
       "apps": [
         "BenchLab"
       ],
@@ -282,6 +286,7 @@
         "foreground"
       ],
       "title": "Reveal a hover-only toolbar and click one action",
+      "label": "hover toolbar",
       "apps": [
         "BenchLab"
       ],
@@ -315,6 +320,7 @@
         "foreground"
       ],
       "title": "Read a tooltip and type its code",
+      "label": "tooltip code",
       "apps": [
         "BenchLab"
       ],
@@ -341,6 +347,7 @@
     "ir-01": {
       "probe": "IR-01",
       "title": "A two-step form with a permission prompt",
+      "label": "access prompt",
       "apps": [
         "BenchLab"
       ],
@@ -367,6 +374,7 @@
     "ir-02": {
       "probe": "IR-02",
       "title": "Apply while an update banner covers the button",
+      "label": "update banner",
       "apps": [
         "BenchLab"
       ],
@@ -393,6 +401,7 @@
     "ir-03": {
       "probe": "IR-03",
       "title": "Edit two notes past unsaved-changes dialogs",
+      "label": "unsaved changes",
       "apps": [
         "BenchLab"
       ],
@@ -427,6 +436,7 @@
     "ir-04": {
       "probe": "IR-04",
       "title": "Sign up past a cookie-consent overlay",
+      "label": "cookie overlay",
       "apps": [
         "BenchLab"
       ],

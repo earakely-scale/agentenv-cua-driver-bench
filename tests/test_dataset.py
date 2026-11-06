@@ -297,3 +297,15 @@ def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables
     macos = tables.task_row(ROOT, ROOT / "tasks" / "macos-mb-09-r2-foreground.json")
     assert (macos["os"], macos["computer"], mb09["os"]) == ("macos", "desktop-benchlab-macos", "linux")
     assert (macos["task"], macos["seed"], macos["title"]) == ("mb-09", mb09["seed"], mb09["title"])
+
+
+def test_the_cards_comparison_section_holds_each_figure_with_its_notes_and_is_left_out_without_them(tables):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+
+    section = card._compare({"compare_figures": ["pareto"],
+                             "compare_notes": {"pareto": ["A passes 52% at $0.56 a trial.", "B costs $0.07."]}})
+
+    assert card._compare({"compare_figures": []}) == ""
+    assert section.startswith("## How models, operating systems and drivers compare")
+    assert "assets/figures/pareto-dark.svg" in section and card.COMPARE_FIGURES["pareto"] in section
+    assert section.endswith("A passes 52% at \\$0.56 a trial. B costs \\$0.07.")

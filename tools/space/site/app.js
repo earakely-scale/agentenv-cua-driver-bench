@@ -290,7 +290,8 @@ function figures(keys, alt) {
     h("source", { media: "(max-width: 480px) and (prefers-color-scheme: dark)", srcset: `figures/${f}-phone-dark.svg` }),
     h("source", { media: "(max-width: 480px)", srcset: `figures/${f}-phone.svg` }),
     h("source", { media: "(prefers-color-scheme: dark)", srcset: `figures/${f}-dark.svg` }),
-    h("img", { src: `figures/${f}.svg`, alt: alt(f) })))));
+    h("img", { src: `figures/${f}.svg`, alt: alt(f) })),
+    CAT.compare_notes?.[f] ? h("p", { class: "fnote" }, CAT.compare_notes[f].join(" ")) : null)));
 }
 
 function resultsSection() {
@@ -512,7 +513,7 @@ function modelsSection() {
     cards, outcomeKey(cards),
     models.some((m) => m.harness === "codex-cli") ? h("p", { class: "dnote" }, "Codex CLI hands the model a tool's structured result alone, so GPT never sees ",
       `${driverName(CAT.driver)}'s window screenshots, only its accessibility tree.`) : null,
-    figs.length ? figures(figs, (f) => (f === "pareto" ? "Cost per trial against full pass, a point per model" : "Full pass on each task, a line per model")) : null);
+    figs.length ? figures(figs, (f) => (f === "pareto" ? "Cost per trial against full pass, a point per model" : "Passes by task and model: a row per task and a column per model, foreground and background")) : null);
 }
 
 function modelCard(m, runs, tasks, depth) {
@@ -545,7 +546,7 @@ function failuresSection() {
 function gallery(F, clips) {
   const failed = F ? CAT.trials.map((t) => F.by_trial[t.uid]).filter(Boolean) : [];
   const count = (id) => failed.filter((x) => x === id).length;
-  const modes = (F?.modes || []).filter((m) => count(m.id) || clips.some((g) => g.mode === m.id)).sort((a, b) => count(b.id) - count(a.id));
+  const modes = (F?.modes || []).filter((m) => count(m.id) || clips.some((g) => outcomeOf(g) === m.id)).sort((a, b) => count(b.id) - count(a.id));
   const grid = h("div", { class: "fgrid" }, clips.map(clip));
   const desc = h("p", { class: "mdesc" });
   const chips = h("div", { class: "tabs modes", role: "group", "aria-label": "Failure modes" },
@@ -553,7 +554,7 @@ function gallery(F, clips) {
   const pick = (m) => {
     [null, ...modes].forEach((x, i) => chips.children[i].setAttribute("aria-pressed", String(x === m)));
     for (const el of grid.children) el.hidden = !!m && el.dataset.mode !== m.id;
-    const none = m && !clips.some((g) => g.mode === m.id);
+    const none = m && !clips.some((g) => outcomeOf(g) === m.id);
     const ex = none ? (F.examples?.[m.id] || []).map((uid) => CAT.trials.find((t) => t.uid === uid)).filter(Boolean).slice(0, 4) : [];
     desc.replaceChildren(h("span", {}, m?.description, ex.length ? [" No clip of this one yet; replay ", ex.map((t, i) => [i ? " · " : "",
       h("a", { href: hashOf(t) }, `${probeOf(t.task)} on ${OSES[t.os]?.name || t.os}, ${driverLabel(t.driver)}, ${t.model_name}`)]), "."] : null));
@@ -566,10 +567,10 @@ function gallery(F, clips) {
 
 function clip(g) {
   const t = CAT.trials.find((x) => x.uid === g.uid);
-  const mode = CAT.failures?.modes.find((m) => m.id === g.mode);
+  const mode = CAT.failures?.modes.find((m) => m.id === outcomeOf(g));
   const video = h("video", { src: g.video, muted: true, loop: true, playsinline: true, preload: "none", "aria-label": `${g.title}: ${g.caption}` });
   video.muted = true;
-  return h("figure", { class: `fclip${t?.passed ? " pass" : ""}`, "data-mode": g.mode }, video,
+  return h("figure", { class: `fclip${t?.passed ? " pass" : ""}`, "data-mode": outcomeOf(g) }, video,
     h("figcaption", {}, h("b", {}, g.title), g.caption ? h("p", {}, g.caption) : null,
       h("div", { class: "fclip-foot" },
         mode ? h("span", { class: "chip mode" }, mode.name) : null,
@@ -578,6 +579,8 @@ function clip(g) {
         h("span", { class: "chip" }, h("span", { class: "dot", style: { background: `var(--s${(MODELS[g.model]?.slot ?? 0) % 8})` } }), MODELS[g.model]?.name || g.model),
         t ? h("a", { class: "fclip-go", href: hashOf(t) }, "Replay the trial →") : null)));
 }
+
+const outcomeOf = (g) => CAT.failures?.by_trial[g.uid] || g.mode;
 
 function playWhenSeen(videos) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
