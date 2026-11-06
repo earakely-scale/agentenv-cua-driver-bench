@@ -261,7 +261,7 @@ def test_a_clip_plays_its_modes_moment_or_the_whole_run_sped_up(space):
         11.5, 12.0, 11.5, 8.0, 20.0, None]
     assert clip.window(sc, m, {"mode": "focus"}) == (8.5, 16.0, 1, 11.5)
     assert clip.window(sc, m, {"mode": "focus", "at": 3.0}) == (2.0, 7.5, 1, 3.0)
-    assert clip.window(sc, m, {"mode": "refused"}) == (6.0, 24.5, 2, 8.0)
+    assert clip.window(sc, m, {"mode": "refused"}) == (6.0, 22.0, 2, 8.0)
     assert clip.window(sc, m, {"mode": "turns"}) == (2.0, 60.0, 10, None)
 
 

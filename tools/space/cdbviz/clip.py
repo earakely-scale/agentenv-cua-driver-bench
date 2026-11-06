@@ -22,7 +22,7 @@ H = TOP + PV + STRIP
 SECONDS, SHOWN, HOLD, MAX_MB = 7, 2.6, 3.0, 3
 #: Each moment's mode's seconds of the trial before and after the moment, and its speed: a disturbance in real time,
 #: the driver's refusals over the next quarter minute at twice it.
-SPANS = {"refused": (2.0, 16.5, 2)}
+SPANS = {"refused": (2.0, 14.0, 2)}
 SPAN = (3.0, 4.5, 1)
 #: The user's log events a disturbing mode's moment is the first of, in the order its callout names them.
 EVENTS = {"focus": ("key_focus",), "raise": ("window_raised",), "dialog": ("dialog", "window_raised", "key_focus")}
