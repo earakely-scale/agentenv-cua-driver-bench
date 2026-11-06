@@ -9,7 +9,7 @@ task_categories:
 - reinforcement-learning
 - image-text-to-text
 size_categories:
-- n<1K
+- {{SIZE}}
 tags:
 - agentenv
 - computer-use
@@ -19,9 +19,12 @@ tags:
 - multiplayer
 - desktop
 - linux
+- macos
 - mcp
 - claude-code
 - codex
+- openai
+- anthropic
 configs:
 - config_name: trials
   default: true
@@ -91,6 +94,7 @@ from datasets import load_dataset
 trials = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "trials", split="eval")   # one row per trial
 calls = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "calls", split="eval")     # one row per tool call
 tasks = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "tasks", split="eval")     # prompts and settings
+board = trials.filter(lambda t: t["on_board"])   # the trials the card's board and the replay Space count
 ```
 
 Run a trial yourself, on a Linux machine with Docker (we used an EC2 c6i.4xlarge on Ubuntu 24.04):

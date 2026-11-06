@@ -89,7 +89,7 @@ The A22 criteria:
 ## Dataset structure
 
 ```
-results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, cost, turns, paths
+results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, cost, turns, paths, and on_board: whether the board and the Space count it
 results/calls.parquet        one row per tool call, keyed by os, run and trial_id as trials.parquet is: when it was issued and answered on the recording's clock, its input, its result
 results/missing.parquet      one row per trial whose re-runs were spent, so its run is incomplete
 tasks/tasks.parquet          one row per trial task: the prompt, the system prompt, the built-in tools, limits, the task file

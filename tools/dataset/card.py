@@ -59,6 +59,7 @@ def main():
     shutil.copy(HERE / "LICENSE.md", dataset / "LICENSE.md")
     shutil.copytree(HERE / "licenses", dataset / "licenses", dirs_exist_ok=True)
     text = (HERE / "card" / "README.md").read_text()
+    text = text.replace("{{SIZE}}", _size(len(trials)))
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{PAIRS}}", _pairs(catalog, trials))
     text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
@@ -326,6 +327,12 @@ Of the {len(failed)} trials that didn't fully pass, {half} ({_pct(half / len(fai
 half the task's points or more, and {done} did the whole task but left the GUI or disturbed the user.
 
 {figures}"""
+
+
+def _size(rows):
+    """Hugging Face's size category for a default table of ``rows`` rows."""
+    return next(f"{lo}<n<{hi}" for lo, hi, top in (("", "1K", 1e3), ("1K", "10K", 1e4), ("10K", "100K", 1e5),
+                                                   ("100K", "1M", 1e6)) if rows < top).lstrip("<")
 
 
 def _pct(value):

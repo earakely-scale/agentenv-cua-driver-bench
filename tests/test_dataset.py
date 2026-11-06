@@ -153,10 +153,14 @@ def test_a_trials_row_holds_every_half_of_its_grade_and_where_its_files_are(tabl
         {"i": 0, "turn": 1, "t0": 6.0, "t1": 7.0, "tool": "click", "server": "desktop-benchlab", "input": {},
          "error": False, "result": "ok", "image": False}]}))
 
-    row, calls = tables.trial_row(tmp_path, folder, {"ir-02": "Set two fields and press Apply"})
+    cfg = json.loads((ROOT / "tools" / "space" / "config.json").read_text())
+
+    row, calls = tables.trial_row(tmp_path, folder, {"ir-02": "Set two fields and press Apply"}, cfg)
+    later, _ = tables.trial_row(tmp_path, folder, {}, {**cfg, "exclude_runs": []})
 
     assert (row["run"], row["passed"], row["gui_only"], row["user_undisturbed"], row["a22_pointer"]) == (
         "haiku-5-5-2026-11-02", True, True, True, True)
+    assert (row["on_board"], later["on_board"]) == (False, True)
     assert row["agent_window_s"] == 25.0 and row["recording"].endswith("ir-02-r3-background/recording.mp4")
     assert [(c["trial_id"], c["tool"]) for c in calls] == [(folder.name, "click")]
 

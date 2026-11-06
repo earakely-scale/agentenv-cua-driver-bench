@@ -1,7 +1,7 @@
 """tables.py BENCH DATASET: the dataset's tables from its runs/ folders and the bench's committed trial tasks.
 
 tasks/tasks.parquet (one row per trial task), results/trials.parquet (one row per graded trial, with the harness errors
-it was re-run for), results/calls.parquet (one row per tool call, keyed by os, run and trial_id as trials are), and
+it was re-run for and whether the board counts it, as the Space's config.json says), results/calls.parquet (one row per tool call, keyed by os, run and trial_id as trials are), and
 results/missing.parquet (one row per trial
 whose re-runs were spent, so the run it belongs to is incomplete)."""
 import json
@@ -23,12 +23,13 @@ def main():
     trials = sorted(p.parent for p in dataset.glob("runs/*/*/*/trial.json"))
     tasks = [task_row(bench, path) for path in sorted(bench.glob("tasks/*.json")) if STEM.match(path.stem)]
     titles = {task["task"]: task["title"] for task in tasks}
+    cfg = json.loads((bench / "tools" / "space" / "config.json").read_text())
     (dataset / "tasks").mkdir(exist_ok=True)
     (dataset / "results").mkdir(exist_ok=True)
     pd.DataFrame(tasks).to_parquet(dataset / "tasks" / "tasks.parquet", index=False)
     rows, calls = [], []
     for folder in trials:
-        row, trial_calls = trial_row(dataset, folder, titles)
+        row, trial_calls = trial_row(dataset, folder, titles, cfg)
         rows.append(row)
         calls.extend(trial_calls)
     missing = [missing_row(folder) for folder in sorted(p.parent for p in dataset.glob("runs/*/*/*/missing.json"))]
@@ -67,7 +68,7 @@ def task_row(bench, path):
     }
 
 
-def trial_row(dataset, folder, titles):
+def trial_row(dataset, folder, titles, cfg):
     facts = json.loads((folder / "trial.json").read_text())
     timeline = json.loads((folder / "timeline.json").read_text())
     grade = facts.get("grade") or {}
@@ -89,6 +90,8 @@ def trial_row(dataset, folder, titles):
         "effort": facts.get("effort"),
         "reward": facts["reward"],
         "passed": facts.get("passed"),
+        "on_board": f"{facts['os']}/{folder.parent.name}" not in (cfg.get("exclude_runs") or [])
+                    and ((cfg.get("models") or {}).get(facts["model"]) or {}).get("board", True),
         "run_index": facts.get("run_index"),
         "seed": facts.get("seed"),
         "task_file": facts.get("task_file"),
