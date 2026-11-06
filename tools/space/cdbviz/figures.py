@@ -9,7 +9,7 @@ from fontTools import subset
 from fontTools.ttLib import TTFont
 from PIL import ImageFont
 
-from . import catalog
+from . import catalog, failures
 
 FONTS = Path(__file__).resolve().parent.parent / "fonts"
 WEIGHTS = {400: "Inter-Regular.ttf", 600: "Inter-SemiBold.ttf", 700: "Inter-Bold.ttf", 800: "Inter-ExtraBold.ttf"}
@@ -463,17 +463,271 @@ def driver_specs(cat):
 
 def write_all(cat, out_dirs):
     """Each figure with a panel, in light and dark, desktop and phone, into every one of ``out_dirs``: the keys written,
-    as the catalog's results figures and drivers figures."""
-    written = {"figures": [], "driver_figures": []}
-    for group, all_specs in (("figures", specs(cat)), ("driver_figures", driver_specs(cat))):
+    as the catalog's results, drivers and failure figures."""
+    written = {"figures": [], "driver_figures": [], "failure_figures": []}
+    for group, all_specs in (("figures", specs(cat)), ("driver_figures", driver_specs(cat)),
+                             ("failure_figures", failure_specs(cat))):
         for key, spec in all_specs.items():
             if not spec["panels"]:
                 continue
+            draw = {"bars": bars, "grid": grid}.get(spec.get("kind"), figure)
             for suffix, theme, phone in (("", "light", False), ("-dark", "dark", False), ("-phone", "light", True),
                                          ("-phone-dark", "dark", True)):
-                body = figure(spec, theme, phone)
+                body = draw(spec, theme, phone)
                 for d in out_dirs:
                     Path(d).mkdir(parents=True, exist_ok=True)
                     (Path(d) / f"{key}{suffix}.svg").write_text(body)
             written[group].append(key)
     return written
+
+
+#: Each outcome's colour, a SERIES slot and its strength in the light and the dark theme: a pass and the dialog over the
+#: user are tints, so the failures the agent made stand out; the full hues, in failures.MODES' order, keep neighbours
+#: apart for colour-blind readers.
+OUTCOME = {"pass": (2, 0.3, 0.42), "wrong": (7, 1, 1), "out_of_turns": (0, 1, 1), "blocked": (1, 1, 1),
+           "no_background": (6, 1, 1), "dialog": (3, 0.35, 0.45), "disturbed": (3, 1, 1), "left_gui": (4, 1, 1)}
+
+
+def failure_specs(cat):
+    """The failure figures, of the board's trials: how each OS, driver and model's trials ended in each condition, and
+    which of trycua's A22 criteria its background trials broke."""
+    counts = failures.tally(cat)
+    names = {k: {x["id"]: x.get("label") or x["name"] for x in cat[k]} for k in ("oses", "drivers", "models")}
+    conds = [c for c in cat["conditions"] if c["id"] in ("foreground", "background")]
+    modes = [m for m in failures.MODES if any(c[m["id"]] for c in counts.values())]
+    groups = []
+    for os_, driver, model in failures.setups(cat):
+        if not groups or groups[-1]["key"] != (os_, driver):
+            groups.append({"key": (os_, driver), "label": f"{names['oses'][os_]} · {names['drivers'][driver]}",
+                           "rows": []})
+        groups[-1]["rows"].append({"model": model, "label": names["models"][model], "bars": {
+            c["id"]: [(m["id"], counts[(os_, driver, model, c["id"])][m["id"]]) for m in modes] for c in conds}})
+    total = sum(sum(c.values()) for c in counts.values())
+    return {
+        "failure-modes": {
+            "kind": "bars", "title": "How the trials ended",
+            "subtitle": "Each trial once, under the gravest way it failed (furthest right in the key), a bar per OS, "
+                        "driver and model in each condition. The numbers count trials.",
+            "modes": modes, "conds": conds, "panels": groups,
+            "foot": f"{total} trials of the board. {unpassable(cat)} Tasks by trycua's Cua Driver Bench, run on "
+                    "AgentEnv; not trycua's official results.",
+            "desc": "; ".join(f"{g['label']}, {r['label']}, {c['name'].lower()}: " + ", ".join(
+                f"{n} {m}" for m, n in r["bars"][c["id"]] if n) for g in groups for r in g["rows"] for c in conds)},
+        "disturbances": disturbance_spec(cat, groups),
+    }
+
+
+def disturbance_spec(cat, groups):
+    """The heat grid of the A22 criteria: ``groups``' rows that ran in the background, each cell the share of the
+    row's background trials that broke the column's criterion, the first column's any of them."""
+    crit = [{"id": "any", "name": "Any"}] + [{"id": c["id"], "name": c["short"]} for c in cat["criteria"]]
+    by_trial = cat["failures"]["by_trial"]
+    panels = []
+    for g in groups:
+        rows = []
+        for r in g["rows"]:
+            u = [t["grade"]["user_undisturbed"] for t in cat["trials"] if t["uid"] in by_trial and (
+                t["os"], t["driver"], t["model"], t["condition"]) == (*g["key"], r["model"], "background")]
+            if u:
+                rows.append({"label": r["label"], "cells": [
+                    sum(not x["result"] for x in u) / len(u) if c["id"] == "any" else
+                    sum(x["criteria"].get(c["id"]) is False for x in u) / len(u) for c in crit]})
+        if rows:
+            panels.append({"label": g["label"], "rows": rows})
+    broke = [c for k, c in enumerate(cat["criteria"]) if any(r["cells"][k + 1] for p in panels for r in p["rows"])]
+    return {
+        "kind": "grid", "title": "How the user was disturbed",
+        "subtitle": "The share of each setup's background trials, in %, that broke each of trycua's eight A22 criteria; "
+                    "Any, that broke one or more. A blank cell: never.",
+        "columns": crit, "panels": panels,
+        "foot": "".join(f"{c['short']}: {c['broken']}. " for c in broke) + unpassable(cat),
+        "desc": "; ".join(f"{p['label']}, {r['label']}: " + ", ".join(
+            f"{c['name']} {pct(v)}" for c, v in zip(crit, r["cells"]) if v) for p in panels for r in p["rows"])}
+
+
+def unpassable(cat):
+    """The caveats of tasks no trial can pass, as "‡ Not passable on Linux: IR-01, IR-03 and IR-04." each."""
+    short = {t["id"]: catalog.short(t) for t in cat["tasks"]}
+    return " ".join(f"{cv['mark']} {cv['short']}: "
+                    + " and ".join(catalog.ranges([short[t] for t in cv["tasks"]]).rsplit(", ", 1)) + "."
+                    for cv in cat["caveats"] if cv.get("passable") is False)
+
+
+def tone(theme, slot, strength):
+    """A SERIES colour at ``strength`` over the theme's surface, as hex."""
+    over, under = SERIES[theme][slot], THEMES[theme]["surface"]
+    rgb = [round(strength * int(over[k:k + 2], 16) + (1 - strength) * int(under[k:k + 2], 16)) for k in (1, 3, 5)]
+    return "#" + "".join(f"{v:02x}" for v in rgb)
+
+
+def ink_on(theme, slot, strength):
+    """A label's colour inside SERIES ``slot`` at ``strength``: white, but near-black on a light tint and on the light
+    theme's yellow, the one full hue white doesn't read on (APCA)."""
+    return THEMES["light"]["ink"] if theme == "light" and (strength < 1 or slot == 3) else "#ffffff"
+
+
+def tinted(theme, outcome):
+    slot, light, dark = OUTCOME[outcome]
+    return slot, light if theme == "light" else dark
+
+
+def head(svg, spec, s, margin):
+    """The title and subtitle; the y below them."""
+    svg.text(margin, margin + s["title"] * 0.8, spec["title"], s["title"], 800)
+    lines = wrap(spec["subtitle"], 400, s["subtitle"], svg.w - 2 * margin)
+    for k, line in enumerate(lines):
+        svg.text(margin, margin + s["title"] + 10 + k * (s["subtitle"] + 5) + s["subtitle"] * 0.75, line,
+                 s["subtitle"], 400, "ink2")
+    return margin + s["title"] + 8 + len(lines) * (s["subtitle"] + 5)
+
+
+def foot(svg, spec, s, margin, y):
+    """The foot's lines from ``y``; the figure's height."""
+    lines = wrap(spec["foot"], 400, s["foot"], svg.w - 2 * margin)
+    for k, line in enumerate(lines):
+        svg.text(margin, y + s["foot"] + k * (s["foot"] + 5), line, s["foot"], 400, "ink3")
+    return y + len(lines) * (s["foot"] + 5) + margin
+
+
+BARS = {False: {"title": 24, "subtitle": 14, "key": 13, "group": 14, "label": 13.5, "cond": 14, "sub": 12, "count": 12,
+                "foot": 12, "bar": 20, "pitch": 30, "gap": 3},
+        True: {"title": 20, "subtitle": 12.5, "key": 12, "group": 13, "label": 12.5, "cond": 11, "sub": 11,
+               "count": 11, "foot": 11, "bar": 17, "pitch": 22, "gap": 2.5}}
+
+
+def bars(spec, theme, phone):
+    """Stacked bars, one per row and condition, each trial counted once in its outcome's colour, passes first; a
+    segment wide enough carries its count. On a phone each row's two bars stack under its name."""
+    s = BARS[phone]
+    W, margin = (360, 16) if phone else (780, 28)
+    svg = Svg(W, 10, theme)
+    y = head(svg, spec, s, margin) + (12 if phone else 16)
+    y = key(svg, spec["modes"], theme, s, margin, y)
+    n_w = width("50", 400, s["count"]) + 8
+    if phone:
+        cond_w = max(width(c["name"], 400, s["cond"]) for c in spec["conds"]) + 8
+        x0, bw = margin + cond_w, W - 2 * margin - cond_w - n_w
+    else:
+        label_w = max(width(r["label"], 400, s["label"]) for g in spec["panels"] for r in g["rows"]) + 18
+        bw = (W - 2 * margin - label_w - 2 * n_w - 22) / 2
+        xs = [margin + label_w, margin + label_w + bw + n_w + 22]
+        y += 6
+        for x, c in zip(xs, spec["conds"]):
+            svg.text(x, y + s["cond"] * 0.8, c["name"], s["cond"], 600)
+            svg.text(x + width(c["name"], 600, s["cond"]) + 8, y + s["cond"] * 0.8, c["short"], s["sub"], 400, "ink3")
+        y += s["cond"] + 10
+    for g in spec["panels"]:
+        y += 12
+        svg.text(margin, y + s["group"] * 0.8, g["label"], s["group"], 700)
+        y += s["group"] + 8
+        for r in g["rows"]:
+            if phone:
+                svg.text(margin, y + s["label"] * 0.8, r["label"], s["label"], 600)
+                y += s["label"] + 6
+                for c in spec["conds"]:
+                    svg.text(margin, y + s["bar"] / 2 + s["cond"] * 0.36, c["name"], s["cond"], 400, "ink3")
+                    bar(svg, r["bars"][c["id"]], x0, y, bw, theme, s)
+                    y += s["pitch"]
+                y += 6
+            else:
+                svg.text(margin, y + s["bar"] / 2 + s["label"] * 0.36, r["label"], s["label"], 400)
+                for x, c in zip(xs, spec["conds"]):
+                    bar(svg, r["bars"][c["id"]], x, y, bw, theme, s)
+                y += s["pitch"]
+    svg.h = round(foot(svg, spec, s, margin, y + 10))
+    return svg.render(spec["title"], spec["desc"])
+
+
+def key(svg, modes, theme, s, margin, y):
+    """The outcomes' swatches and names in stacking order, wrapped to the width; the y below them."""
+    x, sw = margin, s["key"] * 0.9
+    for m in modes:
+        w = sw + 6 + width(m["name"], 400, s["key"])
+        if x + w > svg.w - margin:
+            x, y = margin, y + s["key"] + 9
+        svg.add(f'<rect x="{x:.1f}" y="{y + s["key"] * 0.5 - sw / 2:.1f}" width="{sw:.1f}" height="{sw:.1f}" rx="2.5" '
+                f'fill="{tone(theme, *tinted(theme, m["id"]))}"/>')
+        svg.text(x + sw + 6, y + s["key"] * 0.85, m["name"], s["key"], 400, "ink2")
+        x += w + 16
+    return y + s["key"] + 8
+
+
+def bar(svg, parts, x, y, w, theme, s):
+    """One stacked bar of (outcome, count) parts across ``w``, its ends rounded and a gap between parts, then its
+    trials' number; a part wide enough carries its count."""
+    total = sum(n for _, n in parts)
+    shown = [(m, n) for m, n in parts if n]
+    names = {m["id"]: m["name"] for m in failures.MODES}
+    gaps = s["gap"] * (len(shown) - 1)
+    at = x
+    for k, (m, n) in enumerate(shown):
+        pw = max((w - gaps) * n / total, 1.0)
+        slot, strength = tinted(theme, m)
+        svg.add(f'<path d="{rounded(at, y, pw, s["bar"], k == 0, k == len(shown) - 1)}" '
+                f'fill="{tone(theme, slot, strength)}"><title>{escape(names[m])}: {n}</title></path>')
+        if pw >= width(str(n), 600, s["count"]) + 8:
+            svg.text(at + pw / 2, y + s["bar"] / 2 + s["count"] * 0.36, str(n), s["count"], 600,
+                     ink_on(theme, slot, strength), "middle", num=True)
+        at += pw + s["gap"]
+    svg.text(x + w + 6, y + s["bar"] / 2 + s["count"] * 0.36, str(total), s["count"], 400, "ink3", num=True)
+
+
+def rounded(x, y, w, h, left, right, r=4):
+    """A rectangle's path with its left and right corners rounded as asked."""
+    a, b = min(r, w / 2) if left else 0, min(r, w / 2) if right else 0
+    return (f"M{x + a:.2f},{y:.2f}H{x + w - b:.2f}" + (f"A{b:.2f},{b:.2f} 0 0 1 {x + w:.2f},{y + b:.2f}" if b else "")
+            + f"V{y + h - b:.2f}" + (f"A{b:.2f},{b:.2f} 0 0 1 {x + w - b:.2f},{y + h:.2f}" if b else "")
+            + f"H{x + a:.2f}" + (f"A{a:.2f},{a:.2f} 0 0 1 {x:.2f},{y + h - a:.2f}" if a else "")
+            + f"V{y + a:.2f}" + (f"A{a:.2f},{a:.2f} 0 0 1 {x + a:.2f},{y:.2f}" if a else "") + "Z")
+
+
+GRID = {False: {"title": 24, "subtitle": 14, "group": 14, "label": 13.5, "head": 12, "cell": 12.5, "foot": 12,
+                "h": 24, "gap": 3},
+        True: {"title": 20, "subtitle": 12.5, "group": 13, "label": 12, "head": 10.5, "cell": 11, "foot": 11,
+               "h": 21, "gap": 2.5}}
+
+
+def grid(spec, theme, phone):
+    """A heat grid, a row per setup and a column per criterion, each cell's share as the strength of the user's amber
+    and as its number; the first column, Any, set apart."""
+    s = GRID[phone]
+    W, margin = (360, 16) if phone else (780, 28)
+    svg = Svg(W, 10, theme)
+    y = head(svg, spec, s, margin) + (14 if phone else 18)
+    labels = [r["label"] for g in spec["panels"] for r in g["rows"]]
+    label_w = max(width(x, 400, s["label"]) for x in labels) + (10 if phone else 18)
+    cols = spec["columns"]
+    apart = 8 if phone else 12
+    spill = max(0, width(cols[-1]["name"], 600, s["head"]) * 0.71 - 10) if phone else 0
+    cw = (W - 2 * margin - label_w - apart - spill) / len(cols)
+    xs = [margin + label_w + k * cw + (apart if k else 0) for k in range(len(cols))]
+    if phone:
+        rise = max(width(c["name"], 600, s["head"]) for c in cols) * 0.71 + s["head"]
+        for x, c in zip(xs, cols):
+            cx, cy = x + cw / 2 - s["head"] * 0.3, y + rise
+            svg.text(cx, cy, c["name"], s["head"], 600, "ink2", "start", f' transform="rotate(-45 {cx:.1f} {cy:.1f})"')
+        y += rise + 8
+    else:
+        heads = [balanced(c["name"], 600, s["head"], cw - 2) for c in cols]
+        tall = max(len(h) for h in heads)
+        for x, lines in zip(xs, heads):
+            for k, line in enumerate(lines):
+                svg.text(x + cw / 2, y + (tall - len(lines) + k) * (s["head"] + 3) + s["head"] * 0.8, line,
+                         s["head"], 600, "ink2", "middle")
+        y += tall * (s["head"] + 3) + 6
+    for g in spec["panels"]:
+        y += 10
+        svg.text(margin, y + s["group"] * 0.8, g["label"], s["group"], 700)
+        y += s["group"] + 6
+        for r in g["rows"]:
+            svg.text(margin, y + s["h"] / 2 + s["label"] * 0.36, r["label"], s["label"], 400)
+            for x, v in zip(xs, r["cells"]):
+                fill = tone(theme, 3, 0.14 + 0.86 * v) if v else THEMES[theme]["grid"]
+                svg.add(f'<rect x="{x + s["gap"] / 2:.1f}" y="{y:.1f}" width="{cw - s["gap"]:.1f}" height="{s["h"]}" '
+                        f'rx="3" fill="{fill}" fill-opacity="{1 if v else 0.45}"/>')
+                if v:
+                    svg.text(x + cw / 2, y + s["h"] / 2 + s["cell"] * 0.36, str(round(100 * v)), s["cell"],
+                             700 if x == xs[0] else 600, ink_on(theme, 3, 0.14 + 0.86 * v), "middle", num=True)
+            y += s["h"] + s["gap"]
+    svg.h = round(foot(svg, spec, s, margin, y + 10))
+    return svg.render(spec["title"], spec["desc"])

@@ -513,6 +513,7 @@
       ],
       "mark": "‡",
       "short": "Not passable on Linux",
+      "passable": false,
       "reason": "The interruption is a modal dialog. On Linux the window manager stacks it over the user's window (xfwm4 also gives it the keyboard; openbox, trycua's Linux choice, only stacks it), so the user is disturbed whatever the agent does. On macOS a background app's sheet stays behind."
     },
     {

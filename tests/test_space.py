@@ -239,3 +239,98 @@ def test_a_pairs_panels_show_one_region_of_the_screen_holding_every_window_at_it
     assert abs(w / h - 16 / 9) < 1e-6 and x <= 65 - 56 + 1 and y <= 81 and x + w >= 1320 and y + h >= 860
     assert x >= 0 and y >= 0 and x + w <= 1920 and y + h <= 1080
     assert pair.view(Fake("foreground", [])) == (0, 0, 1920, 1080)
+
+
+def _trial(task, condition, k, *, passed=False, score=0.0, gui=True, user=True, ending="Replied DONE", errors=(),
+           criteria=None, model=SONNET, driver="cua-driver", os="linux", first_disturbance=None):
+    """A loaded trial as build.py holds it, its meta and its web timeline, graded as told."""
+    meta = _meta(driver, task, condition, k, passed, score, os, model)
+    broken = criteria or ([] if user else ["key_focus"])
+    meta["grade"] = {"task": {"result": score == 1.0, "score": score},
+                     "gui_only": {"result": gui, "violations": [] if gui else ["mcp__desktop-s04__launch_app:arguments"]},
+                     "user_undisturbed": {"result": user, "criteria": {c: c not in broken for c in ("key_focus",
+                                                                                                    "window_raised")}}
+                     if condition == "background" else None}
+    meta.update(ending=ending, duration=100.0)
+    calls = [{"t0": 10.0 + i, "tool": "launch_app" if not gui else "click", "err": e} for i, e in enumerate(errors)]
+    events = [{"t": first_disturbance, "c": "key_focus"}] if first_disturbance is not None else []
+    return {"meta": meta, "web": {"calls": calls, "armed": [2.0, 90.0], "duration": 100.0,
+                                  "user": {"events": events} if condition == "background" else None}}
+
+
+REFUSAL = "Background delivery is not available: the requested target has no focus-free input backend"
+LINUX_DIALOG = {**CONFIG, "caveats": [{"os": "linux", "condition": "background", "tasks": ["ir-01"], "mark": "‡",
+                                        "short": "Not passable on Linux", "passable": False}]}
+
+
+def test_a_failed_trial_counts_under_the_gravest_way_it_failed(space):
+    failures = space("failures")
+    loaded = [
+        _trial("ir-02", "background", 1, passed=True, score=1.0),
+        _trial("cdb-g04", "background", 1, gui=False, user=False, ending="Replied BLOCKED: no log", errors=[REFUSAL]),
+        _trial("ir-01", "background", 1, score=1.0, user=False),
+        _trial("ir-02", "background", 2, score=1.0, user=False, ending="Hit the 45-turn limit"),
+        _trial("mb-09", "background", 1, ending="Replied BLOCKED: no drag", errors=[REFUSAL]),
+        _trial("mb-09", "background", 2, ending="Replied BLOCKED: no screenshot"),
+        _trial("mb-09", "foreground", 1, ending="Replied BLOCKED: no screenshot", errors=[REFUSAL]),
+        _trial("cdb-g02", "foreground", 1, score=0.6, ending="Hit the 45-turn limit"),
+        _trial("cdb-g03", "foreground", 1, score=0.4, ending="Ran out of time"),
+        _trial("ir-04", "foreground", 1, score=0.5),
+    ]
+    cat = _catalog(space, [t["meta"] for t in loaded], LINUX_DIALOG)
+
+    got = failures.build(loaded, cat)
+
+    assert [got["by_trial"][t["meta"]["uid"]] for t in loaded] == [
+        "pass", "left_gui", "dialog", "disturbed", "no_background", "blocked", "blocked", "out_of_turns",
+        "out_of_turns", "wrong"]
+    assert [m["id"] for m in got["modes"]] == ["pass", "wrong", "out_of_turns", "blocked", "no_background", "dialog",
+                                               "disturbed", "left_gui"]
+
+
+def test_a_modes_examples_are_sonnets_first_then_those_that_show_it_soonest_across_setups(space):
+    failures = space("failures")
+    loaded = [_trial("ir-01", "background", 1, score=1.0, user=False, first_disturbance=60.0, os="macos"),
+              _trial("ir-02", "background", 1, score=1.0, user=False, first_disturbance=5.0, os="macos", model=HAIKU),
+              _trial("ir-02", "background", 2, score=1.0, user=False, first_disturbance=30.0, os="macos"),
+              _trial("ir-02", "background", 3, score=1.0, user=False, first_disturbance=8.0, os="macos",
+                     driver="agent-desktop"),
+              _trial("ir-01", "background", 2, score=1.0, user=False, first_disturbance=4.0, os="macos")]
+    cat = _catalog(space, [t["meta"] for t in loaded])
+
+    [first, second, third] = failures.build(loaded, cat)["examples"]["disturbed"]
+
+    uid = lambda t: t["meta"]["uid"]
+    assert (first, second, third) == (uid(loaded[4]), uid(loaded[3]), uid(loaded[2]))
+    assert failures.shown_at(loaded[4], "disturbed") == 2.0
+
+
+def test_the_failure_figures_stack_each_setups_outcomes_and_grid_the_criteria_its_background_broke(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    failures, figures = space("failures"), space("figures")
+    loaded = [_trial("ir-02", "foreground", 1, passed=True, score=1.0, os="macos"),
+              _trial("ir-02", "background", 1, passed=True, score=1.0, os="macos"),
+              _trial("ir-01", "background", 1, score=1.0, user=False, criteria=["key_focus", "window_raised"],
+                     os="macos"),
+              _trial("ir-01", "background", 2, score=1.0, user=False, os="macos", driver="agent-desktop"),
+              _trial("ir-02", "foreground", 1, score=0.5, os="macos", driver="agent-desktop",
+                     ending="Hit the 45-turn limit")]
+    cat = _catalog(space, [t["meta"] for t in loaded],
+                   {**CONFIG, "criteria": {"key_focus": ["Focus", "keeps keyboard focus", "lost keyboard focus"],
+                                           "window_raised": ["On top", "stays on top", "a window was raised"]}})
+    cat["failures"] = failures.build(loaded, cat)
+
+    specs = figures.failure_specs(cat)
+    bars, grid = specs["failure-modes"], specs["disturbances"]
+
+    assert [m["id"] for m in bars["modes"]] == ["pass", "out_of_turns", "disturbed"]
+    assert [(g["label"], [r["label"] for r in g["rows"]]) for g in bars["panels"]] == [
+        ("macOS · cua-driver", ["Claude Sonnet 5.5"]), ("macOS · agent-desktop", ["Claude Sonnet 5.5"])]
+    assert bars["panels"][0]["rows"][0]["bars"]["background"] == [("pass", 1), ("out_of_turns", 0), ("disturbed", 1)]
+    assert [c["id"] for c in grid["columns"]] == ["any", "key_focus", "window_raised"]
+    assert [r["cells"] for g in grid["panels"] for r in g["rows"]] == [[0.5, 0.5, 0.5], [1.0, 1.0, 0.0]]
+    assert figures.write_all(cat, [])["failure_figures"] == ["failure-modes", "disturbances"]
+    svg = figures.bars(bars, "dark", True)
+    assert "Disturbed the user" in svg and figures.tone("dark", 3, 1) in svg
+    assert "| macOS | cua-driver | Claude Sonnet 5.5 | 1 · 1 | 0 · 0 | 0 · 1 | 1 · 2 |" in failures.markdown(cat)
