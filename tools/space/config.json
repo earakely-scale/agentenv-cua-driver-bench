@@ -89,7 +89,8 @@
       "slot": 6
     },
     "macos-harness": {
-      "name": "macos-harness",
+      "name": "browser-use (macos-harness)",
+      "label": "browser-use",
       "detail": "browser-use's macOS harness 0.2.1, its 11 commands through one tool that runs a list of them, as its skill chains them; the agent reads its skill through the tool, since Claude Code cuts a server's instructions at 4,096 characters",
       "slot": 3
     }

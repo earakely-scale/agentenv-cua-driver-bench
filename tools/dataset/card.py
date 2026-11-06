@@ -43,7 +43,8 @@ def main():
     text = (HERE / "card" / "README.md").read_text()
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
-    text = text.replace("{{RESULTS}}", _results(out, trials, missing, {m["id"]: m["name"] for m in catalog["models"]}))
+    text = text.replace("{{RESULTS}}", _results(out, trials, missing, {m["id"]: m["name"] for m in catalog["models"]},
+                                                 {d["id"]: d["name"] for d in catalog["drivers"]}))
     drivers = _drivers(out, catalog)
     text = text.replace("{{DRIVERS}}\n\n", f"{drivers}\n\n" if drivers else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
@@ -72,7 +73,7 @@ def _hero(catalog, trials):
             f"with every other trial.</sub>")
 
 
-def _results(out, trials, missing, names):
+def _results(out, trials, missing, names, drivers):
     figures = "\n\n".join(_picture(name, alt) for name, alt in FIGURES.items())
     runs = trials.groupby(["run", "model", "driver"], sort=False).agg(
         trials=("trial_id", "count"), passed=("passed", "sum"), task_score=("task_score", "mean"),
@@ -80,11 +81,12 @@ def _results(out, trials, missing, names):
     runs["cost"] = runs.run.map(trials.groupby("run").cost_usd.sum())
     lost = missing.groupby("run").size()
     run_rows = "\n".join(
-        f"| `{r.run}` | {names.get(r.model, r.model)} | {r.driver} | Claude Code {r.harness} | {r.trials} | "
-        f"{_lost(lost.get(r.run, 0))} | {int(r.passed)} | {r.task_score:.2f} | ${r.cost:.2f} |" for r in runs.itertuples())
+        f"| `{r.run}` | {names.get(r.model, r.model)} | {drivers.get(r.driver, r.driver)} | Claude Code {r.harness} | "
+        f"{r.trials} | {_lost(lost.get(r.run, 0))} | {int(r.passed)} | {r.task_score:.2f} | ${r.cost:.2f} |"
+        for r in runs.itertuples())
     per_trial = "\n".join(
-        f"| {t.trial_id} | {t.os} | {t.model.rsplit('/', 1)[-1]} | {t.driver} | {t.task_score:.2f} | "
-        f"{_mark(t.gui_only)} | {_mark(t.user_undisturbed)} | {_mark(t.passed)} | "
+        f"| {t.trial_id} | {t.os} | {t.model.rsplit('/', 1)[-1]} | {drivers.get(t.driver, t.driver)} | "
+        f"{t.task_score:.2f} | {_mark(t.gui_only)} | {_mark(t.user_undisturbed)} | {_mark(t.passed)} | "
         f"{int(t.tool_calls)} | "
         f"{'' if pd.isna(t.cost_usd) else f'${t.cost_usd:.2f}'} |" for t in trials.itertuples())
     return f"""{figures}

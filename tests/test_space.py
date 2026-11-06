@@ -170,7 +170,8 @@ def test_the_results_figures_are_of_cua_drivers_rows_and_a_drivers_figure_has_a_
              + _cells("agent-desktop", [("ir-01", "foreground", [(False, 0.6)]), ("ir-01", "background", [(True, 1.0)])])
              + _cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)]), ("ir-01", "background", [(True, 1.0)])],
                       model=HAIKU))
-    cat = _catalog(space, metas)
+    labelled = {**CONFIG["drivers"]["agent-desktop"], "name": "Vercel Labs (agent-desktop)", "label": "agent-desktop"}
+    cat = _catalog(space, metas, {**CONFIG, "drivers": {**CONFIG["drivers"], "agent-desktop": labelled}})
 
     results = figures.specs(cat)
     drivers = figures.driver_specs(cat)
@@ -185,6 +186,7 @@ def test_the_results_figures_are_of_cua_drivers_rows_and_a_drivers_figure_has_a_
         ("cua-driver", 2, [1.0, 0.0]), ("agent-desktop", 6, [0.0, 1.0])]
     svg = figures.figure(drivers["drivers-full-pass"], "dark", True)
     assert "agent-desktop" in svg and figures.SERIES["dark"][6] in svg
+    assert "Vercel Labs (agent-desktop)" in space("catalog").drivers_md(cat)
 
 
 def test_a_span_of_tasks_names_each_task_and_three_or_more_in_a_row_as_a_range(space):

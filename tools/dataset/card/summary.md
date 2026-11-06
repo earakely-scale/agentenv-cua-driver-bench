@@ -10,11 +10,11 @@ passes 39 of 50, 35 of 50 and 32 of 50 trials in the foreground, and 23 of 40, 8
   G03 trials, five of the others ending on the 45-turn limit.
 - **agent-desktop (Vercel Labs): Sonnet 35 of 50 and 8 of 40, Haiku 32 of 35 and 10 of 25.** With Sonnet it passes
   every BenchLab trial in the foreground and none of the 15 multi-app ones, running out of its 45 turns in all of
-  them: it makes about 75 tool calls a trial, against cua-driver's 52 and macos-harness's 43, and loses turns to
+  them: it makes about 75 tool calls a trial, against cua-driver's 52 and browser-use's 43, and loses turns to
   element references that go stale after each change and to its own checks, which refuse clicks they judge covered
   and report values the Electron apps didn't take. In the background it disturbs the user in 19 of Sonnet's 40
   trials, mostly taking their keyboard or raising a window over theirs.
-- **macos-harness (browser-use): Sonnet 32 of 50 and 1 of 40, Haiku 21 of 35 and 1 of 25.** It is the only
+- **browser-use (macos-harness): Sonnet 32 of 50 and 1 of 40, Haiku 21 of 35 and 1 of 25.** It is the only
   driver to pass G04 every time in the foreground (5 of 5, chaining a few commands in each call), but it has
   no hover, so MB-10 and MB-11 fail. In the background it does the task in 32 of Sonnet's 40 trials and still
   disturbs the user in 39 of them: its set_value, click, drag and key commands bring the app forward over the

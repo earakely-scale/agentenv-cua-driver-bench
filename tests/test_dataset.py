@@ -166,15 +166,15 @@ def test_a_board_row_and_a_card_run_with_a_missing_trial_are_labelled_incomplete
              "gui_only": True, "user_undisturbed": True, "tool_calls": 9}
     runs = card._results(tmp_path, tables.pd.DataFrame([trial, {
         **trial, "trial_id": "ir-02-r3-background", "passed": False, "task_score": 0.0,
-        "cost_usd": 0.25}]), tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M"})
+        "cost_usd": 0.25}]), tables.pd.DataFrame([tables.missing_row(folder)]), {"m": "M"}, {"cua-driver": "CD"})
 
     assert missing == [{"os": "macos", "driver": "cua-driver", "run": "m-run", "name": folder.name, "task": "ir-02",
                         "condition": "background"}]
     assert {row["model"]: row["missing"] for row in rows} == {"m": 1, "n": 0}
     assert "| m (incomplete: 1 missing) | cua-driver | background |" in table and "isn't ranked" in table
-    assert "| `m-run` | M | cua-driver | Claude Code 2.1 | 2 | **1, incomplete** | 1 | 0.50 | $0.75 |" in runs
-    assert "| ir-02-r1-background | macos | m | cua-driver | 1.00 |" in runs
-    assert "| ir-02-r3-background | macos | m | cua-driver | 0.00 | ✓ | ✓ | ✗ | 9 | $0.25 |" in runs
+    assert "| `m-run` | M | CD | Claude Code 2.1 | 2 | **1, incomplete** | 1 | 0.50 | $0.75 |" in runs
+    assert "| ir-02-r1-background | macos | m | CD | 1.00 |" in runs
+    assert "| ir-02-r3-background | macos | m | CD | 0.00 | ✓ | ✓ | ✗ | 9 | $0.25 |" in runs
 
 
 def test_the_cards_drivers_section_holds_the_drivers_figures_and_table_and_is_left_out_without_them(tables, tmp_path):

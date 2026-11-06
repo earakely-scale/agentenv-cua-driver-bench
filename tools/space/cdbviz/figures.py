@@ -437,7 +437,8 @@ def driver_specs(cat):
             panels.append({"label": f"{names[c['model']]} on {osn[c['os']]}",
                            "note": f"{len(c['tasks'])} task{'s' if len(c['tasks']) != 1 else ''} · "
                                    f"{catalog.ranges([short[t] for t in c['tasks']])}",
-                           "series": [{"name": drivers[d["id"]]["name"], "slot": drivers[d["id"]]["slot"],
+                           "series": [{"name": drivers[d["id"]].get("label") or drivers[d["id"]]["name"],
+                                       "slot": drivers[d["id"]]["slot"],
                                        "values": [d[k["id"]][metric] for k in conds]} for d in c["drivers"]]})
         if key == "drivers-task-score":
             sub = ("The same OS, model and tasks; only the computer-use driver changes. trycua's evaluator (weighted "
