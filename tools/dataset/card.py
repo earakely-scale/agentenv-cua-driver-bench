@@ -71,6 +71,8 @@ def main():
     text = text.replace("{{DRIVERS}}\n\n", f"{drivers}\n\n" if drivers else "")
     failures = _failures(out, catalog)
     text = text.replace("{{FAILURES}}\n\n", f"{failures}\n\n" if failures else "")
+    gallery = _gallery(catalog)
+    text = text.replace("{{GALLERY}}\n\n", f"{gallery}\n\n" if gallery else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
     (dataset / "README.md").write_text(text)
 
@@ -282,6 +284,29 @@ The board three ways: every task's passes model by model, what a pass costs, and
 system does.
 
 {figures}"""
+
+
+def _gallery(catalog):
+    """The card's failure gallery: each clip with what goes wrong in it, its setup, what happens and its replay;
+    nothing without clips."""
+    trials = {t["uid"]: t for t in catalog["trials"]}
+    oses = {o["id"]: o["name"] for o in catalog["oses"]}
+    drivers = {d["id"]: d.get("label") or d["name"] for d in catalog["drivers"]}
+    tasks = {t["id"]: t for t in catalog["tasks"]}
+    rows = []
+    for g in catalog.get("gallery") or []:
+        t = trials[g["uid"]]
+        task = tasks.get(t["task"]) or {}
+        link = _link(pd.Series(t))
+        setup = (f"{oses[t['os']]} · {drivers[t['driver']]} · {t['model_name']} · {task.get('probe', t['task'])} "
+                 f"{task.get('title', '')}, {t['condition']}")
+        alt = f"{g['title']}: {setup}; the recording from just before the moment, ending on the trial's grade"
+        rows.append(f"[![{alt}](assets/{g['gif']})]({link})\n\n<sub>**{g['title']}.** {setup}. {g['caption']} "
+                    f"**▶ [Replay it]({link})**</sub>")
+    if not rows:
+        return ""
+    return ("### What failing looks like\n\nRecorded trials at the moment they go wrong, in real time or sped up, each "
+            "ending on its grade, and one clean pass for contrast.\n\n" + "\n\n".join(rows))
 
 
 def _lost(count):

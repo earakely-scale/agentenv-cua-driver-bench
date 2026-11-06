@@ -77,6 +77,8 @@ Linux and Windows, and results from the two runners aren't like-for-like.
 
 {{FAILURES}}
 
+{{GALLERY}}
+
 ## Quick start
 
 Load the tables:

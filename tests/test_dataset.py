@@ -1,7 +1,7 @@
 """The dataset's exporter, tables and card, offline: a trial's cost at list price from the tokens its trajectory reports
 (a flat price from the totals, a tiered one call by call, the calls' own counts when the run was cut off before Claude
 Code's result), its timeline on the recording's clock, the rows the tables take from a trial folder and a task file,
-and the card's runs with their drivers, its drivers section, its failure section and its hero's link."""
+and the card's runs with their drivers, its drivers section, its failure section and gallery and its hero's link."""
 import importlib.util
 import json
 from datetime import datetime, timezone
@@ -309,3 +309,24 @@ def test_the_cards_comparison_section_holds_each_figure_with_its_notes_and_is_le
     assert section.startswith("## How models, operating systems and drivers compare")
     assert "assets/figures/pareto-dark.svg" in section and card.COMPARE_FIGURES["pareto"] in section
     assert section.endswith("A passes 52% at \\$0.56 a trial. B costs \\$0.07.")
+
+
+def test_the_cards_gallery_holds_each_clip_with_its_failure_setup_caption_and_replay(tables):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+    trial = {"uid": "macos--a-run--ir-02-r2-background", "os": "macos", "driver": "agent-desktop", "task": "ir-02",
+             "condition": "background", "model": "anthropic/claude-sonnet-5-5", "model_name": "Claude Sonnet 5.5",
+             "run_index": 2}
+    catalog = {"trials": [trial], "oses": [{"id": "macos", "name": "macOS"}],
+               "drivers": [{"id": "agent-desktop", "name": "agent-desktop"}],
+               "tasks": [{"id": "ir-02", "probe": "IR-02", "title": "Apply"}],
+               "gallery": [{"uid": trial["uid"], "gif": "gallery-focus.gif", "title": "Takes the user's keyboard focus",
+                            "caption": "BenchLab's menu takes the keyboard."}]}
+
+    section = card._gallery(catalog)
+
+    assert section.startswith("### What failing looks like")
+    assert "(assets/gallery-focus.gif)](https://huggingface.co/spaces/" in section
+    assert ("**Takes the user's keyboard focus.** macOS · agent-desktop · Claude Sonnet 5.5 · IR-02 Apply, background. "
+            "BenchLab's menu takes the keyboard.") in section
+    assert "#/agent-desktop/macos/ir-02/background/anthropic%2Fclaude-sonnet-5-5/r2)" in section
+    assert card._gallery({**catalog, "gallery": []}) == ""
