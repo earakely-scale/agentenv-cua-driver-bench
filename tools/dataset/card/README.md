@@ -112,6 +112,7 @@ The board's Linux rows run each trial with cua-driver's own tools alone, `--set 
 GPT-6 runs in Codex through the `codex-` task files, each its Linux twin with AgentEnv's `codex` agent:
 
 ```bash
+pip install 'agentenv-framework>=0.9.1454'
 agent-env run . --task codex-cdb-g02-background --model openai/gpt-6.1-sol --set envs/desktop-s02.tools=driver
 ```
 

@@ -1274,7 +1274,7 @@ function createPlayer(root, trial, tl) {
             c.err ? h("div", { class: "e" }, c.err) : null,
             h("code", {}, c.tool)));
       } else if (it.kind === "say") {
-        el = h("li", { class: "saying" }, h("span", { class: "t" }, fmt(it.t)), h("q", {}, it.s.text));
+        el = h("li", { class: "saying" }, h("span", { class: "t" }, fmt(it.t)), h("q", { "data-who": trial.model_name || "Agent" }, it.s.text));
       } else if (it.kind === "user") {
         const m = it.m;
         el = h("li", { class: "ev user-ev bad" }, h("span", { class: "t" }, fmt(m.t)),

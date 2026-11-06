@@ -485,3 +485,10 @@ def test_a_share_rounds_half_up_as_the_space_does_and_a_label_column_stays_above
     assert space("catalog").pct(0.125) == figures.pct(0.125) == "13%"
     assert [it["y"] for it in figures.spread([{"y": 100}, {"y": 100}, {"y": 100}], 20, floor=105)] == [65, 85, 105]
     assert [it["y"] for it in figures.spread([{"y": 10}, {"y": 50}], 20, floor=105)] == [10, 50]
+
+
+def test_a_run_steps_step_reads_the_same_written_either_way(space):
+    trials = space("trials")
+
+    assert trials.step_parts({"tool": "click", "args": {"element_token": "s1:4"}}) == ("click", {"element_token": "s1:4"})
+    assert trials.step_parts({"click": {"element_token": "s1:4"}}) == ("click", {"element_token": "s1:4"})

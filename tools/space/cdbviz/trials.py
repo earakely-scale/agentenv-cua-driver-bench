@@ -324,6 +324,14 @@ def kind_of(tool, inp=None):
     return "act"
 
 
+def step_parts(st):
+    """A run_steps step as its tool and arguments, written ``{"tool": ..., "args": ...}`` or as ``{tool: args}``."""
+    if "tool" in st:
+        return str(st["tool"]), st.get("args") if isinstance(st.get("args"), dict) else {}
+    name, args = next(iter(st.items()), ("?", {}))
+    return str(name), args if isinstance(args, dict) else {}
+
+
 def arm_steps(tool, inp):
     """Another driver's call as the steps it takes, each a name and its arguments: an agent-desktop tool less its
     ``desktop_`` prefix, or its batch's commands, and the command lines macos-harness's one tool runs; None for
@@ -520,10 +528,10 @@ def describe(call, res, desk):
     elif tool == "invoke_menu":
         verb, obj = "Menu", " › ".join(str(p) for p in inp.get("path") or [])
     elif tool == "run_steps":
-        steps = [st for st in inp.get("steps") or [] if isinstance(st, dict)]
+        steps = [step_parts(st) for st in inp.get("steps") or [] if isinstance(st, dict)]
         base = {k: inp[k] for k in ("pid", "window_id") if k in inp}
-        inner = [describe({"tool": str(st.get("tool") or "?"), "input": {**base, **(st.get("args") or {})},
-                           "error": call.get("error")}, res, desk) for st in steps[:3]]
+        inner = [describe({"tool": name, "input": {**base, **args}, "error": call.get("error")}, res, desk)
+                 for name, args in steps[:3]]
         if len(steps) == 1 and inner:
             d = inner[0]
             verb, obj, pt = d["verb"], d["obj"], d["pt"]
@@ -534,7 +542,7 @@ def describe(call, res, desk):
                 obj += f" → +{len(steps) - 2} more"
             pt = next((d["pt"] for d in inner if d["pt"]), None)
         if win is None:
-            first = next((st.get("args") for st in steps if isinstance(st.get("args"), dict)), {}) or {}
+            first = next((args for _, args in steps if args), {})
             wid, win = desk.window(first.get("window_id"), first.get("pid"))
             if win is None:
                 tok = first.get("element_token")

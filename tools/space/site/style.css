@@ -503,7 +503,7 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
 .saying { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 0 8px; padding: 6px 14px 8px 13px; cursor: pointer; }
 .saying .t { font-family: var(--mono); font-size: 11px; color: var(--ink-4); padding-top: 3px; text-align: right; }
 .saying q { font-size: 13.5px; line-height: 1.42; color: var(--ink); quotes: "“" "”"; font-style: italic; border-left: 2px solid var(--line-2); padding-left: 10px; display: block; }
-.saying q::before { content: "Claude: "; font-style: normal; font-weight: 700; color: var(--agent-ink); font-size: 12px; }
+.saying q::before { content: attr(data-who) ": "; font-style: normal; font-weight: 700; color: var(--agent-ink); font-size: 12px; }
 .saying.future { opacity: .42; }
 .saying.cur q { border-left-color: var(--agent); }
 .ev { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 0 8px; padding: 5px 14px 6px 13px; }

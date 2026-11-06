@@ -50,6 +50,8 @@ default = "anthropic/claude-sonnet-5-5"
 EOF
 agent-env run hf://{{REPO}} --task cdb-g02-background   # one trial
 agent-env run hf://{{REPO}} --eval bench-v2             # every task of Bench v2 once
+# GPT-6 in OpenAI's Codex CLI (agentenv-framework 0.9.1454 or later), on cua-driver's own tools as the board ran it
+agent-env run hf://{{REPO}} --task codex-cdb-g02-background --model openai/gpt-6.1-sol --set envs/desktop-s02.tools=driver
 ```
 
 On an Apple silicon Mac, the same tasks run on macOS 26, in a logged-in session with
