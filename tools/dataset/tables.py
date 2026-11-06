@@ -1,7 +1,8 @@
 """tables.py BENCH DATASET: the dataset's tables from its runs/ folders and the bench's committed trial tasks.
 
 tasks/tasks.parquet (one row per trial task), results/trials.parquet (one row per graded trial, with the harness errors
-it was re-run for), results/calls.parquet (one row per tool call), and results/missing.parquet (one row per trial
+it was re-run for), results/calls.parquet (one row per tool call, keyed by os, run and trial_id as trials are), and
+results/missing.parquet (one row per trial
 whose re-runs were spent, so the run it belongs to is incomplete)."""
 import json
 import re
@@ -126,7 +127,7 @@ def trial_row(dataset, folder, titles, off):
         "sentinel_log": f"{rel}/sentinel.jsonl",
         "workspace": f"{rel}/workspace",
     }
-    calls = [{"trial_id": facts["trial_id"], "i": c["i"], "turn": c["turn"], "t0": c["t0"], "t1": c["t1"],
+    calls = [{"os": facts["os"], "run": folder.parent.name, "trial_id": facts["trial_id"], "i": c["i"], "turn": c["turn"], "t0": c["t0"], "t1": c["t1"],
               "tool": c["tool"], "server": c["server"], "input": json.dumps(c["input"]), "error": c["error"],
               "result": c["result"], "image": c["image"]} for c in timeline["calls"]]
     return row, calls

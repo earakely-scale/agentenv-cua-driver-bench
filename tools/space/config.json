@@ -498,7 +498,7 @@
       ],
       "mark": "¶",
       "short": "Not scored",
-      "reason": "Agreed with trycua, whose task list at the pinned commit still runs both conditions: every hover BenchLab saw in these runs moved the user's pointer, and on macOS a tooltip shows only for the app in front, so in the background no driver here can pass them. Their background trials stay in the dataset with their grades, outside every total, and new runs leave them out.",
+      "reason": "Agreed with trycua, whose task list at the pinned commit still runs both conditions: every hover BenchLab saw in these runs moved the user's pointer, so in the background no driver here can pass them. Their background trials stay in the dataset with their grades, outside every total, and new runs leave them out.",
       "unscored": true
     }
   ]

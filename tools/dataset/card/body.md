@@ -41,9 +41,10 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    with cua-driver, the task's apps as trycua's macOS descriptors run them, and trycua's own BenchSentinel. The
    drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`) are those
    with Vercel Labs' agent-desktop or browser-use's macOS harness in cua-driver's place, and nothing else changed.
-2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver as its
-   only MCP server, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns and
-   360 seconds.
+2. Deploy the agent: Claude Code with its built-in tools limited to `Skill` and `Read`, the computer's driver's MCP
+   server (on Linux with AgentEnv's `computer_*` tools beside cua-driver's own) and AgentEnv's `peer_agents` server,
+   which no task uses, trycua's system prompt (for "a Linux desktop" on Linux, as written on macOS), at most 45 turns
+   and 360 seconds.
 3. Start recording the screen (10 fps), arm the sentinel, prompt the agent, disarm the sentinel.
 4. Snapshot the computer's app data and grade it in a separate container with no network.
 
@@ -82,13 +83,21 @@ The A22 criteria:
 
 ```
 results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, whether it's scored, cost, turns, paths
-results/calls.parquet        one row per tool call: when it was issued and answered on the recording's clock, its input, its result
+results/calls.parquet        one row per tool call, keyed by os, run and trial_id as trials.parquet is: when it was issued and answered on the recording's clock, its input, its result
+results/missing.parquet      one row per trial whose re-runs were spent, so its run is incomplete
 tasks/tasks.parquet          one row per trial task: the prompt, the system prompt, the built-in tools, limits, the task file
+runs/<os>/<run>/
+  manifest.json              the run's task pack, bench and framework commits, model, harness, agents, built-in tools and computers (macOS runs)
 runs/<os>/<run>/<trial>/
   recording.mp4              the screen, 1920x1080 at 10 fps, from just before the agent starts until it stops
+  web.mp4                    the Space's smaller copy of the recording
+  manifest.json              the recording's source, timing and segments
   timeline.json              the tool calls, the model's text and the user's log on the recording's clock
   trajectory.json            Claude Code's stream-json, as recorded (screenshots included)
   sentinel.jsonl             the user's window's log, in trycua's format
+  sentinel.stderr            the sentinel's own error output (macOS)
+  condition                  the condition the sentinel was launched in, which its log's start line doesn't carry (macOS)
+  attempts.json              the harness errors the trial was re-run for (macOS)
   grade.json                 both verifications as AgentEnv stored them
   trial.json                 the trial's facts
   workspace/                 the task app's files at the end of the trial
@@ -125,8 +134,7 @@ runs/<os>/<run>/<trial>/
   brief names an "Actions" strip that their Linux BenchLab labels "Hover here to reveal actions".
 - MB-10's and MB-11's background trials are kept with their grades but not scored, and new runs leave them out, as
   agreed with trycua, whose task list at the pinned commit still runs both conditions: every hover BenchLab saw in
-  these runs moved the user's pointer, and on macOS a tooltip shows only for the app in front, so in the background
-  no driver here can pass them.
+  these runs moved the user's pointer, so in the background no driver here can pass them.
   MB-09 is scored in both conditions, though in the background its drag keeps the user undisturbed only through a
   driver that drags without moving the user's pointer.
 - Claude Code's `num_turns` counts tool round trips, across a context compaction too, so it passes 45 when the model
