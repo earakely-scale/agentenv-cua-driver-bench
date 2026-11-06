@@ -8,6 +8,7 @@ import shutil
 import sys
 import urllib.parse
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -26,6 +27,12 @@ DRIVER_FIGURES = {
                           "per OS and model, one line per computer-use driver",
     "drivers-full-pass": "Line chart of the share of trials that pass every half of the grade in the foreground and "
                          "the background condition, a panel per OS and model, one line per computer-use driver",
+}
+FAILURE_FIGURES = {
+    "failure-modes": "Stacked bars of how every trial ended, a pass or the gravest way it failed, a bar per OS, driver "
+                     "and model in the foreground and the background condition",
+    "disturbances": "Heat grid of the share of each setup's background trials that broke each of trycua's eight A22 "
+                    "criteria for an undisturbed user",
 }
 DRIVER = "cua-driver"
 HARNESSES = {"claude-code": "Claude Code", "codex-cli": "Codex CLI"}
@@ -52,6 +59,8 @@ def main():
                                                  {d["id"]: d["name"] for d in catalog["drivers"]}))
     drivers = _drivers(out, catalog)
     text = text.replace("{{DRIVERS}}\n\n", f"{drivers}\n\n" if drivers else "")
+    failures = _failures(out, catalog)
+    text = text.replace("{{FAILURES}}\n\n", f"{failures}\n\n" if failures else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
     (dataset / "README.md").write_text(text)
 
@@ -207,6 +216,45 @@ in the Space, whose cua-driver rows are its runs on its own tools alone (`cua-dr
 {figures}
 
 {table}"""
+
+
+def _failures(out, catalog):
+    """The card's failure section: the failure figures, the findings and table build.py wrote, and what each outcome
+    means with replays of trials that show it soonest; nothing before the catalog has them."""
+    path = out / "failures.md"
+    found = path.read_text().strip() if path.exists() else ""
+    if not found or not catalog.get("failures"):
+        return ""
+    pictures = {name: _picture(name, FAILURE_FIGURES[name]) for name in catalog.get("failure_figures") or []}
+    findings, _, table = found.partition("\n\n")
+    trials = {t["uid"]: t for t in catalog["trials"]}
+    oses = {o["id"]: o["name"] for o in catalog["oses"]}
+    drivers = {d["id"]: d.get("label") or d["name"] for d in catalog["drivers"]}
+    watch = lambda t: f"[{t['probe'].replace('CDB-', '')} on {oses[t['os']]} · {drivers[t['driver']]}]" \
+                      f"({_link(SimpleNamespace(**t))})"
+    modes = "\n".join(f"- **{m['name']}**: {m['description']}" + (
+        " Watch " + ", ".join(watch(trials[uid]) for uid in catalog["failures"]["examples"][m["id"]]) + "."
+        if m["id"] in catalog["failures"]["examples"] else "") for m in catalog["failures"]["modes"])
+    return f"""## Where trials fail
+
+Every trial on the board counts once: as a pass, or under the gravest way it failed. The bench's two rules come first,
+since breaking either fails a trial whatever it left behind: leaving the GUI, then disturbing the user. A trial that kept
+both counts under how its run ended: the agent stopped and said it was blocked, it ran out of turns, or it finished with
+the task wrong.
+
+{pictures.get("failure-modes", "")}
+
+{findings}
+
+{pictures.get("disturbances", "")}
+
+{modes}
+
+<details><summary>Every setup's outcomes</summary>
+
+{table}
+
+</details>"""
 
 
 def _lost(count):

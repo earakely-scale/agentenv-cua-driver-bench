@@ -1,5 +1,5 @@
-"""build.py DATA_DIR OUT_DIR: the Space, the hero GIF and still, the results and drivers figures, and the card's
-results.md and drivers.md tables, from a folder of trials.
+"""build.py DATA_DIR OUT_DIR: the Space, the hero GIF and still, the results, drivers and failure figures, and the card's
+results.md and drivers.md tables and failures.md findings, from a folder of trials.
 
 DATA_DIR is the dataset's root (holding runs/<os>/<run>/<trial>/), runs/ itself, or any folder of trial folders.
 Each trial's web copy is written next to its recording as web.mp4; the Space streams it from config media_base, or
@@ -15,7 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from cdbviz import catalog, figures, hero, media, pair, reel, trials  # noqa: E402
+from cdbviz import catalog, failures, figures, hero, media, pair, reel, trials  # noqa: E402
 
 
 def pick_hero(metas, cfg):
@@ -148,6 +148,7 @@ def main():
               f"web.mp4 {entry.get('video_mb', '–')} MB{', Space copy' if keep_local else ''}")
     cat = catalog.build(metas, cfg, hero_uid, files, [m for m in trials.discover_missing(args.data)
                                                      if f"{m['os']}/{m['run']}" not in skip])
+    cat["failures"] = failures.build(loaded, cat)
     keep = {m["uid"] for m in metas}
     for stale in (data / "trials").iterdir():
         if stale.is_dir() and stale.name not in keep:
@@ -158,7 +159,9 @@ def main():
     (data / "catalog.json").write_text(json.dumps(cat, separators=(",", ":"), ensure_ascii=False))
     (args.out / "results.md").write_text(catalog.results_md(cat))
     (args.out / "drivers.md").write_text(catalog.drivers_md(cat))
-    print(f"figures: {4 * (len(cat['figures']) + len(cat['driver_figures']))} SVGs in {assets}")
+    (args.out / "failures.md").write_text(failures.markdown(cat))
+    print(f"figures: {4 * (len(cat['figures']) + len(cat['driver_figures']) + len(cat['failure_figures']))} SVGs in "
+          f"{assets}")
     if hero_uid and not args.no_gif:
         t = next(x for x in loaded if x["meta"]["uid"] == hero_uid)
         gif, still = hero.render(t, cat, cfg, assets)
