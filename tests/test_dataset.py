@@ -157,7 +157,7 @@ def test_a_board_row_and_a_card_run_with_a_missing_trial_are_labelled_incomplete
 
     missing = trials.discover_missing(tmp_path)
     rows = catalog.board([graded, {**graded, "model": "n", "run": "n-run", "uid": "u2"}], {}, missing)
-    table = catalog.results_md({"tasks": [{"id": "ir-02", "probe": "IR-02"}], "models": [], "board": rows,
+    table = catalog.results_md({"tasks": [{"id": "ir-02", "probe": "IR-02", "conditions": ["background"]}], "models": [], "board": rows,
                                 "oses": [{"id": "macos", "name": "macOS"}],
                                 "drivers": [{"id": "cua-driver", "name": "cua-driver"}]})
     (tmp_path / "results.md").write_text(table)

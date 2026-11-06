@@ -136,7 +136,8 @@ def test_a_task_the_config_runs_in_the_foreground_alone_counts_there_and_is_said
     assert (cua["foreground"]["n"], cua["background"]["n"], cua["background"]["score"]) == (2, 1, 0.5)
     assert "MB-10 runs in the foreground only." in catalog.results_md(cat)
     assert "(MB-10 runs in the foreground only)" in catalog.drivers_md(cat)
-    assert [t["conditions"] for t in cat["tasks"]] == [["foreground", "background"], ["foreground"]]
+    assert {t["id"]: t["conditions"] for t in cat["tasks"]} == {"ir-01": ["foreground", "background"],
+                                                                "mb-10": ["foreground"]}
     for package in ("fontTools", "PIL", "brotli"):
         pytest.importorskip(package)
     [panel] = space("figures").driver_specs(cat)["drivers-full-pass"]["panels"]
