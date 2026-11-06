@@ -210,6 +210,8 @@ a.sq:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
 .dnote { margin: 0 0 16px; color: var(--ink-3); font-size: 13px; }
 .dnote code, .cmp-foot code { font-family: var(--mono); font-size: 12px; }
 .drivers .figs { margin-bottom: 16px; }
+.models .figs, .failures .figs { grid-template-columns: minmax(0, 1fr); margin-bottom: 16px; }
+.models .fig img, .failures .fig img { max-width: 1000px; margin: 0 auto; }
 .compare { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .cmp-head { display: grid; gap: 10px; padding: 14px 16px; background: var(--surface-2); border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
 .cmp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }

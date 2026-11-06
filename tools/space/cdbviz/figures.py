@@ -39,7 +39,7 @@ def width(text, weight, size):
 
 
 def pct(v):
-    return f"{round(100 * v)}%"
+    return f"{floor(100 * v + 0.5)}%"
 
 
 class Svg:
@@ -87,7 +87,9 @@ def woff2(weight, chars):
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def spread(items, gap):
+def spread(items, gap, floor=float("inf")):
+    """``items`` moved apart to at least ``gap`` between neighbours, then the whole column raised so that none sits
+    below ``floor``."""
     items = sorted(items, key=lambda it: it["y"])
     for _ in range(50):
         moved = False
@@ -98,6 +100,9 @@ def spread(items, gap):
                 moved = True
         if not moved:
             break
+    over = items[-1]["y"] - floor if items else 0
+    for it in items if over > 0 else ():
+        it["y"] -= over
     return items
 
 
@@ -179,7 +184,7 @@ def panel(svg, x0, y0, pw, ph, series, conds, theme, s, label=None, note=None):
             ends.append({"y": y(sr["values"][last]) + s["name"] * 0.36, "dot": y(sr["values"][last]),
                          "x": xs[last], "name": sr["name"], "v": sr["values"][last]})
     if side:
-        side_labels(svg, s, labels[0], ends, val_w, halo)
+        side_labels(svg, s, labels[0], ends, val_w, halo, plot_bot)
         return
     taken = []
     for i, items in labels.items():
@@ -201,7 +206,7 @@ def panel(svg, x0, y0, pw, ph, series, conds, theme, s, label=None, note=None):
     if not any(clash(b, other) for k, (*_, b) in enumerate(notes) for other in taken + [n[-1] for n in notes[:k]]):
         for nx, ny, text, anchor, _ in notes:
             svg.text(nx, ny, text, s["sub"], 600, "ink3", anchor, halo, num=True)
-    for e in spread(ends, s["name"] + 6):
+    for e in spread(ends, s["name"] + 6, plot_bot + s["name"] * 0.36):
         lx = e["x"] + name_off
         if abs(e["y"] - s["name"] * 0.36 - e["dot"]) > 3:
             svg.add(f'<path d="M{e["x"] + s["dot"] + 3:.1f},{e["dot"]:.1f} L{lx - 4:.1f},{e["y"] - s["name"] * 0.36:.1f}" '
@@ -225,7 +230,7 @@ def gloss_lines(conds, xs, s):
     return lines
 
 
-def side_labels(svg, s, firsts, ends, val_w, halo):
+def side_labels(svg, s, firsts, ends, val_w, halo, floor=float("inf")):
     """The first condition's values in a column left of their points; the last's in a column right of theirs, each
     before its line's name. Both spread apart in order, and a leader goes to any point its label had to leave."""
     for it in spread([{**it, "dot": it["y"], "y": it["y"] + s["val"] * 0.36} for it in sides(firsts, 2, float("inf"))],
@@ -236,7 +241,7 @@ def side_labels(svg, s, firsts, ends, val_w, halo):
                     f'stroke="{svg.t["ink3"]}" stroke-width="1" fill="none"/>')
         svg.text(vx, it["y"], pct(it["v"]), s["val"], 700, "ink", "end", halo, num=True)
     size = max(s["val"], s["name"])
-    for e in spread([{**e, "y": e["dot"] + size * 0.36} for e in ends], size + 5):
+    for e in spread([{**e, "y": e["dot"] + size * 0.36} for e in ends], size + 5, floor):
         vx, text = e["x"] + s["dot"] + 8 + val_w, pct(e["v"])
         if abs(e["y"] - size * 0.36 - e["dot"]) > 3:
             svg.add(f'<path d="M{e["x"] + s["dot"] + 3:.1f},{e["dot"]:.1f} L{vx - width(text, 700, s["val"]) - 4:.1f},'

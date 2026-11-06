@@ -337,7 +337,7 @@ function driverCard(d, runs, tasks, depth) {
 
 function topFailure(runs) {
   const F = CAT.failures;
-  const failed = runs.filter((t) => F?.by_trial[t.uid]);
+  const failed = runs.filter((t) => F?.by_trial[t.uid] && F.by_trial[t.uid] !== "pass");
   if (!failed.length) return null;
   const tally = {};
   for (const t of failed) tally[F.by_trial[t.uid]] = (tally[F.by_trial[t.uid]] || 0) + 1;
@@ -345,7 +345,7 @@ function topFailure(runs) {
   const mode = F.modes.find((m) => m.id === id) || { name: id };
   const ex = (F.examples?.[id] || []).map((uid) => failed.find((t) => t.uid === uid)).find(Boolean) || failed.find((t) => F.by_trial[t.uid] === id);
   return h("p", { class: "xline" }, "Most common failure: ", h("b", { title: mode.description || null }, mode.name),
-    ` in ${n} of its ${runs.filter((t) => !t.passed).length} failed trials. `, h("a", { href: hashOf(ex) }, "Watch one"));
+    ` in ${n} of its ${failed.length} failed trials. `, h("a", { href: hashOf(ex) }, "Watch one"));
 }
 
 /** The landing replay's model, which the drivers cards and the OS facts follow when it ran there too, so the page
@@ -539,18 +539,19 @@ function failuresSection() {
   return h("section", { class: "failures", "aria-labelledby": "failures-h" },
     h("div", { class: "section-head", id: "failures", "data-nav": "Failures" }, h("h2", { id: "failures-h" }, "Where trials fail"),
       h("p", {}, "What broke in the trials that failed, and a clip of each kind.")),
-    figs.length ? h("div", { class: "solo" }, figures(figs, () => "Failed trials by what broke")) : null,
+    figs.length ? figures(figs, () => "How every trial ended: a pass, or the gravest way it failed, a bar per OS, driver and model in each condition") : null,
     gallery(F, clips));
 }
 
 function gallery(F, clips) {
-  const failed = F ? CAT.trials.map((t) => F.by_trial[t.uid]).filter(Boolean) : [];
-  const count = (id) => failed.filter((x) => x === id).length;
-  const modes = (F?.modes || []).filter((m) => count(m.id) || clips.some((g) => outcomeOf(g) === m.id)).sort((a, b) => count(b.id) - count(a.id));
+  const outcomes = F ? CAT.trials.map((t) => F.by_trial[t.uid]).filter(Boolean) : [];
+  const count = (id) => outcomes.filter((x) => x === id).length;
+  const modes = (F?.modes || []).filter((m) => count(m.id) || clips.some((g) => outcomeOf(g) === m.id))
+    .sort((a, b) => (a.id === "pass") - (b.id === "pass") || count(b.id) - count(a.id));
   const grid = h("div", { class: "fgrid" }, clips.map(clip));
   const desc = h("p", { class: "mdesc" });
   const chips = h("div", { class: "tabs modes", role: "group", "aria-label": "Failure modes" },
-    [null, ...modes].map((m) => h("button", { "aria-pressed": "false", onclick: () => pick(m) }, m ? m.name : "All", h("small", {}, m ? count(m.id) : failed.length))));
+    [null, ...modes].map((m) => h("button", { "aria-pressed": "false", onclick: () => pick(m) }, m ? m.name : "All", h("small", {}, m ? count(m.id) : clips.length))));
   const pick = (m) => {
     [null, ...modes].forEach((x, i) => chips.children[i].setAttribute("aria-pressed", String(x === m)));
     for (const el of grid.children) el.hidden = !!m && el.dataset.mode !== m.id;

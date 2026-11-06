@@ -476,3 +476,12 @@ def test_a_clips_callouts_name_each_new_kind_of_disturbance_the_modes_first_and_
     assert [(x["head"], x["text"]) for x in raised[2:]] == [("Page execute_javascript", "disabled by default"),
                                                            ("Launch app sh -c 'cp a b'", "no new window")]
     assert (door["head"], door["text"], door["mono"]) == ("launch_app, called with", "launch_path: sh -c 'cp a b'", True)
+
+
+def test_a_share_rounds_half_up_as_the_space_does_and_a_label_column_stays_above_its_floor(space):
+    pytest.importorskip("PIL")
+    figures = space("figures")
+
+    assert space("catalog").pct(0.125) == figures.pct(0.125) == "13%"
+    assert [it["y"] for it in figures.spread([{"y": 100}, {"y": 100}, {"y": 100}], 20, floor=105)] == [65, 85, 105]
+    assert [it["y"] for it in figures.spread([{"y": 10}, {"y": 50}], 20, floor=105)] == [10, 50]

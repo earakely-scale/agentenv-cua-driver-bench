@@ -1,3 +1,4 @@
+import math
 import re
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -155,7 +156,7 @@ def driver_entries(drivers, cfg):
 
 
 def pct(x):
-    return "–" if x is None else f"{round(100 * x)}%"
+    return "–" if x is None else f"{math.floor(100 * x + 0.5)}%"
 
 
 def ranges(probes):
