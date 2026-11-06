@@ -527,17 +527,24 @@ function costPlane(p, lo, hi, W, prev, measure) {
     const l2 = `${pct(q.share)} · ${usd(q.cost)}`;
     const w = Math.max(measure(l1, 650, 12.5), measure(l2, 500, 11.5)) + 2, ht = 29, R = 12;
     let best = null;
-    for (const [bx, by, anchor] of [[x + R, y - ht / 2, "start"], [x - R - w, y - ht / 2, "end"], [x - w / 2, y - R - ht, "middle"],
-      [x - w / 2, y + R, "middle"], [x + R * 0.7, y - R * 0.7 - ht, "start"], [x + R * 0.7, y + R * 0.7, "start"],
-      [x - R * 0.7 - w, y - R * 0.7 - ht, "end"], [x - R * 0.7 - w, y + R * 0.7, "end"]]) {
-      const r = [bx, by, bx + w, by + ht];
-      const cost = dots.reduce((s, b) => s + overlap(r, b) * 3, 0) + placed.reduce((s, b) => s + overlap(r, b.r) * 6, 0)
-        + (area(r) - overlap(r, bounds)) * 10;
-      if (!best || cost < best.cost) best = { cost, r, anchor };
+    for (const D of [R, R * 2.6]) {
+      for (let [bx, by, anchor] of [[x + D, y - ht / 2, "start"], [x - D - w, y - ht / 2, "end"], [x - w / 2, y - D - ht, "middle"],
+        [x - w / 2, y + D, "middle"], [x + D * 0.7, y - D * 0.7 - ht, "start"], [x + D * 0.7, y + D * 0.7, "start"],
+        [x - D * 0.7 - w, y - D * 0.7 - ht, "end"], [x - D * 0.7 - w, y + D * 0.7, "end"]]) {
+        if (anchor === "middle") bx = Math.min(Math.max(bx, bounds[0]), bounds[2] - w);
+        const r = [bx, by, bx + w, by + ht];
+        const cost = dots.reduce((s, b) => s + overlap(r, b) * 3, 0) + placed.reduce((s, b) => s + overlap(r, b.r) * 6, 0)
+          + (area(r) - overlap(r, bounds)) * 10 + (D > R ? 40 : 0);
+        if (!best || cost < best.cost) best = { cost, r, anchor, far: D > R };
+      }
     }
     if (placed.some((b) => overlap(best.r, b.r) > 0) || area(best.r) > overlap(best.r, bounds)) continue;
     placed.push(best);
     const tx = { start: best.r[0], end: best.r[2], middle: (best.r[0] + best.r[2]) / 2 }[best.anchor];
+    if (best.far) {
+      const ex = Math.min(Math.max(x, best.r[0]), best.r[2]), ey = Math.min(Math.max(y, best.r[1] + 2), best.r[3] - 2);
+      svg.append(sv("line", { class: "plead", "data-key": q.key, x1: fx(x), y1: fx(y), x2: fx(ex), y2: fx(ey) }));
+    }
     svg.append(sv("g", { class: `pl${q.frontier ? " on" : ""}`, "data-key": q.key, transform: `translate(${fx(tx)} ${fx(best.r[1])})` },
       sv("text", { y: 12, "text-anchor": best.anchor, class: "pl1" }, l1),
       sv("text", { y: 26, "text-anchor": best.anchor, class: "pl2" }, l2)));

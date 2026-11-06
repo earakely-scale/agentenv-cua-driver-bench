@@ -696,7 +696,8 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
 .pl1 { fill: var(--ink-2); font-size: 12.5px; font-weight: 650; }
 .pl.on .pl1 { fill: var(--ink); }
 .pl2 { fill: var(--ink-3); font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.pstage.dim .pt:not(.hl), .pstage.dim .pl:not(.hl) { opacity: .18; }
+.plead { stroke: var(--ink-4); stroke-width: 1; transition: opacity .15s; }
+.pstage.dim .pt:not(.hl), .pstage.dim .pl:not(.hl), .pstage.dim .plead:not(.hl) { opacity: .18; }
 @keyframes ppop { from { transform: scale(0); } }
 @keyframes pfade { from { opacity: 0; } }
 .pline { margin: 6px 2px 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.5; }
