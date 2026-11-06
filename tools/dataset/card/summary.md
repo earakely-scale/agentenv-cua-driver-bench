@@ -30,16 +30,16 @@ the board.
 
 **Six models on Linux, each through cua-driver on its own tools, every trial of Bench v2** (runs
 `cua-driver-*-2026-11-06`, Ubuntu 24.04 on EC2, `--set envs/<computer>.tools=driver`): Claude Haiku, Sonnet and Opus 5.5
-in Claude Code, and GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI, all at medium effort. Some GPT-6 trials are still arriving; a row is final at 90 trials.
+in Claude Code, and GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI, all at medium effort.
 
 | Model | Harness | Foreground | Background | Multi-app (fg) | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | Claude Sonnet 5.5 | Claude Code | 42 of 50 | 5 of 40 | 7 of 15 | 15 of 15 | 20 of 20 | 1 | $0.56 |
 | Claude Opus 5.5 | Claude Code | 38 of 50 | 5 of 40 | 7 of 15 | 11 of 15 | 20 of 20 | 2 | $0.82 |
 | Claude Haiku 5.5 | Claude Code | 34 of 50 | 5 of 40 | 0 of 15 | 14 of 15 | 20 of 20 | 3 | $0.07 |
-| GPT-6.1 Sol | Codex CLI | 24 of 46 | 5 of 35 | 3 of 11 | 1 of 15 | 20 of 20 | 2 | $0.18 |
-| GPT-6.1 Terra | Codex CLI | 24 of 44 | 5 of 33 | 1 of 11 | 6 of 15 | 17 of 18 | 2 | $0.11 |
-| GPT-6 Luna | Codex CLI | 16 of 31 | 4 of 26 | 0 of 8 | 8 of 12 | 8 of 11 | 0 | $0.02 |
+| GPT-6.1 Sol | Codex CLI | 26 of 50 | 5 of 40 | 5 of 15 | 1 of 15 | 20 of 20 | 2 | $0.19 |
+| GPT-6.1 Terra | Codex CLI | 26 of 50 | 5 of 40 | 1 of 15 | 6 of 15 | 19 of 20 | 3 | $0.11 |
+| GPT-6 Luna | Codex CLI | 26 of 50 | 5 of 40 | 1 of 15 | 10 of 15 | 15 of 20 | 1 | $0.02 |
 
 - **On Linux the background doesn't separate the models: each passes IR-02's five background trials and no other.**
   IR-01, IR-03 and IR-04 interrupt with a modal dialog that Linux's window manager stacks over the user's window (‡),
@@ -52,14 +52,14 @@ in Claude Code, and GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex 
 - **GPT-6 in Codex works from the accessibility tree alone, and it shows on the tasks that need the screen.** Codex sends
   the model cua-driver's structured results without their screenshots, so GPT-6.1 Sol passes 20 of 20
   interruption trials but 1 of 15 precision trials, where the hover toolbar, the tooltip and the drag
-  targets show only on screen; Terra passes 6 of 15 of those and Luna 8 of 12. Their multi-app
-  passes: Sol 3, Terra 1, Luna 0.
-- **10 trials leave the GUI, each through cua-driver's `launch_app`** (Haiku 3, Opus 2, Sol 2, Terra 2, Sonnet 1). Most open a
-  file by handing it to an app on the command line: the GPT-6.1 models G02's workbook in LibreOffice, Claude G04's access
+  targets show only on screen; Terra passes 6 of 15 of those and Luna 10 of 15. Their multi-app
+  passes: Sol 5, Terra 1, Luna 1.
+- **12 trials leave the GUI, each through cua-driver's `launch_app`** (Haiku 3, Terra 3, Opus 2, Sol 2, Sonnet 1, Luna 1). Most open a
+  file by handing it to an app on the command line: the GPT-6 models G02's workbook in LibreOffice, Claude G04's access
   log in a text editor. Two, Sonnet's and Opus's in G04's background, run a shell command with `sh -c`, copying the log
   and fetching the archive page into /tmp.
 - **Cost per trial at list price** runs from $0.02 (Luna) and $0.07 (Haiku) to $0.82 (Opus); Sonnet
-  costs $0.56, Sol $0.18 and Terra $0.11.
+  costs $0.56, Sol $0.19 and Terra $0.11.
 
 cua-driver's first Linux runs, which also offered its agents AgentEnv's seven `computer_*` tools beside its own 66,
 stay in the dataset but not on the board: Claude Sonnet 5.5 (`sonnet-5-5-2026-11-03`) passed 36 of 50 in the
