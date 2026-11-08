@@ -35,8 +35,10 @@ LOCK = ROOT / "taskpack.lock.toml"
 TARGET = ROOT / "artifacts" / "taskpack"
 ENVS = ROOT / "envs"
 GRADER = ROOT / "artifacts" / "gui_only" / "verify.py"
-#: trycua's scan of an agent's tool calls, which the trajectory's GUI-only check fetches.
+#: trycua's scan of an agent's tool calls, which the trajectory's GUI-only check fetches, and their Windows guard, whose
+#: scan adds Windows' shells and script hosts, which it fetches for a Windows trial.
 SCAN = "scoring/bench_v2.py"
+WINDOWS_SCAN = "windows/guard.py"
 _TABLE = re.compile(r"(?ms)^TRYCUA = \{.*?^\}$")
 #: The bench tasks with an app of their own, each in envs/<task>/, and where their folders are in the task pack.
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
@@ -142,11 +144,12 @@ def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str,
 
 
 def grader(lock: Lock, target: Path = TARGET, verifier: Path = GRADER) -> Path:
-    """Write the ``TRYCUA`` of the trajectory's GUI-only verifier: trycua's scan, by its URL at the lock's commit and
-    its sha256 as the verified task pack's manifest has it."""
+    """Write the ``TRYCUA`` of the trajectory's GUI-only verifier: trycua's scan and their Windows guard, each by its
+    URL at the lock's commit and its sha256 as the verified task pack's manifest has it."""
     verify(lock, target)
     hashes = {name: sha for sha, name in (line.split("  ", 1) for line in (target / MANIFEST).read_text().splitlines())}
-    table = {"commit": lock.commit, PurePosixPath(SCAN).name: {"url": _url(lock, SCAN), "sha256": hashes[SCAN]}}
+    table = {"commit": lock.commit, **{PurePosixPath(name).name: {"url": _url(lock, name), "sha256": hashes[name]}
+                                       for name in (SCAN, WINDOWS_SCAN)}}
     text = verifier.read_text(encoding="utf-8")
     if not _TABLE.search(text):
         raise SystemExit(f"{verifier} has no TRYCUA = {{...}} to write")

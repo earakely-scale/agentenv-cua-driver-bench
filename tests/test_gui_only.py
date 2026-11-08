@@ -40,8 +40,13 @@ def gui_only(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
     cache.mkdir()
     shutil.copy(PACK / "scoring" / "bench_v2.py", cache / module.TRYCUA["bench_v2.py"]["sha256"])
+    shutil.copy(PACK / "windows" / "guard.py", cache / module.TRYCUA["guard.py"]["sha256"])
     monkeypatch.setattr(module, "CACHE", cache)
-    return lambda trajectory: asyncio.run(module.verify("http://mcp", "http://env", trajectory))[0]
+
+    def verify(trajectory, os=None):
+        monkeypatch.setattr(module, "_os", lambda env_url: os)
+        return asyncio.run(module.verify("http://mcp", "http://env", trajectory))[0]
+    return verify
 
 
 def test_skills_reading_the_agents_own_files_and_opening_an_app_are_gui_only(gui_only):
@@ -60,6 +65,17 @@ def test_a_tool_call_out_of_the_gui_fails(gui_only, call, violation):
     result = gui_only(_trajectory(CLICK, call))
 
     assert result["result"] is False and violation in result["violations"]
+
+
+def test_on_windows_a_shell_or_script_host_in_a_tool_input_fails_as_trycuas_windows_guard_scans_it(gui_only):
+    call = _tool("mcp__desktop-benchlab-windows__type_text", text="powershell -c Get-ChildItem")
+
+    windows = gui_only(_trajectory(CLICK, call), os="windows")
+    linux = gui_only(_trajectory(CLICK, call), os="linux")
+
+    assert windows["result"] is False
+    assert "mcp__desktop-benchlab-windows__type_text:powershell" in windows["violations"]
+    assert "mcp__desktop-benchlab-windows__type_text:powershell" not in linux["violations"]
 
 
 @pytest.mark.parametrize("launch, violation", [
@@ -166,3 +182,5 @@ def test_its_table_pins_trycuas_scan_at_the_locks_commit():
     assert module.TRYCUA["bench_v2.py"]["sha256"] == manifest["scoring/bench_v2.py"]
     assert module.TRYCUA["bench_v2.py"]["url"].startswith(
         f"https://raw.githubusercontent.com/trycua/cua/{module.TRYCUA['commit']}/")
+    assert module.TRYCUA["guard.py"]["sha256"] == manifest["windows/guard.py"]
+    assert module.TRYCUA["guard.py"]["url"].endswith("/automated-eval/macos_bench/windows/guard.py")

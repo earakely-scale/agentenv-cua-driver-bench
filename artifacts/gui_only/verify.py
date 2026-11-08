@@ -1,5 +1,6 @@
 """The trajectory's half of the bench's GUI-only check, outside the computer: trycua's scan of the agent's tool calls
-(their ``bench_v2``, fetched at the lock's commit and checked against its sha256, as ``TRYCUA`` pins it, written by
+(their ``bench_v2``, and for a computer whose card says it's Windows their Windows guard's, which adds Windows' shells
+and script hosts, each fetched at the lock's commit and checked against its sha256, as ``TRYCUA`` pins it, written by
 ``python tools/taskpack.py grader``), on claude-code's stream-json, or codex-cli's exec events read as trycua's runner
 reads its Codex arm's: its own tools as the built-ins trycua forbids; the grade in its container is the guard's half.
 
@@ -34,15 +35,22 @@ TRYCUA = {
  "bench_v2.py": {
   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
   "sha256": "204eaeadb97b2f20225bd99f52b706d26a11aaec270ee364f3fb3def25446727"
+ },
+ "guard.py": {
+  "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/windows/guard.py",
+  "sha256": "44f22d382ad02bb676fea2e9e8583a0a24ecc1fa7bf399126020e5ba0aae0611"
  }
 }
 
 
 async def verify(mcp_url, env_url, trajectory=None):
+    windows = _os(env_url) == "windows"
     with tempfile.TemporaryDirectory() as scratch:
-        v2 = _module(_fetched(TRYCUA["bench_v2.py"], Path(scratch) / "bench_v2.py"))
+        v2 = _module(_fetched(TRYCUA["bench_v2.py"], Path(scratch) / "bench_v2.py"), "trycua_bench_v2")
+        scan = (_module(_fetched(TRYCUA["guard.py"], Path(scratch) / "windows" / "guard.py"), "trycua_windows_guard")
+                if windows else v2)
     events = _events(trajectory)
-    violations, mentions = _scan(v2, events or [])
+    violations, mentions = _scan(v2, events or [], scan)
     return [{"id": "gui_only_trajectory", "result": bool(events) and not violations, "violations": violations,
              "trajectory_checked": bool(events), "refused_calls": _refused(v2, events or []), "mentions": mentions,
              "description": "no way out of the GUI in the agent's tool calls"}]
@@ -86,12 +94,25 @@ def _codex_calls(document):
     return calls
 
 
-def _scan(v2, events):
-    """trycua's scan, a forbidden built-in tried or code in a tool input; any built-in the CLI offered beside the
+def _os(env_url):
+    """The OS type the computer's card says it runs, its computer/v1 platform's; None for a card it can't read, whose
+    trial keeps trycua's own scan."""
+    try:
+        with urllib.request.urlopen(f"{env_url.rstrip('/')}/.well-known/agent-env.json", timeout=30) as response:
+            card = json.load(response)
+    except (OSError, ValueError, AttributeError):
+        return None
+    extensions = (card.get("capabilities") or {}).get("extensions") or []
+    computer = next((ext.get("params") or {} for ext in extensions if ext.get("uri") == "urn:agentenv:computer/v1"), {})
+    return (computer.get("platform") or {}).get("os")
+
+
+def _scan(v2, events, scan):
+    """trycua's scan (``scan``, their Windows guard's on Windows), a forbidden built-in tried or code in a tool input; any built-in the CLI offered beside the
     computer env's tools and Skill and Read; and launch_app running a command: with arguments, a launch path that isn't
     an app's .desktop file, or a name a shell would read as more than an app's. A call to a tool the CLI never offered
     ran nothing, so it isn't one, unless trycua forbids it. The violations, and the side doors merely named."""
-    hard, soft = v2.scan_events(events)
+    hard, soft = scan.scan_events(events)
     offered = {f"offered:{name}" for event in events if (event.get("type"), event.get("subtype")) == ("system", "init")
                for name in event.get("tools") or [] if not name.startswith("mcp__") and name not in ALLOWED_BUILTINS}
     launches = set()
@@ -143,8 +164,8 @@ def _refused(v2, events):
     return refused
 
 
-def _module(path):
-    spec = importlib.util.spec_from_file_location("trycua_bench_v2", path)
+def _module(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -164,5 +185,6 @@ def _fetched(pinned, path):
         with tempfile.NamedTemporaryFile(dir=CACHE, delete=False) as part:
             part.write(data)
         os.replace(part.name, cached)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     return path
