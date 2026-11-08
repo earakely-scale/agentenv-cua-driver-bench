@@ -264,7 +264,15 @@ def test_benchlab_declares_trycuas_files_at_the_locks_commit_its_data_and_launch
         [modes] = [ast.literal_eval(node.value) for node in ast.parse(pack.read_text()).body
                    if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == "MODES"]
         assert get_args(app.BenchLab.Settings.model_fields["mode"].annotation) == modes
-    assert app.BenchLab.Settings().model_dump() == {"mode": "hover", "seed": 1}
+    assert app.BenchLab.Settings().model_dump() == {"mode": "hover", "seed": 1, "condition": "foreground"}
+    windows = app.BenchLab.declaration().os["windows"]
+    assert [download["to"] for download in windows.install["downloads"]] == [
+        "lab/windows/benchlab.py", "lab/probes/_common/benchlab_common.py"]
+    assert all(f["url"].startswith(f"https://raw.githubusercontent.com/trycua/cua/{commit}/") for f in listed["windows"])
+    assert windows.install["python"] == "requirements-windows.txt" and windows.paths == [".benchlab"]
+    assert [run["script"] for run in windows.install["run"]] == ["install-windows.ps1"]
+    assert windows.launch.command == ["venv/Scripts/python.exe", "lab_windows.py"]
+    assert windows.launch.window == {"instance": "benchlab.exe"}
 
 
 def test_benchlab_starts_as_trycuas_runner_starts_it_with_a_throwaway_home(lab, monkeypatch, tmp_path):
@@ -291,6 +299,39 @@ def test_benchlab_starts_as_trycuas_runner_starts_it_with_a_throwaway_home(lab, 
     assert started["argv"] == ["/usr/bin/python3", str(lab.LAB), "--mode", "irmodal", "--seed", "517139",
                                "--state", str(data / "state.json"), "--events", str(data / "events.jsonl")]
     assert data.is_dir() and started["home"] != str(tmp_path)
+
+
+@pytest.mark.parametrize("condition, activates", [("foreground", True), ("background", False)])
+def test_on_windows_benchlab_starts_from_its_named_pythonw_as_trycuas_runner_starts_it(lab, monkeypatch, tmp_path,
+                                                                                      condition, activates):
+    sys.path.insert(0, str(ROOT / "envs" / "benchlab"))
+    try:
+        lab_windows = importlib.import_module("lab_windows")
+    finally:
+        sys.path.remove(str(ROOT / "envs" / "benchlab"))
+        sys.modules.pop("lab_windows", None)
+    started = {}
+
+    class Lab:
+        def __init__(self, argv, env, **_):
+            started.update(argv=argv, env=env)
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(lab_windows.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(lab_windows.subprocess, "Popen", Lab)
+    settings = sys.modules["app"].BenchLab.Settings(mode="irmodal", seed=517139, condition=condition)
+
+    with pytest.raises(SystemExit):
+        lab_windows.main(settings)
+
+    data = tmp_path / ".benchlab"
+    assert started["argv"] == [
+        str(lab_windows.LAB), str(lab_windows.HERE / "lab" / "windows" / "benchlab.py"), "--mode", "irmodal",
+        "--seed", "517139", "--state", str(data / "state.json"), "--events", str(data / "events.jsonl"),
+        "--frame", "40,40,760,540", *([] if activates else ["--no-activate"])]
+    assert lab_windows.LAB.name == "BenchLab.exe" and started["env"]["PYTHONPATH"]
 
 
 def test_on_macos_each_electron_app_gets_a_bundle_of_its_own_name_and_identifier(bench_app, tmp_path, monkeypatch):
