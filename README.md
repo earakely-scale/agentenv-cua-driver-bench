@@ -10,7 +10,8 @@ tasks G02 to G04, each on a computer of its own with its shared task's apps, s04
 at the build agentenv's `chromium` app pins, pinned again here so the bench's browser stays the same whatever a
 framework release ships), and the seven BenchLab tasks, MB-09 to MB-11 and IR-01 to IR-04, in trycua's own Linux
 BenchLab. Beside each task's app, the bench's sentinel, with trycua's GUI-only guard in it, and the grade, which scores
-a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-only scan.
+a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-only scan. Every task runs on macOS too,
+and the seven BenchLab tasks on Windows 11, in trycua's Windows ports of BenchLab, the sentinel and the guard.
 
 ## What's here
 
@@ -100,6 +101,43 @@ An eval runs its trials one after another. Apple's licence allows two macOS VMs 
 **What differs from Linux:** the macOS trial files (`tasks/macos-*.json`) carry trycua's system prompt as written, for
 "a macOS desktop", and grade on the Mac's own Docker.
 
+### On Windows
+
+The seven BenchLab tasks run on Windows 11 too, in both conditions (MB-10 and MB-11 in the foreground only), five
+runs each. BenchLab and the sentinel are trycua's Windows ports at the pinned commit, `windows/benchlab.py` (wxPython)
+and `windows/sentinel.py`, started as their runner starts them, from copies of `pythonw.exe` named `BenchLab.exe` and
+`BenchSentinel.exe`, at their runner's frames. Beside the sentinel runs trycua's `windows/guard.py`: once it's armed, a
+Command Prompt, PowerShell or Run dialog started in the session is a violation and is ended, one the driver's own
+program starts is that tool's helper, and one in front three samples in a row is a violation. The arming script
+commands the sentinel through its control file, as their runner does. The computer is agent-env's `windows-11` base,
+Microsoft's 90-day evaluation of Windows 11 Enterprise, with cua-driver and the two apps. The agent and the grade run in
+containers beside it.
+
+You need:
+
+- a Linux amd64 machine with KVM (`/dev/kvm`);
+- Docker, with a registry on `localhost:5000`;
+- a model endpoint.
+
+```bash
+pip install 'agentenv-framework>=0.9.1472'
+docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
+python tools/taskpack.py
+agent-env run . --task windows-ir-01-r1-foreground
+agent-env run . --eval windows-bench-v2     # every Windows task file once (60)
+```
+
+**The first run takes a while.** Unless your image store already holds a `windows-11` base, it fetches Microsoft's
+evaluation ISO and installs Windows unattended, about 13 minutes. It then composes the task's computer, about 7
+minutes: BenchLab's and the sentinel's installs (wxPython, and the Visual C++ runtime the trimmed Windows lacks) in a
+VM of the base, then the probe. Later runs reuse the composed computer. A trial then takes about a minute and a half.
+Whether the evaluation's terms allow your use is yours to check.
+
+**What differs from Linux:** the Windows trial files (`tasks/windows-*.json`) carry trycua's system prompt for "a
+Windows desktop", and their prompts say "on this Windows PC", as trycua's Windows runner words them. A trial's
+recording doesn't reach a local object store yet, as the Windows VM can't reach its upload address; the grade doesn't
+need it. G02 to G04 don't run on Windows yet.
+
 ## The task apps
 
 Each shared task (`cdb-s02`, `cdb-s03`, `cdb-s04`) is one computer app, so that every window it opens stops and starts
@@ -134,7 +172,7 @@ mode per task. `envs/benchlab` is their Linux port of it, a GTK app, as a comput
   (`tasks/benchlab-background-ir-0{1,3,4}.json`), brings up and answers IR-01's, IR-03's and IR-04's interruption by
   background actions alone, and reports what the user's window went through.
 
-### A background app's modal dialog on Linux
+### A background app's modal dialog on Linux and Windows
 
 IR-01, IR-03 and IR-04 interrupt with a modal dialog, and on Linux the window manager puts a new modal dialog over the
 user's window whatever the agent does, so in the background condition those three tasks can't keep the user
@@ -151,6 +189,10 @@ opened by a background click while the user's window held the keyboard:
 The bench stays on xfwm4: openbox wouldn't let those tasks pass either, and it made the computers' conformance probe
 fail at random (P6, a chord that selects all, then Backspace). IR-02's banner is drawn inside BenchLab's window, so it
 can pass. The `background` checks report `user_kept_focus` and `user_window_on_top`, both "no" here.
+
+Windows does the same. In one background trial of each with cua-driver, IR-01's, IR-03's and IR-04's dialogs took the
+user's keyboard and activation when they opened, so A22's `key_focus`, `typing` and `activation` failed, while the agent
+did the task each time. MB-09 and IR-02, whose clicks land in BenchLab's own window, kept the user undisturbed.
 
 ## The sentinel and the GUI-only guard
 
