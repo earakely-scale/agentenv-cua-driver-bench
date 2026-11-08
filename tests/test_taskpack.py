@@ -198,23 +198,25 @@ def test_apps_lists_each_apps_files_its_computer_installs_by_url_at_the_commit_a
     (bundle / "envs" / "cdb-s02").mkdir(parents=True)
     (bundle / "envs" / "lab").mkdir()
 
-    written, lab = taskpack.apps(lock, target, bundle / "envs", ("cdb-s02",), {"lab": ("taskpack/README.md",)})
+    written, lab = taskpack.apps(lock, target, bundle / "envs", ("cdb-s02",),
+                                 {"lab": {"files": ("taskpack/README.md",), "windows": ("LICENSE",)}})
 
     listed = json.loads(written.read_text())
     assert listed["commit"] == "c1"
     assert [f["path"] for f in listed["files"]] == [
         "apps/desk/main.js", "apps/desk/renderer/app.js", "brief.md", "fixture/mail/messages.json",
-        "platform/launch.linux.json", "reset/setup.py", "task.cuabench.json"]
+        "platform/launch.linux.json", "platform/launch.macos.json", "reset/setup.py", "task.cuabench.json"]
     first = listed["files"][0]
     assert first["url"] == f"{taskpack.RAW}/{REPO}/c1/{task}/apps/desk/main.js"
     assert first["sha256"] == hashlib.sha256(b"apps/desk/main.js\n").hexdigest()
-    assert json.loads(lab.read_text())["files"] == [{"path": "taskpack/README.md", "url": f"{taskpack.RAW}/{REPO}/c1/"
-                                                     "libs/bench/taskpack/README.md",
-                                                     "sha256": hashlib.sha256(b"the pack\n").hexdigest()}]
+    lab_lists = json.loads(lab.read_text())
+    assert lab_lists["files"] == [{"path": "taskpack/README.md", "url": f"{taskpack.RAW}/{REPO}/c1/"
+                                   "libs/bench/taskpack/README.md", "sha256": hashlib.sha256(b"the pack\n").hexdigest()}]
+    assert [entry["path"] for entry in lab_lists["windows"]] == ["LICENSE"]
     with pytest.raises(SystemExit, match="isn't there"):
         taskpack.apps(lock, target, bundle / "missing", ("cdb-s02",), {})
     with pytest.raises(SystemExit, match="has no taskpack/gone.py, which lab installs"):
-        taskpack.apps(lock, target, bundle / "envs", (), {"lab": ("taskpack/gone.py",)})
+        taskpack.apps(lock, target, bundle / "envs", (), {"lab": {"files": ("taskpack/gone.py",)}})
 
 
 def test_apps_refuses_a_copy_that_doesnt_match_the_lock(github, bundle):

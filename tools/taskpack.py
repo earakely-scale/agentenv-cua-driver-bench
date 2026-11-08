@@ -41,8 +41,16 @@ _TABLE = re.compile(r"(?ms)^TRYCUA = \{.*?^\}$")
 #: The bench tasks with an app of their own, each in envs/<task>/, and where their folders are in the task pack.
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
 TASK_DIR = "taskpack/tasks/shared"
-#: The bench's apps of trycua's own windows, each in envs/<app>/, and the task pack's files each installs.
-LABS = {"benchlab": ("linux/benchlab.py", "probes/_common/benchlab_common.py")}
+#: trycua's macOS BenchLab and BenchSentinel, built together from their Swift sources.
+SWIFT = ("swift/BenchLab.swift", "swift/BenchLabInterrupts.swift", "swift/BenchLabModes.swift",
+         "swift/BenchSentinel.swift", "swift/build.sh")
+#: The bench's apps of trycua's own windows, each in envs/<app>/, and the task pack's files each installs on each OS,
+#: by the list its files.json keeps them in: ``files``, a Linux computer's, else the OS type's.
+LABS = {"benchlab": {"files": ("linux/benchlab.py", "probes/_common/benchlab_common.py"), "macos": SWIFT,
+                     "windows": ("windows/benchlab.py", "probes/_common/benchlab_common.py")},
+        "bench-sentinel": {"macos": SWIFT,
+                           "windows": ("windows/sentinel.py", "windows/winenv.py", "windows/guard.py",
+                                       "scoring/bench_v2.py")}}
 MANIFEST = "MANIFEST.sha256"
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
@@ -105,29 +113,30 @@ def pin(commit: str, lock_path: Path = LOCK, target: Path = TARGET) -> str:
 
 
 def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str, ...] = TASKS,
-         labs: dict[str, tuple[str, ...]] = LABS) -> list[Path]:
-    """Write ``files.json`` in each app's folder: a task's files its computer installs, or a lab's, each by its URL at
-    the lock's commit and its sha256 as the verified task pack's manifest has it; the files written."""
+         labs: dict[str, dict[str, tuple[str, ...]]] = LABS) -> list[Path]:
+    """Write ``files.json`` in each app's folder: a task's files its computer installs, or a lab's on each OS, each by
+    its URL at the lock's commit and its sha256 as the verified task pack's manifest has it; the files written."""
     verify(lock, target)
     hashes = {name: sha for sha, name in (line.split("  ", 1) for line in (target / MANIFEST).read_text().splitlines())}
     listed = {}
     for task in tasks:
         prefix = f"{TASK_DIR}/{task}/"
-        listed[task] = [{"path": name[len(prefix):], "url": _url(lock, name), "sha256": sha}
-                        for name, sha in sorted(hashes.items())
-                        if name.startswith(prefix) and _for_the_computer(name[len(prefix):])]
-    for lab, names in labs.items():
-        if missing := [name for name in names if name not in hashes]:
+        listed[task] = {"files": [{"path": name[len(prefix):], "url": _url(lock, name), "sha256": sha}
+                                  for name, sha in sorted(hashes.items())
+                                  if name.startswith(prefix) and _for_the_computer(name[len(prefix):])]}
+    for lab, lists in labs.items():
+        if missing := [name for names in lists.values() for name in names if name not in hashes]:
             raise SystemExit(f"the task pack has no {', '.join(missing)}, which {lab} installs")
-        listed[lab] = [{"path": name, "url": _url(lock, name), "sha256": hashes[name]} for name in names]
+        listed[lab] = {key: [{"path": name, "url": _url(lock, name), "sha256": hashes[name]} for name in names]
+                       for key, names in lists.items()}
     written = []
-    for app, files in listed.items():
-        if not files:
+    for app, lists in listed.items():
+        if not any(lists.values()):
             raise SystemExit(f"the task pack has no files of {app}")
         if not (envs / app).is_dir():
             raise SystemExit(f"{envs / app} isn't there: it's the app of {app}")
         path = envs / app / "files.json"
-        path.write_text(json.dumps({"commit": lock.commit, "files": files}, indent=1) + "\n", encoding="utf-8")
+        path.write_text(json.dumps({"commit": lock.commit, **lists}, indent=1) + "\n", encoding="utf-8")
         written.append(path)
     return written
 
@@ -146,12 +155,13 @@ def grader(lock: Lock, target: Path = TARGET, verifier: Path = GRADER) -> Path:
 
 
 def _for_the_computer(path: str) -> bool:
-    """Whether a file of a task's folder goes into its computer: its apps, reset scripts and fixture, its Linux launch,
-    brief and manifest; never its evaluator, tests or tools, which grade and build it outside."""
+    """Whether a file of a task's folder goes into its computer: its apps, reset scripts and fixture, its launch on
+    each OS, brief and manifest; never its evaluator, tests or tools, which grade and build it outside."""
     parts = PurePosixPath(path).parts
     if parts[0] == "apps":
         return "tests" not in parts
-    return parts[0] in ("reset", "fixture") or path in ("platform/launch.linux.json", "brief.md", "task.cuabench.json")
+    return (parts[0] in ("reset", "fixture") or path in ("brief.md", "task.cuabench.json")
+            or (parts[0] == "platform" and parts[-1].startswith("launch.") and parts[-1].endswith(".json")))
 
 
 def _url(lock: Lock, name: str) -> str:

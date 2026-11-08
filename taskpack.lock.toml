@@ -2,8 +2,8 @@
 # at this commit of trycua's repo, under its "to", and sha256 over their MANIFEST.sha256. Repin with
 # python tools/taskpack.py pin <commit>.
 repo = "trycua/cua"
-commit = "22a67eacd15dc71811e330ed88951dd615bb395d"
-sha256 = "9fcd03b958b5c67611f604786d452ca27872c42643635722696b72e7dab82d11"
+commit = "69b459b33ca001a5e7026dee4f57da1ec02ee53f"
+sha256 = "9c9648ef24642c7635f8fbfbb09d271fe38272c4025265c833de7b6262a24eaf"
 
 [[include]]
 from = "libs/cua-driver-bench/LICENSE"
@@ -100,3 +100,27 @@ to = "probes/IR-04"
 [[include]]
 from = "libs/cua-driver-bench/automated-eval/macos_bench/probes/tests"
 to = "probes/tests"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/swift/BenchLab.swift"
+to = "swift/BenchLab.swift"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/swift/BenchLabInterrupts.swift"
+to = "swift/BenchLabInterrupts.swift"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/swift/BenchLabModes.swift"
+to = "swift/BenchLabModes.swift"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/swift/BenchSentinel.swift"
+to = "swift/BenchSentinel.swift"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/swift/build.sh"
+to = "swift/build.sh"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/windows"
+to = "windows"

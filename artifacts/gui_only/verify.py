@@ -30,10 +30,10 @@ CODEX_TEXT = ("agent_message", "reasoning", "todo_list", "error")
 _COMMAND = re.compile(r"[;|&$`<>]|^[/.~]")
 
 TRYCUA = {
- "commit": "22a67eacd15dc71811e330ed88951dd615bb395d",
+ "commit": "69b459b33ca001a5e7026dee4f57da1ec02ee53f",
  "bench_v2.py": {
-  "url": "https://raw.githubusercontent.com/trycua/cua/22a67eacd15dc71811e330ed88951dd615bb395d/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
-  "sha256": "a0127815b9428dbc68570069ab16e2cb83905c301c5b87a852df98e4099cc0d3"
+  "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
+  "sha256": "204eaeadb97b2f20225bd99f52b706d26a11aaec270ee364f3fb3def25446727"
  }
 }
 
