@@ -1,6 +1,8 @@
 """The bench's sentinel as a computer app beside a task's: the user's window, which logs all that disturbs that user while
 an agent works, on Linux our port (``sentinel.py``), on macOS trycua's BenchSentinel.app, built from their Swift sources
-at the pinned commit (``files.json``, ``build-macos.sh``) and run beside their GUI-only guard (``sentinel_macos.py``).
+at the pinned commit (``files.json``, ``build-macos.sh``) and run beside their GUI-only guard (``sentinel_macos.py``), on
+Windows their wxPython port, run as their runner runs it from ``BenchSentinel.exe``, a copy of the Python's pythonw.exe
+beside it, and beside their GUI-only guard on Windows (``install-windows.ps1``, ``sentinel_windows.py``).
 Its data is its log, ``~/.bench-sentinel/sentinel.jsonl``, which a reset starts afresh; a task arms it around the agent
 with the ``sentinel`` artifact's run_code steps, as trycua's runner does."""
 import json
@@ -8,12 +10,13 @@ from pathlib import Path
 from typing import Literal
 
 from agentenv_protocol.computer import (ComputerAppEnvironment, Download, Launch, Packages, Ready, RunScript,
-                                        computer_app, install, install_step, linux, ready_check)
+                                        computer_app, install, install_step, linux, ready_check, windows)
 from pydantic import BaseModel
 
 HERE = Path(__file__).resolve().parent
 SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm64"]},
-            {"os": {"type": "macos", "display": ["aqua"]}, "arch": ["arm64"]}]
+            {"os": {"type": "macos", "display": ["aqua"]}, "arch": ["arm64"]},
+            {"os": {"type": "windows", "display": ["dwm"]}, "arch": ["amd64"]}]
 LOG_FOLDER = ".bench-sentinel"
 PINNED = json.loads((HERE / "files.json").read_text(encoding="utf-8"))
 
@@ -33,6 +36,10 @@ class MacOS(BaseModel):
 @install("macos", MacOS(downloads=[Download(url=f["url"], sha256=f["sha256"], to=f["path"]) for f in PINNED["macos"]],
                         run=[RunScript(script="build-macos.sh", scope="session")]),
          paths=[LOG_FOLDER], launch=Launch(at="boot", command=["venv/bin/python", "sentinel_macos.py"]))
+@windows(downloads=[Download(url=f["url"], sha256=f["sha256"], to=f"lab/{f['path']}") for f in PINNED["windows"]],
+         python="requirements-windows.txt", run=[RunScript(script="install-windows.ps1")], paths=[LOG_FOLDER],
+         launch=Launch(at="boot", command=["venv/Scripts/python.exe", "sentinel_windows.py"],
+                       window={"instance": "benchsentinel.exe"}, ready=Ready(window=True)))
 class BenchSentinel(ComputerAppEnvironment):
     class Settings(BaseModel):
         #: trycua's two conditions: ``background``, the user's "User activity" window, which types; ``foreground``,
@@ -43,11 +50,11 @@ class BenchSentinel(ComputerAppEnvironment):
     def log_folder(self) -> None:
         (Path.home() / LOG_FOLDER).mkdir(exist_ok=True)
 
-    @ready_check(os="macos")
+    @ready_check(os=["macos", "windows"])
     def started(self) -> bool:
-        """BenchSentinel.app's log begun, its start line written."""
+        """BenchSentinel's log begun: its start line written on macOS, its ready line on Windows."""
         try:
             first = (Path.home() / LOG_FOLDER / "sentinel.jsonl").read_text().splitlines()[0]
-            return json.loads(first)["ev"] == "start"
+            return json.loads(first)["ev"] in ("start", "ready")
         except (FileNotFoundError, IndexError, ValueError, KeyError):
             return False

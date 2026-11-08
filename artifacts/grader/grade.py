@@ -25,6 +25,8 @@ OUT = Path("/grade")
 SENTINEL = Path("bench-sentinel/.bench-sentinel")
 LAB = Path("benchlab/.benchlab")
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
+#: The identity trycua's sentinel on Windows gives its own window in its samples.
+SENTINEL_BID = "ai.cua.benchsentinel"
 
 
 def main(argv=None):
@@ -52,14 +54,14 @@ def grade(task, trial, trycua, scratch, seed=None):
     summary = summarize.summarize(str(log))
     condition = next((line.get("condition") for line in reversed(lines) if line["ev"] == "start"), None) or (
         _read(trial / SENTINEL / "condition"))
-    window = [line for line in lines if line["armed"] or line["ev"] == "disarmed"]
+    window = _armed_window(lines)
     armed = next((line for line in window if line["ev"] == "armed"), {})
     problems = _problems(window, condition)
     violations = sorted({line["detail"] for line in window if line["ev"] == "gui_only_violation"}
                         | _devtools(trial / SENTINEL / "devtools.jsonl", window))
     gui_only = not violations and not problems
     checks = (evaluation.get("detail") or evaluation).get("checks", {})
-    multiplayer = v2.multiplayer_score(summary, bool(summary["available"] and armed.get("active") and armed.get("key")),
+    multiplayer = v2.multiplayer_score(summary, bool(summary["available"] and _armed_in_front(armed)),
                                        bool(evaluation.get("passed")) and gui_only, condition)
     closes = sum(line["ev"] == "close_refused" for line in window)
     results = [
@@ -81,6 +83,24 @@ def grade(task, trial, trycua, scratch, seed=None):
                         "background_completion": bool(multiplayer["background_completion"]) and undisturbed,
                         "description": "trycua's A22: the user could have kept working, undisturbed"})
     return results
+
+
+def _armed_window(lines):
+    """The lines from the sentinel's arming to its disarming, or to the end when it never disarmed, which a trial arms
+    once: by their place, as only Linux's and macOS's sentinels say on each line whether they're armed."""
+    first = next((i for i, line in enumerate(lines) if line["ev"] == "armed"), None)
+    if first is None:
+        return []
+    end = next((i for i, line in enumerate(lines[first:], first) if line["ev"] == "disarmed"), len(lines) - 1)
+    return lines[first:end + 1]
+
+
+def _armed_in_front(armed):
+    """Whether the sentinel armed with its window active and holding the focus: its own flags, or on Windows its
+    sample's front window, the sentinel's."""
+    if "front" in armed and "active" not in armed:
+        return (armed["front"] or {}).get("bid") == SENTINEL_BID
+    return bool(armed.get("active") and armed.get("key"))
 
 
 def _problems(window, condition):
