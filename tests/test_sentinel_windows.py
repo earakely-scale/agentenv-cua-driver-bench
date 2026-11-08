@@ -146,7 +146,8 @@ def test_the_app_installs_trycuas_windows_files_and_launches_beside_its_guard(wi
     windows = sys.modules["app"].BenchSentinel.declaration().os["windows"]
 
     assert [download["to"] for download in windows.install["downloads"]] == [
-        "lab/windows/sentinel.py", "lab/windows/winenv.py", "lab/windows/guard.py", "lab/scoring/bench_v2.py"]
+        "lab/windows/sentinel.py", "lab/windows/winenv.py", "lab/windows/guard.py", "lab/scoring/bench_v2.py",
+        "vc_redist.x64.exe"]
     assert windows.launch.command == ["venv/Scripts/python.exe", "sentinel_windows.py"]
     assert windows.launch.window == {"instance": "benchsentinel.exe"} and windows.paths == [".bench-sentinel"]
 

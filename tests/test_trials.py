@@ -160,6 +160,7 @@ def test_bench_v2_is_each_task_five_runs_in_each_of_its_conditions_in_trycuas_sc
     windows = (ROOT / "evals" / "windows-benchlab-trials.txt").read_text().split()
     assert windows == [f"windows-{name}" for name in trials if not name.startswith("cdb-")]
     assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in windows)
+    assert tomllib.loads((ROOT / "evals" / "windows-bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(windows))
 
 
 @pytest.mark.parametrize("path", sorted((ROOT / "tasks").glob("codex-*.json")), ids=lambda path: path.stem)

@@ -19,6 +19,10 @@ SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm
             {"os": {"type": "windows", "display": ["dwm"]}, "arch": ["amd64"]}]
 LOG_FOLDER = ".bench-sentinel"
 PINNED = json.loads((HERE / "files.json").read_text(encoding="utf-8"))
+#: Microsoft's Visual C++ runtime, which wxPython's DLLs need and a trimmed Windows lacks, at its versioned URL.
+VC_REDIST = Download(url="https://download.visualstudio.microsoft.com/download/pr/990c720a-46ce-4dc7-87b9-c2eb615d34b9/"
+                         "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe",
+                     sha256="cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b", to="vc_redist.x64.exe")
 
 
 class MacOS(BaseModel):
@@ -36,7 +40,8 @@ class MacOS(BaseModel):
 @install("macos", MacOS(downloads=[Download(url=f["url"], sha256=f["sha256"], to=f["path"]) for f in PINNED["macos"]],
                         run=[RunScript(script="build-macos.sh", scope="session")]),
          paths=[LOG_FOLDER], launch=Launch(at="boot", command=["venv/bin/python", "sentinel_macos.py"]))
-@windows(downloads=[Download(url=f["url"], sha256=f["sha256"], to=f"lab/{f['path']}") for f in PINNED["windows"]],
+@windows(downloads=[*(Download(url=f["url"], sha256=f["sha256"], to=f"lab/{f['path']}") for f in PINNED["windows"]),
+                    VC_REDIST],
          python="requirements-windows.txt", run=[RunScript(script="install-windows.ps1")], paths=[LOG_FOLDER],
          launch=Launch(at="boot", command=["venv/Scripts/python.exe", "sentinel_windows.py"],
                        window={"instance": "benchsentinel.exe"}, ready=Ready(window=True)))

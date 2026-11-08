@@ -267,7 +267,7 @@ def test_benchlab_declares_trycuas_files_at_the_locks_commit_its_data_and_launch
     assert app.BenchLab.Settings().model_dump() == {"mode": "hover", "seed": 1, "condition": "foreground"}
     windows = app.BenchLab.declaration().os["windows"]
     assert [download["to"] for download in windows.install["downloads"]] == [
-        "lab/windows/benchlab.py", "lab/probes/_common/benchlab_common.py"]
+        "lab/windows/benchlab.py", "lab/probes/_common/benchlab_common.py", "vc_redist.x64.exe"]
     assert all(f["url"].startswith(f"https://raw.githubusercontent.com/trycua/cua/{commit}/") for f in listed["windows"])
     assert windows.install["python"] == "requirements-windows.txt" and windows.paths == [".benchlab"]
     assert [run["script"] for run in windows.install["run"]] == ["install-windows.ps1"]
