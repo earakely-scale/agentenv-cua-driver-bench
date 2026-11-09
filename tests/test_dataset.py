@@ -1,7 +1,8 @@
 """The dataset's exporter, tables and card, offline: a trial's cost at list price from the tokens its trajectory reports
 (a flat price from the totals, a tiered one call by call, the calls' own counts when the run was cut off before Claude
-Code's result), its timeline on the recording's clock, the rows the tables take from a trial folder and a task file,
-and the card's runs with their drivers, its drivers section, its failure section and gallery and its hero's link."""
+Code's result), its timeline on the recording's clock, its workspace without an app's .runtime or a Windows home's
+desktop.ini, the rows the tables take from a trial folder and a task file, and the card's runs with their drivers, its
+drivers section, its failure section and gallery and its hero's link."""
 import importlib.util
 import json
 from datetime import datetime, timezone
@@ -30,6 +31,14 @@ def test_an_entity_is_named_by_its_ids_last_segment_less_a_set_runs_settings(exp
     assert export.named("@local/~/bench/ir-01-r1-background") == "ir-01-r1-background"
     assert export.named("@hf/earakely-scale/cua-driver-bench/desktop-benchlab(desktop-benchlab.tools driver, "
                         "desktop-benchlab.driver reference)") == "desktop-benchlab"
+
+
+def test_a_trials_workspace_leaves_out_an_apps_runtime_and_a_windows_homes_desktop_ini(export):
+    assert export.in_workspace("cdb-s04/cases/RWC-193.json")
+    assert export.in_workspace("Downloads/report.ods")
+    assert not export.in_workspace("cdb-s04/.runtime/b/Default/Cookies")
+    assert not export.in_workspace(".runtime/electron-mail/Local State")
+    assert not export.in_workspace("Documents/desktop.ini") and not export.in_workspace("Desktop/Desktop.ini")
 
 
 @pytest.fixture
