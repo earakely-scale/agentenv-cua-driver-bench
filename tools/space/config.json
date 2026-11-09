@@ -153,7 +153,7 @@
     },
     "codex-computer-use": {
       "name": "Codex Computer Use",
-      "detail": "OpenAI's Codex Computer Use, the ChatGPT app's unified-computer-use plugin at 26.930.51102, through its cua_repl's js and js_reset: the agent writes JavaScript against OpenAI's cua API, each app approved by the task's allowed apps, in Codex's read-only sandbox, with no ChatGPT sign-in",
+      "detail": "OpenAI's Codex Computer Use, the ChatGPT app 26.930.51102's unified-computer-use plugin, driven by Claude through AgentEnv's codex-computer-use driver, not by OpenAI's own agent or models: the agent writes JavaScript against OpenAI's cua API through cua_repl's js and js_reset, Codex acts only on the task's apps, in Codex's read-only sandbox, with no ChatGPT sign-in; its API has no hover",
       "slot": 4
     }
   },

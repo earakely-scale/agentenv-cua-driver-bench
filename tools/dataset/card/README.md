@@ -97,7 +97,8 @@ run on macOS 26 (we used EC2 mac2-m2.metal hosts), in a logged-in session with
 [Lume](https://github.com/trycua/cua/tree/main/libs/lume) on the PATH and a Docker (colima will do). Select the
 Lume sandbox in a two-line config, `[sandbox]` with `default = "lume"` in `.agentenv/config.toml`, and run the
 `macos-` tasks: `macos-cua-driver-…` for cua-driver on its own tools, `macos-agent-desktop-…` for Vercel Labs'
-agent-desktop and `macos-macos-harness-…` for browser-use's macOS harness, as the drivers comparison ran them, for
+agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness and `macos-codex-computer-use-…` for OpenAI's
+Codex Computer Use (agentenv-framework 0.9.1482 or later), as the drivers comparison ran them, for
 example `agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background --model
 anthropic/claude-sonnet-5-5`.
 
@@ -169,8 +170,8 @@ agent-env run . --eval macos-bench-v2 --model anthropic/claude-sonnet-5-5       
 ```
 
 The first run pulls Cua's macOS base (about 29 GB) and composes the task's computer, about 7 minutes. The drivers
-comparison's trials name their driver: `macos-agent-desktop-ir-01-r1-foreground`, `macos-macos-harness-…`, and
-cua-driver on its own tools alone, `macos-cua-driver-…`.
+comparison's trials name their driver: `macos-agent-desktop-ir-01-r1-foreground`, `macos-macos-harness-…`,
+`macos-codex-computer-use-…`, and cua-driver on its own tools alone, `macos-cua-driver-…`.
 
 ### Run another driver or tool set
 
@@ -197,8 +198,9 @@ agent-env run . --task macos-ir-01-r1-background --set envs/desktop-benchlab-mac
 the Linux rows on the board ran with `driver`, and the first Linux runs, which stay in the dataset, with `both`. An eval deploys several envs, so set each one, for example
 `--eval bench-v2 --set envs/desktop-benchlab.driver=reference --set envs/desktop-s02.driver=reference
 --set envs/desktop-s03.driver=reference --set envs/desktop-s04.driver=reference`. The `macos-agent-desktop-…`,
-`macos-macos-harness-…` and `macos-cua-driver-…` task files are these settings written out, and they are what the
-macOS rows ran; in the foreground they also start agent-desktop headed, which `--set` can't. A driver that doesn't run
+`macos-macos-harness-…`, `macos-codex-computer-use-…` and `macos-cua-driver-…` task files are these settings written
+out, and they are what the macOS rows ran; in the foreground they also start agent-desktop headed, and Codex's trials
+name the apps it may act on, which `--set` can't. A driver that doesn't run
 on the computer, such as macos-harness on Linux, is refused before any task runs.
 
 {{BODY}}

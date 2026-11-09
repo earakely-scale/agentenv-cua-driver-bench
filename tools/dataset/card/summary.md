@@ -1,8 +1,9 @@
-**On macOS the driver decides whether the user stays undisturbed.** Three computer-use drivers ran trycua's tasks
+**On macOS the driver decides whether the user stays undisturbed.** Four computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
-90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06, macOS 26 on EC2 Macs). Through the three, Sonnet
-passes 39 of 50, 35 of 50 and 32 of 50 trials in the foreground, and 23 of 40, 8 of 40 and 1 of 40 in the background.
+90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06; and
+`codex-computer-use-sonnet-5-5-2026-11-09`, Sonnet alone; macOS 26 on EC2 Macs). Through the four, Sonnet passes 39,
+35, 32 and 26 of 50 trials in the foreground, and 23, 8, 1 and 11 of 40 in the background.
 
 - **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 38 of 50 and 18 of 40.** Of 80 background trials it takes the user's keyboard in 1 and raises a window over theirs in 7.
   Its background misses are the tasks: MB-09's drag moves the user's pointer (§), and it passes 1 of the 10 G02 and
@@ -13,11 +14,19 @@ passes 39 of 50, 35 of 50 and 32 of 50 trials in the foreground, and 23 of 40, 8
   element references that go stale after each change and to its own checks, which refuse clicks they judge covered
   and report values the Electron apps didn't take. In the background it disturbs the user in 19 of Sonnet's 40
   trials, mostly taking their keyboard or raising a window over theirs.
-- **browser-use (macos-harness): Sonnet 32 of 50 and 1 of 40, Haiku 26 of 50 and 1 of 40.** It is the only
-  driver to pass G04 every time in the foreground (5 of 5, chaining a few commands in each call), but it has
-  no hover, so MB-10 and MB-11 fail. In the background it does the task in 32 of Sonnet's 40 trials and still
-  disturbs the user in 39 of them: its set_value, click, drag and key commands bring the app forward over the
-  user's window.
+- **browser-use (macos-harness): Sonnet 32 of 50 and 1 of 40, Haiku 26 of 50 and 1 of 40.** With Codex Computer Use, it
+  is one of two drivers to pass G04 every time in the foreground (5 of 5, chaining a few commands in each call), but it
+  has no hover, so MB-10 and MB-11 fail. In the background it does the task in 32 of Sonnet's 40 trials and still
+  disturbs the user in 39 of them: its set_value, click, drag and key commands bring the app forward over the user's
+  window.
+- **Codex Computer Use (OpenAI), driven by Claude: Sonnet 26 of 50 in the foreground and 11 of 40 in the
+  background.** It is the ChatGPT app's Computer Use plugin at 26.930.51102, with no ChatGPT sign-in: Claude writes
+  the JavaScript it runs against OpenAI's `cua` API, and Codex may act on the task's apps alone. In the background it
+  does the task in 31 of 40 trials and still disturbs the user in 29: Codex raises the window it acts on over the
+  user's, its own "ChatGPT Computer Use" window sits above theirs while it works, and GnuCash takes the user's
+  keyboard in 4 of G03's 5. In the foreground it passes 19 of 20 interruption trials and G04 every time, but neither
+  G02 nor G03; its API has no hover, so MB-10 and MB-11 fail, and it passes MB-09's drag 2 of 5. 21 of its 90 trials
+  end on the 45-turn limit, none leaves the GUI, and a trial costs $0.34 at list price.
 
 **Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.
 
