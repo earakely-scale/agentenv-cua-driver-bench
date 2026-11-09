@@ -40,8 +40,9 @@ ARM_LOOKS = {"snapshot", "get_app_state", "find", "get", "is", "screenshot", "li
 #: The driver of a trial whose trial.json names none: the bench's first, which every trial before the macOS arms ran on.
 DRIVER = "cua-driver"
 #: A task file's stem: the OS but Linux or the harness but claude-code, then the driver but cua-driver, as
-#: macos-agent-desktop-ir-01-r1-background or codex-ir-01-r1-background.
-STEM = re.compile(r"^(?:macos-|codex-)?(?:(?P<driver>[a-z0-9-]+?)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d+)?"
+#: macos-agent-desktop-ir-01-r1-background, codex-ir-01-r1-background or
+#: codex-macos-codex-computer-use-ir-01-r1-background.
+STEM = re.compile(r"^(?:codex-)?(?:macos-)?(?:(?P<driver>[a-z0-9-]+?)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d+)?"
                   r"-(?P<condition>foreground|background)$")
 
 

@@ -185,7 +185,9 @@ def test_each_codex_trial_is_its_linux_twin_with_codex_as_the_agent_its_own_tool
 def test_every_linux_trial_has_its_codex_twin():
     trials = set((ROOT / "evals" / "bench-v2-trials.txt").read_text().split())
 
-    assert {path.stem for path in (ROOT / "tasks").glob("codex-*.json")} == {f"codex-{name}" for name in trials}
+    linux = {path.stem for path in (ROOT / "tasks").glob("codex-*.json") if not path.stem.startswith("codex-macos-")}
+
+    assert linux == {f"codex-{name}" for name in trials}
 
 
 def _prompt(v2, brief, condition, limits):
