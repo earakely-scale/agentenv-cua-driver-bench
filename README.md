@@ -120,7 +120,7 @@ You need:
 - a model endpoint.
 
 ```bash
-pip install 'agentenv-framework>=0.9.1472'
+pip install 'agentenv-framework>=0.9.1474'
 docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
 python tools/taskpack.py
 agent-env run . --task windows-ir-01-r1-foreground
