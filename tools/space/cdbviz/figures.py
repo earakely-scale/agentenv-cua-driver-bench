@@ -472,16 +472,22 @@ def driver_specs(cat):
 
 def compare_specs(cat):
     """The comparison figures: each task's passes per model on the OS where the bench's first driver ran the most models,
-    the share of trials passed against what a trial costs, with the frontier, and each model's full pass on each OS; each
-    with the notes the card and the Space print under it."""
-    return {"models-tasks": tasks_spec(cat), "pareto": pareto_spec(cat), "os-gap": gap_spec(cat)}
+    and as ``models-tasks-<os>`` on each other OS where it ran two or more; the share of trials passed against what a
+    trial costs, with the frontier; and each model's full pass on each OS; each with the notes the card and the Space
+    print under it."""
+    grids = {"models-tasks": tasks_spec(cat)}
+    widest_os = widest(cat)[0]["id"]
+    grids |= {f"models-tasks-{os_id}": tasks_spec(cat, os_id) for os_id, models in ran_models(cat).items()
+              if os_id != widest_os and len(models) >= 2}
+    return {**grids, "pareto": pareto_spec(cat), "os-gap": gap_spec(cat)}
 
 
-def tasks_spec(cat):
-    """A block per condition of a row per task under its family and a column per model, on the OS where the bench's first
-    driver ran the most models: each cell the task's row on the board, "off" where the bench doesn't run the task in that
-    condition, None where it hasn't run yet."""
-    os_, models = widest(cat)
+def tasks_spec(cat, os_id=None):
+    """A block per condition of a row per task under its family and a column per model, on ``os_id``, by default the OS
+    where the bench's first driver ran the most models: each cell the task's row on the board, "off" where the bench
+    doesn't run the task in that condition, None where it hasn't run yet."""
+    os_, models = widest(cat) if os_id is None else (next(o for o in cat["oses"] if o["id"] == os_id),
+                                                       ran_models(cat)[os_id])
     rows = {(r["model"], r["condition"]): r["tasks"] for r in cat["board"]
             if r["os"] == os_["id"] and r["driver"] == cat["driver"]}
     groups = []
@@ -688,13 +694,18 @@ def gap_notes(gaps, names, osn, via, marks):
 def widest(cat):
     """The OS on which the bench's first driver ran the most models in both conditions, the first of a tie, and those
     models."""
+    both = ran_models(cat)
+    os_ = max(cat["oses"], key=lambda o: len(both[o["id"]]))
+    return os_, both[os_["id"]]
+
+
+def ran_models(cat):
+    """Each OS's models the bench's first driver ran in both conditions."""
     ran = defaultdict(set)
     for r in cat["board"]:
         if r["driver"] == cat["driver"]:
             ran[(r["os"], r["model"])].add(r["condition"])
-    both = {o["id"]: [m for m in cat["models"] if ran[(o["id"], m["id"])] >= set(catalog.CONDITIONS)] for o in cat["oses"]}
-    os_ = max(cat["oses"], key=lambda o: len(both[o["id"]]))
-    return os_, both[os_["id"]]
+    return {o["id"]: [m for m in cat["models"] if ran[(o["id"], m["id"])] >= set(catalog.CONDITIONS)] for o in cat["oses"]}
 
 
 def os_gaps(cat):

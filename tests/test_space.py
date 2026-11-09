@@ -430,6 +430,20 @@ def test_an_os_gap_holds_the_model_and_the_bench_driver_over_the_tasks_every_os_
         "linux": (1.0, 0.0), "macos": (1.0, 1.0)}
 
 
+def test_each_other_os_where_two_models_ran_gets_a_passes_grid_of_its_own(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    metas = [{**m, "cost": 0.1, "harness": "claude-code"} for os_ in ("linux", "macos") for model in (SONNET, HAIKU)
+             for m in _cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)]),
+                                            ("ir-01", "background", [(True, 1.0)])], os=os_, model=model)]
+
+    specs = space("figures").compare_specs(_catalog(space, metas))
+
+    assert [key for key in specs if key.startswith("models-tasks")] == ["models-tasks", "models-tasks-macos"]
+    assert specs["models-tasks"]["subtitle"].startswith("Linux")
+    assert specs["models-tasks-macos"]["subtitle"].startswith("macOS")
+
+
 def test_the_comparison_figures_are_written_with_their_notes_and_one_without_data_is_left_out(space, tmp_path):
     for package in ("fontTools", "PIL", "brotli"):
         pytest.importorskip(package)

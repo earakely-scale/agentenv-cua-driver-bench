@@ -282,7 +282,8 @@ def _compare(catalog):
         return ""
     notes = catalog.get("compare_notes") or {}
     said = lambda key: " ".join(notes.get(key) or []).replace("$", "\\$")
-    figures = "\n\n".join(f"{_picture(key, COMPARE_FIGURES[key])}\n\n{said(key)}" for key in keys)
+    figures = "\n\n".join(f"{_picture(key, COMPARE_FIGURES.get(key) or COMPARE_FIGURES[key.rsplit('-', 1)[0]])}"
+                          f"\n\n{said(key)}" for key in keys)
     return f"""## How models, operating systems and drivers compare
 
 The board three ways: every task's passes model by model, what a pass costs, and what changes when only the operating

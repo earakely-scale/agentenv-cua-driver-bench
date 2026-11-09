@@ -894,22 +894,33 @@ const HARNESS_NAMES = { "claude-code": "Claude Code", "codex-cli": "Codex CLI" }
 
 function modelsSection() {
   const rows = CAT.board.filter((r) => r.driver === CAT.driver);
-  const count = (o) => new Set(rows.filter((r) => r.os === o.id).map((r) => r.model)).size;
-  const os = CAT.oses.reduce((a, b) => (count(b) > count(a) ? b : a));
-  const models = CAT.models.filter((m) => m.board && rows.some((r) => r.os === os.id && r.model === m.id));
-  if (models.length < 2) return null;
-  const runs = CAT.trials.filter((t) => t.os === os.id && t.driver === CAT.driver && models.some((m) => m.id === t.model));
-  const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
-  const depth = Math.max(...runs.map((t) => t.of));
-  const cards = tips(h("div", { class: "xcards" }, models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth))));
-  const figs = (CAT.compare_figures || []).filter((f) => f === "models-tasks");
+  const on = (o) => CAT.models.filter((m) => m.board && rows.some((r) => r.os === o.id && r.model === m.id));
+  const oses = CAT.oses.filter((o) => on(o).length >= 2).sort((a, b) => on(b).length - on(a).length);
+  if (!oses.length) return null;
+  const sub = h("p", {});
+  const body = h("div", {});
+  const tabs = oses.length > 1 ? h("div", { class: "tabs", role: "group", "aria-label": "Operating system" },
+    oses.map((o) => h("button", { "aria-pressed": "false", onclick: () => show(o) }, o.name))) : null;
+  const show = (os) => {
+    VIEW.modelsOs = os.id;
+    if (tabs) [...tabs.children].forEach((b, i) => b.setAttribute("aria-pressed", String(oses[i] === os)));
+    const models = on(os);
+    const runs = CAT.trials.filter((t) => t.os === os.id && t.driver === CAT.driver && models.some((m) => m.id === t.model));
+    const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
+    const depth = Math.max(...runs.map((t) => t.of));
+    const cards = tips(h("div", { class: "xcards" }, models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth))));
+    const key = os === oses[0] ? "models-tasks" : `models-tasks-${os.id}`;
+    const figs = (CAT.compare_figures || []).filter((f) => f === key);
+    sub.textContent = `${os.name} · ${driverName(CAT.driver)} · the same ${tasks.length} tasks; only the model and its harness change.`;
+    body.replaceChildren(...[cards, outcomeKey(cards),
+      models.some((m) => m.harness === "codex-cli") ? h("p", { class: "dnote" }, "Codex CLI hands the model a tool's structured result alone, so GPT never sees ",
+        `${driverName(CAT.driver)}'s window screenshots, only its accessibility tree.`) : null,
+      figs.length ? figures(figs, () => "Passes by task and model: a row per task and a column per model, foreground and background") : null].filter(Boolean));
+  };
+  show(oses.find((o) => o.id === VIEW.modelsOs) || oses[0]);
   return h("section", { class: "models", "aria-labelledby": "models-h" },
-    h("div", { class: "section-head", id: "models", "data-nav": "Models" }, h("h2", { id: "models-h" }, "How the models differ"),
-      h("p", {}, `${os.name} · ${driverName(CAT.driver)} · the same ${tasks.length} tasks; only the model and its harness change.`)),
-    cards, outcomeKey(cards),
-    models.some((m) => m.harness === "codex-cli") ? h("p", { class: "dnote" }, "Codex CLI hands the model a tool's structured result alone, so GPT never sees ",
-      `${driverName(CAT.driver)}'s window screenshots, only its accessibility tree.`) : null,
-    figs.length ? figures(figs, () => "Passes by task and model: a row per task and a column per model, foreground and background") : null);
+    h("div", { class: "section-head", id: "models", "data-nav": "Models" }, h("h2", { id: "models-h" }, "How the models differ"), sub),
+    tabs, body);
 }
 
 function modelCard(m, runs, tasks, depth) {
