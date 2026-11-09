@@ -26,7 +26,14 @@ ARM_VERBS = {"snapshot": "Read window", "get_app_state": "Read window", "find": 
              "right_click": "Right-click", "perform_secondary_action": "Secondary action", "type": "Type",
              "type_text": "Type", "set_value": "Set value", "press": "Press", "press_key": "Press", "scroll": "Scroll",
              "drag": "Drag", "hover": "Hover", "mouse_move": "Move pointer", "focus_window": "Focus window",
-             "wait": "Wait", "batch": "Run steps"}
+             "wait": "Wait", "batch": "Run steps", "js": "Run JavaScript", "js_reset": "Reset the REPL"}
+#: The cua API calls of Codex Computer Use's ``js`` the lane shows, and the step each is; others are its own code.
+CUA_STEPS = {"getApp": "get_app_state", "getState": "get_app_state", "getAXState": "get_app_state",
+             "getAXStateAndScreenshot": "get_app_state", "getScreenshot": "screenshot", "click": "click",
+             "doubleClick": "double_click", "rightClick": "right_click", "setValue": "set_value",
+             "typeText": "type_text", "pressKey": "press_key", "drag": "drag", "scroll": "scroll",
+             "performSecondaryAction": "perform_secondary_action"}
+CUA_CALL = re.compile(r"\.\s*(" + "|".join(CUA_STEPS) + r")\s*\(([^()]*)\)")
 ARM_LOOKS = {"snapshot", "get_app_state", "find", "get", "is", "screenshot", "list_apps", "list_windows",
              "list_surfaces", "list_displays", "list_notifications", "skill", "skills_get", "skills_list", "help",
              "status", "version", "permissions"}
@@ -334,9 +341,13 @@ def step_parts(st):
 
 def arm_steps(tool, inp):
     """Another driver's call as the steps it takes, each a name and its arguments: an agent-desktop tool less its
-    ``desktop_`` prefix, or its batch's commands, and the command lines macos-harness's one tool runs; None for
-    cua-driver's."""
+    ``desktop_`` prefix, or its batch's commands, the command lines macos-harness's one tool runs, and the cua calls
+    Codex Computer Use's JavaScript makes; None for cua-driver's."""
     inp = inp if isinstance(inp, dict) else {}
+    if tool == "js":
+        return cua_steps(inp.get("code")) or [("js", {})]
+    if tool == "js_reset":
+        return [("js_reset", {})]
     if tool == "desktop_batch":
         batch = jparse(inp.get("commands_json")) or []
         return [(str(c.get("command")), c.get("args") or {}) for c in batch if isinstance(c, dict)] or [("batch", {})]
@@ -355,6 +366,31 @@ def arm_steps(tool, inp):
             steps.append((str(line[0]), args))
         return steps or [("macos_harness", {})]
     return None
+
+
+def cua_steps(code):
+    """The cua API calls in Codex Computer Use's ``js`` code, in order, as steps: an element by its index, a point
+    ``[x, y]``, and the text, key, value or direction each takes."""
+    steps = []
+    for method, raw in CUA_CALL.findall(code or ""):
+        args, step = jparse("[" + re.sub(r"'([^'\\]*)'", r'"\1"', raw) + "]") or [], {}
+        first = args[0] if args else None
+        if method == "getApp" and isinstance(first, str):
+            step["app"] = first
+        elif method == "drag" and len(args) > 1 and all(isinstance(a, list) and len(a) == 2 for a in args[:2]):
+            step = {"from_xy": ",".join(map(str, args[0])), "to_xy": ",".join(map(str, args[1]))}
+        elif isinstance(first, list) and len(first) == 2:
+            step["xy"] = ",".join(map(str, first))
+        elif isinstance(first, (int, float)) and not isinstance(first, bool):
+            step["element_index"] = first
+        if method in ("setValue", "typeText") and isinstance(args[-1] if args else None, str):
+            step["value" if method == "setValue" else "text"] = args[-1]
+        if method == "pressKey" and isinstance(first, str):
+            step["key"] = first
+        if method == "scroll" and len(args) > 1:
+            step["direction"] = args[1]
+        steps.append((CUA_STEPS[method], step))
+    return steps
 
 
 def arm_step(name, args):

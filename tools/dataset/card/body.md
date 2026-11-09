@@ -39,8 +39,9 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    computer-use driver (trycua's `cua-driver`), the task's apps and the bench's sentinel (the "User activity" window).
    On macOS (`tasks/macos-*.json`): Cua's macOS 26 VM bundle at 1920x1080, run by Lume on an EC2 Mac (mac2-m2.metal),
    with cua-driver, the task's apps as trycua's macOS descriptors run them, and trycua's own BenchSentinel. The
-   drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`) are those
-   with Vercel Labs' agent-desktop or browser-use's macOS harness in cua-driver's place, and nothing else changed.
+   drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`,
+   `tasks/macos-codex-computer-use-*.json`) are those with Vercel Labs' agent-desktop, browser-use's macOS harness or
+   OpenAI's Codex Computer Use in cua-driver's place, Codex let act on the task's apps alone, and nothing else changed.
 2. Deploy the agent with the computer's driver's MCP server, its own tools alone (on Linux through
    `--set envs/<computer>.tools=driver`, since the Linux task files keep the default, which adds AgentEnv's
    `computer_*` tools), AgentEnv's `peer_agents` server, which no task uses, trycua's system prompt (for "a Linux
@@ -148,6 +149,15 @@ runs/<os>/<run>/<trial>/
   GPT-6 models either, so they run on its generic ones (no code mode, no parallel tool calls, its default
   instructions), as a warning in each trajectory says. trycua's runner has published no Codex numbers, and runs its
   Codex arms on macOS only.
+- **Codex Computer Use is OpenAI's app, driven by Claude.** Its rows (run `codex-computer-use-sonnet-5-5-2026-11-09`)
+  are the ChatGPT app 26.930.51102's `unified-computer-use` plugin, its `cua_repl` started as the app starts it,
+  through AgentEnv's `codex-computer-use` driver, with Claude Sonnet 5.5 in Claude Code writing the JavaScript it
+  runs against OpenAI's `cua` API: not OpenAI's own agent or models, and with no ChatGPT sign-in. The driver answers
+  each of Codex's requests to act on an app from the task's apps, and keeps Codex's read-only sandbox on its
+  JavaScript, where trycua's filter (`codex_cu_filter.py`) turns it off. The GUI-only check reads its `js` as trycua's
+  scan reads any tool input, and fails a call that names a Node module, the process, or loads a module. It needs
+  agentenv-framework 0.9.1482 or later: on an earlier one macOS's prompt to let Codex's helper bypass the private
+  window picker takes the user's focus in the background.
 - **Setup differences from trycua's runner**, found auditing these runs and not corrected in them: cua-driver's arm
   offers `run_script`, as trycua's `cc-cua-driver-script` arm does, without the short `run_script` paragraph that arm
   adds to the system prompt; agent-desktop's foreground trials run every command headed, with real pointer and keys,
