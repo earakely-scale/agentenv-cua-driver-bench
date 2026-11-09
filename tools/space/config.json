@@ -85,7 +85,7 @@
     },
     "windows": {
       "name": "Windows",
-      "detail": ""
+      "detail": "Windows 11 Enterprise evaluation, 25H2 (build 26200) · 1920×1080 · QEMU/KVM on EC2"
     }
   },
   "conditions": {

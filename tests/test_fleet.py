@@ -49,6 +49,15 @@ def test_bench_v2_splits_into_workers_of_one_computer_each_with_each_trial_named
     assert "mb-09-r4-background|mb-09-r4-background|4" in [line for _, specs in workers for line in specs]
 
 
+def test_windows_bench_v2_splits_by_windows_computer_each_trial_named_as_its_linux_twin(plan):
+    linux = plan.split(ROOT, (ROOT / "evals" / "bench-v2-trials.txt").read_text().split(), 10)
+    windows = plan.split(ROOT, (ROOT / "evals" / "windows-bench-v2-trials.txt").read_text().split(), 10)
+
+    assert [env for env, _ in windows] == [f"{env}-windows" for env, _ in linux]
+    assert [line.split("|")[1:] for _, specs in windows for line in specs] == [
+        line.split("|")[1:] for _, specs in linux for line in specs]
+
+
 def test_a_plan_writes_each_workers_trials_and_the_whole_runs_for_its_manifest(plan, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(plan.sys, "argv", ["plan.py", str(ROOT / "evals" / "macos-bench-v2-trials.txt"), str(tmp_path),
                                            "24"])

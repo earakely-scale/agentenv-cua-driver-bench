@@ -45,7 +45,7 @@ COMPARE_FIGURES = {
 }
 DRIVER = "cua-driver"
 HARNESSES = {"claude-code": "Claude Code", "codex-cli": "Codex CLI"}
-OSES = {"linux": "Linux", "macos": "macOS"}
+OSES = {"linux": "Linux", "macos": "macOS", "windows": "Windows"}
 
 
 def main():
