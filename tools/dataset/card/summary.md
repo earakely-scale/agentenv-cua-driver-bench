@@ -1,3 +1,30 @@
+**On Windows, Claude Sonnet 5.5 through cua-driver passes 35 of 50 in the foreground and 11 of 40 in the background**
+(run `cua-driver-sonnet-5-5-2026-11-09`: every trial of Bench v2 on Windows 11 Enterprise evaluation, 25H2, under
+QEMU/KVM on EC2, cua-driver on its own tools, `--set envs/<computer>.tools=driver`), beside the same model and driver
+on Linux and macOS:
+
+| OS | Foreground | Background | Multi-app (fg) | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows | 35 of 50 | 11 of 40 | 2 of 15 | 15 of 15 | 18 of 20 | 1 | $0.66 |
+| Linux | 42 of 50 | 5 of 40 | 7 of 15 | 15 of 15 | 20 of 20 | 1 | $0.56 |
+| macOS | 39 of 50 | 23 of 40 | 4 of 15 | 15 of 15 | 20 of 20 | 0 | $0.65 |
+
+- **In the background Windows falls between Linux and macOS.** IR-01's, IR-03's and IR-04's modal dialogs take the
+  user's keyboard and activation when they open, as on Linux, so IR-01 and IR-03 pass none of their five and IR-04
+  one. MB-09's drag passes all five, where on Linux and macOS it moves the user's pointer (§), and IR-02 passes all
+  five. No multi-app trial passes in the background.
+- **The multi-app tasks run out of turns.** 23 of the 30 end on trycua's 45-turn limit. Sonnet makes about 44 model
+  calls a multi-app trial on Windows against 37 on Linux, at about 1.4 tool calls a call on both. G04 passes 2 of 5 in
+  the foreground and G02 none; G03 scores 0.45 every time, as on Linux and macOS.
+- **In the foreground every precision trial passes, and 18 of 20 interruption trials**: IR-04 fails its task twice.
+- **One trial leaves the GUI**: G04's third background run opens the access log by handing it to Notepad on the
+  command line through cua-driver's `launch_app`.
+
+Before the run, LibreOffice's welcome dialog and GnuCash's tip of the day were turned off on Windows, as Linux's are;
+the macOS cua-driver run above still opened LibreOffice's welcome dialog in 6 of its 30 multi-app trials. cua-driver's
+first Windows run, which also offered its agents AgentEnv's `computer_*` tools beside its own, stays in the dataset
+but not on the board (`sonnet-5-5-2026-11-09`, 63 trials).
+
 **On macOS the driver decides whether the user stays undisturbed.** Four computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
