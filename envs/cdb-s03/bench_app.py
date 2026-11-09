@@ -5,7 +5,9 @@ builds the task's workspace in the session user's home with the task's ``reset/s
 ``platform/launch.linux.json`` says, on that workspace, and stays while they run, so stopping the app stops them all. On
 macOS it follows the task's ``platform/launch.macos.json`` with the macOS builds of the same apps, and finds and places
 the windows through the Accessibility API, which the app's own interpreter is granted, whichever driver the computer
-has."""
+has. On Windows it follows ``platform/launch.windows.json``, finds and places the windows through Win32, and builds the
+workspace as its server starts, as the session user: Windows composes as its admin, so no install step runs as that
+user there."""
 from __future__ import annotations
 
 import ctypes
@@ -39,6 +41,25 @@ if sys.platform == "darwin":
         "_AXUIElementGetWindow"]
     _WINDOW_NUMBER.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
 
+if sys.platform == "win32":
+    import winreg
+    from ctypes import wintypes
+
+    _user32, _dwmapi = ctypes.WinDLL("user32"), ctypes.WinDLL("dwmapi")
+    _ENUM = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    _user32.EnumWindows.argtypes = [_ENUM, wintypes.LPARAM]
+    for _call, _args in (("IsWindowVisible", [wintypes.HWND]), ("GetWindowTextLengthW", [wintypes.HWND]),
+                         ("GetWindowTextW", [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]),
+                         ("GetWindowRect", [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]),
+                         ("ShowWindow", [wintypes.HWND, ctypes.c_int]),
+                         ("SetWindowPos", [wintypes.HWND, wintypes.HWND] + [ctypes.c_int] * 4 + [wintypes.UINT])):
+        getattr(_user32, _call).argtypes = _args
+    _dwmapi.DwmGetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+    #: DWMWA_CLOAKED: a window another virtual desktop or the shell keeps hidden while it reports itself visible.
+    _CLOAKED = 14
+    #: ShowWindow's SW_RESTORE, and SetWindowPos's SWP_NOZORDER | SWP_NOACTIVATE: placed, as it stands, unfocused.
+    _RESTORE, _PLACE = 9, 0x0004 | 0x0010
+
 HERE = Path(__file__).resolve().parent
 TASK = HERE / "task"
 RUNTIME = HERE / "runtime"
@@ -46,8 +67,10 @@ RUNTIME = HERE / "runtime"
 #: docked in the app's own window where the guard can't see it, for the bench's grade.
 DEVTOOLS_HOOK = HERE / "devtools_hook.js"
 SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm64"]},
-            {"os": {"type": "macos", "display": ["aqua"]}, "arch": ["arm64"]}]
+            {"os": {"type": "macos", "display": ["aqua"]}, "arch": ["arm64"]},
+            {"os": {"type": "windows", "display": ["dwm"]}, "arch": ["amd64"]}]
 MACOS = sys.platform == "darwin"
+WINDOWS = sys.platform == "win32"
 _ARCHES = {"amd64": "x64", "arm64": "arm64"}
 
 ELECTRON = "43.8.1"
@@ -107,6 +130,21 @@ GNUCASH_DMG = ("https://github.com/Gnucash/gnucash/releases/download/5.17/Gnucas
                "adbc91d6d69a297c1c599ad2849303a06c01310130d355473c0700f80dd2eb32")
 #: Where Chrome for Testing reads managed policies on macOS.
 MAC_POLICIES = Path("/Library/Managed Preferences/com.google.chrome.for.testing.plist")
+#: The Windows builds for amd64: Electron's, Node's and Chrome for Testing's at the versions above, and the LibreOffice
+#: and GnuCash the task's Windows descriptor runs from Program Files, from their installers, at the macOS versions.
+WIN_ELECTRON_SHA256 = "ce7eedcef94de0d12b9ba54d5244f5a323c00e17b5cdea2ef0e4f440e1a74c4c"
+WIN_NODE_SHA256 = "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20"
+WIN_CHROMIUM_SHA256 = "220021ecfdad08c116fc71a153e65e3861ba841c531afc4f7acc7bd5d44b41db"
+LIBREOFFICE_MSI = ("https://downloadarchive.documentfoundation.org/libreoffice/old/25.8.7.3/win/x86_64/"
+                   "LibreOffice_25.8.7.3_Win_x86-64.msi",
+                   "ecdb65e76f5e91dc198b8c8dce5b5d6e1eb12fea6023553e52b591afd10b619d")
+GNUCASH_SETUP = ("https://github.com/Gnucash/gnucash/releases/download/5.17/gnucash-5.17.setup.exe",
+                 "a3e8049755e536f647640762a483ebe1b6c79cc50cc81a746fa64a404e98d271")
+#: Where Chrome for Testing reads managed policies on Windows, under HKEY_LOCAL_MACHINE.
+WIN_POLICIES = r"SOFTWARE\Policies\Google\Chrome for Testing"
+WIN_CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+#: Each console program the app starts on Windows gets no console window, which would stand in front of the task's.
+_NO_WINDOW = 0x08000000
 MAC_ELECTRON = RUNTIME / "electron" / "Electron.app" / "Contents" / "MacOS" / "Electron"
 #: Where each of the task's Electron apps gets a bundle of its own on macOS: a clone of Electron.app under the app's name
 #: and an identifier of its own, as an Electron app ships, so a driver that names apps tells them apart.
@@ -186,20 +224,62 @@ def macos(*, workspace: str, calc: bool = False, gnucash: bool = False, node: bo
                 paths=[workspace], launch=Launch(at="boot", command=["venv/bin/python", "bench_app.py"]))
 
 
+def windows(*, workspace: str, first_window: str, calc: bool = False, gnucash: bool = False, node: bool = False,
+            browser: bool = False) -> dict:
+    """The ``@windows(...)`` of a task's app: the task's files, Electron, and what else its Windows descriptor runs
+    (LibreOffice, GnuCash, Node, Chrome for Testing), installed by ``install-windows.ps1``, its ``workspace`` folder of
+    the home as its data, and a launch that's ready once ``first_window`` shows, after which its ``windows`` check waits
+    for the rest."""
+    files = json.loads((HERE / "files.json").read_text(encoding="utf-8"))["files"]
+    downloads = [Download(url=f["url"], sha256=f["sha256"], to=f"task/{f['path']}") for f in files]
+    downloads.append(Download(url=f"https://github.com/electron/electron/releases/download/v{ELECTRON}/"
+                                  f"electron-v{ELECTRON}-win32-x64.zip",
+                              sha256=WIN_ELECTRON_SHA256, to="runtime/electron.zip"))
+    if node:
+        downloads.append(Download(url=f"https://nodejs.org/dist/v{NODE}/node-v{NODE}-win-x64.zip",
+                                  sha256=WIN_NODE_SHA256, to="runtime/node.zip"))
+    if browser:
+        downloads.append(Download(url=f"https://storage.googleapis.com/chrome-for-testing-public/{CHROMIUM}/"
+                                      "win64/chrome-win64.zip",
+                                  sha256=WIN_CHROMIUM_SHA256, to="runtime/chromium.zip"))
+    for wanted, (url, sha256), name in ((calc, LIBREOFFICE_MSI, "LibreOffice.msi"),
+                                        (gnucash, GNUCASH_SETUP, "gnucash-setup.exe")):
+        if wanted:
+            downloads.append(Download(url=url, sha256=sha256, to=f"runtime/{name}"))
+    return dict(downloads=downloads, run=[RunScript(script="install-windows.ps1")], paths=[workspace],
+                launch=Launch(at="boot", command=["venv/Scripts/python.exe", "bench_app.py"],
+                              window={"title": first_window}, ready=Ready(window=True, timeout_s=_LAUNCH_TIMEOUT_S)))
+
+
 class BenchTaskApp(ComputerAppEnvironment):
     """A bench task's app: its install builds the workspace, which must check out byte for byte, and it's ready once
-    each of the task's windows shows."""
+    each of the task's windows shows. On Windows its server builds the workspace when it starts, unless it's there,
+    before it keeps the app's paths as installed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        if WINDOWS and not Path(_values(_spec())["${workspace}"]).exists():
+            build_workspace()
 
     @install_step(scope="session", os=["linux", "macos"])
     def workspace(self) -> None:
-        spec = _spec()
-        values = _values(spec)
-        for step in ("setup", "verify"):
-            subprocess.run([_sub(arg, values) for arg in spec["semantics"]["reset"][step]], cwd=TASK, check=True)
+        build_workspace()
 
     @install_step(scope="system", os="linux")
     def browser(self) -> None:
         install_browser(RUNTIME, POLICY_DIR)
+
+    @install_step(scope="system", os="windows")
+    def browser_policies_windows(self) -> None:
+        """Where the task has a browser, ``POLICIES`` as Chrome for Testing's machine policies in the registry: a
+        number or a boolean as a DWORD, anything else as JSON, as Chrome reads a dictionary or a list policy there."""
+        if (RUNTIME / "chromium").exists():
+            with winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, WIN_POLICIES, 0, winreg.KEY_WRITE) as key:
+                for name, value in POLICIES.items():
+                    if isinstance(value, (bool, int)):
+                        winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, int(value))
+                    else:
+                        winreg.SetValueEx(key, name, 0, winreg.REG_SZ, json.dumps(value))
 
     @install_step(scope="system", os="macos")
     def browser_policies(self) -> None:
@@ -223,9 +303,18 @@ class BenchTaskApp(ComputerAppEnvironment):
                 subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(bundle)], check=True,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    @ready_check(os=["linux", "macos"])
+    @ready_check(os=["linux", "macos", "windows"])
     def windows(self) -> bool:
         return all(claimed([app["window"] for app in _spec()["apps"] if "window" in app]))
+
+
+def build_workspace() -> None:
+    """The task's workspace, as its ``reset/setup.py`` builds it, checked by its ``reset/verify.py``."""
+    spec = _spec()
+    values = _values(spec)
+    for step in ("setup", "verify"):
+        subprocess.run([_sub(arg, values) for arg in spec["semantics"]["reset"][step]], cwd=TASK, check=True,
+                       creationflags=_NO_WINDOW if WINDOWS else 0)
 
 
 def install_browser(runtime: Path, policies: Path) -> None:
@@ -259,7 +348,8 @@ def launch() -> None:
         _quiet(command, env)
         with open(logs / f"{app['id']}.log", "wb") as log:
             running.append(subprocess.Popen(command, cwd=_sub(app.get("cwd", "${bundle}"), values), env=env,
-                                            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
+                                            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                            creationflags=_NO_WINDOW if WINDOWS else 0))
         if ready := app.get("ready"):
             _wait_for(ready["url"], ready["timeout_seconds"])
     _place([app["window"] for app in spec["apps"] if "window" in app])
@@ -276,11 +366,13 @@ def _unlock(workspace: Path) -> None:
 
 
 def _spec() -> dict:
-    return json.loads((TASK / "platform" / f"launch.{'macos' if MACOS else 'linux'}.json").read_text(encoding="utf-8"))
+    name = "macos" if MACOS else "windows" if WINDOWS else "linux"
+    return json.loads((TASK / "platform" / f"launch.{name}.json").read_text(encoding="utf-8"))
 
 
 def _values(spec: dict) -> dict[str, str]:
-    workspace = Path(spec["workspace_root"].replace("${HOME}", str(Path.home())))
+    workspace = Path(spec["workspace_root"].replace("${HOME}", str(Path.home())).replace("${USERPROFILE}",
+                                                                                         str(Path.home())))
     return {"${bundle}": str(TASK), "${workspace}": str(workspace), "${workspace_uri}": workspace.as_uri(),
             "${python}": sys.executable}
 
@@ -297,6 +389,15 @@ def _command(app: dict, values: dict[str, str]) -> list[str]:
     on Chromium's mock keychain, since a bundle signed ad hoc would ask for the keychain item another app made, and
     Chrome for Testing in place of Google Chrome."""
     argv = [_sub(arg, values) for arg in app["command"]]
+    if WINDOWS:
+        profile = Path(values["${workspace}"]) / ".runtime" / f"electron-{app['id']}"
+        if argv[0] in ("npx", "npx.cmd") and argv[1:2] == ["electron"]:
+            return [str(RUNTIME / "electron" / "electron.exe"), *argv[2:], f"--user-data-dir={profile}"]
+        if argv[0] == "node":
+            return [str(RUNTIME / "node" / "node.exe"), *argv[1:]]
+        if argv[0] == WIN_CHROME:
+            return [str(RUNTIME / "chromium" / "chrome.exe"), *argv[1:]]
+        return argv
     if argv[:2] == ["npx", "electron"] and MACOS:
         profile = Path(values["${workspace}"]) / ".runtime" / f"electron-{app['id']}"
         return [str(_bundle(app) / "Contents" / "MacOS" / "Electron"), *argv[2:], f"--user-data-dir={profile}",
@@ -320,9 +421,11 @@ def _bundle(app: dict) -> Path:
 
 def _hooked(command: list[str]) -> dict[str, str]:
     """For an Electron app, the environment that loads the DevTools hook into it."""
-    electron = (MAC_APPS in Path(command[0]).parents and Path(command[0]).name == "Electron") if MACOS else (
-        command[0] == str(RUNTIME / "electron" / "electron"))
-    return {"NODE_OPTIONS": f"--require={DEVTOOLS_HOOK}"} if electron else {}
+    if MACOS:
+        electron = MAC_APPS in Path(command[0]).parents and Path(command[0]).name == "Electron"
+    else:
+        electron = command[0] == str(RUNTIME / "electron" / ("electron.exe" if WINDOWS else "electron"))
+    return {"NODE_OPTIONS": f"--require={DEVTOOLS_HOOK.as_posix()}"} if electron else {}
 
 
 def _quiet(command: list[str], env: dict[str, str]) -> None:
@@ -331,8 +434,12 @@ def _quiet(command: list[str], env: dict[str, str]) -> None:
     if command[0] == "gnucash":
         _setting(Path(env["XDG_CONFIG_HOME"]) / "glib-2.0" / "settings" / "keyfile",
                  "[org/gnucash/GnuCash/dialogs/tip-of-the-day]", "show-at-startup=false")
+    if WINDOWS and Path(command[0]).name == "gnucash.exe":
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                              r"Software\GSettings\org\gnucash\GnuCash\dialogs\tip-of-the-day") as key:
+            winreg.SetValueEx(key, "show-at-startup", 0, winreg.REG_SZ, "false")
     profile = next((arg.split("=", 1)[1] for arg in command if arg.startswith("-env:UserInstallation=")), None)
-    if Path(command[0]).name in ("libreoffice", "soffice") and profile:
+    if Path(command[0]).stem in ("libreoffice", "soffice", "scalc") and profile:
         path = Path(urllib.request.url2pathname(profile.removeprefix("file://"))) / "user" / "registrymodifications.xcu"
         tip = ('<item oor:path="/org.openoffice.Office.Common/Misc"><prop oor:name="ShowTipOfTheDay" oor:op="fuse">'
                "<value>false</value></prop></item>")
@@ -396,9 +503,10 @@ def claimed(windows: list[dict]) -> list[list[str]]:
 
 
 def _search(window: dict) -> list[str]:
-    """The ids of the shown windows ``window`` matches: X's, or on macOS ``<pid>:<window number>``."""
-    if MACOS:
-        return [wid for wid, title, _ in _shown()
+    """The ids of the shown windows ``window`` matches: X's, on macOS ``<pid>:<window number>``, or on Windows its
+    handle."""
+    if MACOS or WINDOWS:
+        return [wid for wid, title, _ in (_shown() if MACOS else _win_shown())
                 if (title == window["title"] if "title" in window else window["title_contains"] in title)]
     return subprocess.run(["xdotool", "search", "--onlyvisible", "--name", _title(window)],
                           capture_output=True, text=True).stdout.split()
@@ -421,6 +529,24 @@ def _shown() -> list[tuple[str, str, object]]:
                 continue
             error, title = AXUIElementCopyAttributeValue(element, kAXTitleAttribute, None)
             found.append((f"{pid}:{number.value}", "" if error else str(title or ""), element))
+    return found
+
+
+def _win_shown() -> list[tuple[str, str, None]]:
+    """The top-level windows Windows shows, each its handle and title: visible, titled, and not cloaked."""
+    found = []
+
+    def take(hwnd, _):
+        length = _user32.GetWindowTextLengthW(hwnd)
+        cloaked = wintypes.DWORD()
+        _dwmapi.DwmGetWindowAttribute(hwnd, _CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+        if _user32.IsWindowVisible(hwnd) and length and not cloaked.value:
+            title = ctypes.create_unicode_buffer(length + 1)
+            _user32.GetWindowTextW(hwnd, title, length + 1)
+            found.append((str(hwnd), title.value, None))
+        return True
+
+    _user32.EnumWindows(_ENUM(take), 0)
     return found
 
 
@@ -463,6 +589,10 @@ def _place(windows: list[dict]) -> None:
 
 
 def _move(wid: str, bounds: dict) -> None:
+    if WINDOWS:
+        _user32.ShowWindow(int(wid), _RESTORE)
+        _user32.SetWindowPos(int(wid), None, bounds["x"], bounds["y"], bounds["width"], bounds["height"], _PLACE)
+        return
     if MACOS:
         for element in [element for shown, _, element in _shown() if shown == wid]:
             _set_frame(element, bounds)
@@ -479,6 +609,11 @@ def _at(wid: str, bounds: dict) -> bool:
     try:
         if MACOS:
             x, y, width, height = next(_frame(element) for shown, _, element in _shown() if shown == wid)
+        elif WINDOWS:
+            rect = wintypes.RECT()
+            if not _user32.GetWindowRect(int(wid), ctypes.byref(rect)):
+                return False
+            x, y, width, height = rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
         else:
             geometry = dict(line.split("=", 1) for line in subprocess.run(
                 ["xdotool", "getwindowgeometry", "--shell", wid], capture_output=True, text=True).stdout.split())

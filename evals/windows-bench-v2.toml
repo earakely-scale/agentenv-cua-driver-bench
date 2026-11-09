@@ -1,4 +1,7 @@
 tasks = [
+  "windows-cdb-g02-foreground",
+  "windows-cdb-g03-foreground",
+  "windows-cdb-g04-foreground",
   "windows-mb-09-r1-foreground",
   "windows-mb-09-r2-foreground",
   "windows-mb-09-r3-foreground",
@@ -34,6 +37,9 @@ tasks = [
   "windows-ir-03-r5-foreground",
   "windows-ir-04-r4-foreground",
   "windows-ir-04-r5-foreground",
+  "windows-cdb-g02-background",
+  "windows-cdb-g03-background",
+  "windows-cdb-g04-background",
   "windows-mb-09-r1-background",
   "windows-mb-09-r2-background",
   "windows-mb-09-r3-background",
