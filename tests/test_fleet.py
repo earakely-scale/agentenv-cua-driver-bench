@@ -247,6 +247,13 @@ def test_setup_and_health_check_failures_are_re_run_twice_before_a_trial_is_miss
     assert worker.LIMITS == {"rate": 6, "server": 3, "setup": 2}
 
 
+def test_a_store_a_stopped_run_left_without_task_instances_holds_none(worker, tmp_path, monkeypatch):
+    monkeypatch.setattr(worker, "DB", tmp_path / "local.db")
+    sqlite3.connect(tmp_path / "local.db").execute("create table docs_artifacts (doc text)")
+
+    assert worker._instances("ir-01-r1-foreground") == {}
+
+
 def test_a_runs_settings_reach_each_trial_and_its_export_and_its_instance_is_found_by_its_task_file(
         worker, tmp_path, monkeypatch):
     monkeypatch.setattr(worker, "FLEET", tmp_path)
