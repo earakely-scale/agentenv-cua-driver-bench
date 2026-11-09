@@ -446,7 +446,7 @@ def _quiet(command: list[str], env: dict[str, str]) -> None:
     if WINDOWS and Path(command[0]).name == "gnucash.exe":
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
                               r"Software\GSettings\org\gnucash\GnuCash\dialogs\tip-of-the-day") as key:
-            winreg.SetValueEx(key, "show-at-startup", 0, winreg.REG_SZ, "false")
+            winreg.SetValueEx(key, "show-at-startup", 0, winreg.REG_DWORD, 0)
     profile = next((arg.split("=", 1)[1] for arg in command if arg.startswith("-env:UserInstallation=")), None)
     if Path(command[0]).stem in ("libreoffice", "soffice", "scalc") and profile:
         path = Path(urllib.request.url2pathname(profile.removeprefix("file://"))) / "user" / "registrymodifications.xcu"
