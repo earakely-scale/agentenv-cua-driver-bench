@@ -12,8 +12,8 @@ from pathlib import Path
 import pandas as pd
 
 CRITERIA = ("key_focus", "window_raised", "typing", "pointer", "clipboard", "space", "dialog", "activation")
-STEM = re.compile(r"^(?:(?P<os>macos)-)?(?:(?P<driver>agent-desktop|macos-harness)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)"
-                  r"(?:-r(?P<run>\d))?-(?P<condition>foreground|background)$")
+STEM = re.compile(r"^(?:(?P<os>macos)-)?(?:(?P<driver>agent-desktop|macos-harness|codex-computer-use)-)?"
+                  r"(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r(?P<run>\d))?-(?P<condition>foreground|background)$")
 #: The driver of a trial that names none, the bench's first arm.
 DRIVER = "cua-driver"
 

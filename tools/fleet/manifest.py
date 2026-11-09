@@ -81,8 +81,8 @@ PINNED = ("mcp-{os}.json", "mcp.json", "skill.md")
 
 def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux") -> dict:
     """The env's computer, driver, display and apps, and the sha256 of what its driver pins of its agents' tools on
-    ``os_type``: cua-driver's ``mcp.json`` on Linux and ``mcp-<os>.json`` on another OS, agent-desktop's ``mcp.json``,
-    macos-harness's ``skill.md``."""
+    ``os_type``: cua-driver's ``mcp.json`` on Linux and ``mcp-<os>.json`` on another OS, agent-desktop's and
+    codex-computer-use's ``mcp.json``, macos-harness's ``skill.md``."""
     spec = tomllib.loads((bench / "envs" / env / "env.toml").read_text())
     names = [name.format(os=os_type) for name in PINNED if os_type != "linux" or "{os}" not in name]
     tools = next((drivers / spec["driver"] / name for name in names if (drivers / spec["driver"] / name).is_file()),

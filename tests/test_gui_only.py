@@ -184,3 +184,31 @@ def test_its_table_pins_trycuas_scan_at_the_locks_commit():
         f"https://raw.githubusercontent.com/trycua/cua/{module.TRYCUA['commit']}/")
     assert module.TRYCUA["guard.py"]["sha256"] == manifest["windows/guard.py"]
     assert module.TRYCUA["guard.py"]["url"].endswith("/automated-eval/macos_bench/windows/guard.py")
+
+
+JS = "mcp__desktop-s02-macos-codex-computer-use__js"
+
+
+def test_codexs_js_driving_apps_through_the_cua_api_is_gui_only(gui_only):
+    code = ('const mail = await cua.getApp("Copperfield Mail"); await mail.click(12);'
+            ' await mail.typeText("Please process the refs.json export by Friday."); nodeRepl.write("done");')
+
+    result = gui_only(_trajectory(_tool(JS, code=code), _tool("mcp__desktop-s02-macos-codex-computer-use__js_reset")))
+
+    assert result["result"] is True and result["violations"] == []
+
+
+@pytest.mark.parametrize("code, violation", [
+    ('const fs = require("fs"); nodeRepl.write(fs.readFileSync("/Users/lume/cdb-s02/a.csv", "utf8"));', "require"),
+    ("nodeRepl.write(fs.readdirSync('/Users/lume/cdb-s02').join(' '));", "module:fs"),
+    ("nodeRepl.write(os.homedir());", "module:os"),
+    ("nodeRepl.write(process.env.HOME);", "process"),
+    ("globalThis.process.kill(1234);", "process"),
+    ('const { execSync } = await import("node:child_process");', "import"),
+    ('import fs from "fs";', "import"),
+], ids=["require", "a module as the REPL's global", "another", "the process", "the process through globalThis",
+        "a dynamic import", "a static import"])
+def test_codexs_js_reaching_out_of_the_gui_fails(gui_only, code, violation):
+    result = gui_only(_trajectory(_tool(JS, code=code)))
+
+    assert result["result"] is False and f"{JS}:codex:{violation}" in result["violations"]

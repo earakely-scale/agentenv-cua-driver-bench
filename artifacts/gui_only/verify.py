@@ -6,8 +6,11 @@ reads its Codex arm's: its own tools as the built-ins trycua forbids; the grade 
 
 It holds when claude-code was offered no built-in tool but Skill and Read beside the computer env's, tried none trycua
 forbids, put no code in a tool input, and ran no command through cua-driver's ``launch_app``, which on Linux runs one
-where macOS's opens apps only, nor through agent-desktop's ``launch``, alone or in a batch. A trial whose agent's trajectory the verifier isn't given, or is neither claude-code's
-stream-json nor codex-cli's events, doesn't hold, since its tool calls can't be checked. Codex's events don't list the
+where macOS's opens apps only, nor through agent-desktop's ``launch``, alone or in a batch. Codex Computer Use's ``js``
+is code by design: trycua's patterns judge it as any tool input, and besides them it may name no Node module, nor the
+process, nor load a module, since the cua API it drives apps with is a global. A trial whose agent's trajectory the
+verifier isn't given, or is neither claude-code's stream-json nor codex-cli's events, doesn't hold, since its tool
+calls can't be checked. Codex's events don't list the
 tools it was offered: that its own were off rests on the task's agent step, which deploy checks against its card."""
 import hashlib
 import importlib.util
@@ -29,6 +32,14 @@ CODEX_TOOLS = {"command_execution": ("Bash", "command"), "file_change": ("Edit",
 CODEX_TEXT = ("agent_message", "reasoning", "todo_list", "error")
 #: A launch_app name that a shell would read as more than an app's name.
 _COMMAND = re.compile(r"[;|&$`<>]|^[/.~]")
+#: What Codex Computer Use's ``js`` reaches outside the GUI beyond trycua's patterns: a Node module its REPL holds as a
+#: global, used without a require; the process; or any module loaded at all, since the cua API it drives apps with is a
+#: global and needs none.
+_CODEX_JS = re.compile(
+    r"\b(?P<module>fs|os|net|https?|child_process|worker_threads|vm|module|dgram|tls|cluster|inspector)\s*\.\s*[A-Za-z_$]"
+    r"|\b(?:globalThis\s*\.\s*)?(?P<process>process)\s*\.\s*[A-Za-z_$]"
+    r"|\b(?P<load>require|import)\s*\("
+    r"|^\s*(?P<static>import)\s+[\w{*]", re.MULTILINE)
 
 TRYCUA = {
  "commit": "69b459b33ca001a5e7026dee4f57da1ec02ee53f",
@@ -129,7 +140,23 @@ def _scan(v2, events, scan):
         if name.endswith("__desktop_batch") and isinstance(tool_input, dict):
             launches |= {f"{name}:launch:{how}" for command in _batch(tool_input) if command.get("command") == "launch"
                          for how in _desktop_launch(command.get("args") or {})}
+        if name.endswith("__js") and isinstance(tool_input, dict):
+            launches |= {f"{name}:codex:{how}" for how in _codex_js(str(tool_input.get("code") or ""))}
     return sorted({*hard, *offered, *launches}), soft
+
+
+def _codex_js(code):
+    """What Codex Computer Use's ``js`` code reaches outside the GUI that trycua's patterns let by: a Node module named
+    as its REPL's global, the process, or a module loaded with require or import."""
+    found = set()
+    for match in _CODEX_JS.finditer(code):
+        if match["module"]:
+            found.add(f"module:{match['module']}")
+        elif match["process"]:
+            found.add("process")
+        else:
+            found.add(match["load"] or match["static"])
+    return found
 
 
 def _desktop_launch(tool_input):
