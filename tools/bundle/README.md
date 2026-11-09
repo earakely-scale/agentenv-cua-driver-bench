@@ -63,7 +63,8 @@ The first run builds each task's computer, a few minutes on Linux and about 7 on
 macOS base (about 29 GB); later runs reuse it. On an amd64 Linux machine whose Docker can't emulate arm64, the build
 also says it "can't build linux/arm64" for each computer: that form is skipped, and the amd64 one runs. On macOS the drivers comparison's trials name their driver:
 `macos-agent-desktop-…` for Vercel Labs' agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness,
-`macos-codex-computer-use-…` for OpenAI's Codex Computer Use, which acts only on the apps the task names, and
+`macos-codex-computer-use-…` for OpenAI's Codex Computer Use, which acts only on the apps the task names (0.9.1482 or
+later), and
 `macos-cua-driver-…` for cua-driver on its own tools alone.
 
 To run exactly what this card describes, pin the repo's commit: `hf://{{REPO}}@<commit>`. Each commit of this repo is
