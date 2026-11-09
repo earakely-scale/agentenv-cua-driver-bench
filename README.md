@@ -101,6 +101,10 @@ An eval runs its trials one after another. Apple's licence allows two macOS VMs 
 **What differs from Linux:** the macOS trial files (`tasks/macos-*.json`) carry trycua's system prompt as written, for
 "a macOS desktop", and grade on the Mac's own Docker.
 
+The Codex Computer Use arm's trials (`tasks/macos-codex-computer-use-*.json`) need agentenv-framework 0.9.1482 or
+later. That release approves the driver's helper app's screen capture ahead, under the key macOS reads, so macOS's
+prompt to "bypass the system private window picker" doesn't take the user's focus mid-trial in the background.
+
 ### On Windows
 
 Every task runs on Windows 11 too, in both conditions (MB-10 and MB-11 in the foreground only), five runs each.

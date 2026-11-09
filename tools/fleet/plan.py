@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 RUN = re.compile(r"-r(\d)-(foreground|background)$")
 #: A macOS trial's OS and its driver, an arm's or cua-driver's on its own tools, a Windows trial's OS, and a Codex
 #: trial's harness, which its name leaves to its run's folder.
-PREFIX = re.compile(r"^(?:codex-|agent-desktop-|macos-(?:agent-desktop-|macos-harness-|cua-driver-)?|windows-)")
+PREFIX = re.compile(r"^(?:codex-|agent-desktop-|macos-(?:agent-desktop-|macos-harness-|codex-computer-use-|"
+                    r"cua-driver-)?|windows-)")
 
 
 def main():

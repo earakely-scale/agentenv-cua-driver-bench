@@ -150,6 +150,11 @@
       "label": "browser-use",
       "detail": "browser-use's macOS harness 0.2.1, its 11 commands through one tool that runs a list of them, as its skill chains them; the agent reads its skill through the tool, since Claude Code cuts a server's instructions at 4,096 characters",
       "slot": 3
+    },
+    "codex-computer-use": {
+      "name": "Codex Computer Use",
+      "detail": "OpenAI's Codex Computer Use, the ChatGPT app's unified-computer-use plugin at 26.930.51102, through its cua_repl's js and js_reset: the agent writes JavaScript against OpenAI's cua API, each app approved by the task's allowed apps, in Codex's read-only sandbox, with no ChatGPT sign-in",
+      "slot": 4
     }
   },
   "families": {

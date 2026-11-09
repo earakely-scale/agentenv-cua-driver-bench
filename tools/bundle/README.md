@@ -62,7 +62,9 @@ agent-env run hf://{{REPO}} --eval macos-bench-v2 --model anthropic/claude-sonne
 The first run builds each task's computer, a few minutes on Linux and about 7 on macOS, where it first pulls Cua's
 macOS base (about 29 GB); later runs reuse it. On an amd64 Linux machine whose Docker can't emulate arm64, the build
 also says it "can't build linux/arm64" for each computer: that form is skipped, and the amd64 one runs. On macOS the drivers comparison's trials name their driver:
-`macos-agent-desktop-…` for Vercel Labs' agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness, and
+`macos-agent-desktop-…` for Vercel Labs' agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness,
+`macos-codex-computer-use-…` for OpenAI's Codex Computer Use, which acts only on the apps the task names (0.9.1482 or
+later), and
 `macos-cua-driver-…` for cua-driver on its own tools alone.
 
 To run exactly what this card describes, pin the repo's commit: `hf://{{REPO}}@<commit>`. Each commit of this repo is
@@ -96,8 +98,9 @@ the Linux runs in the
 [CuaDriverBench-AgentEnv dataset](https://huggingface.co/datasets/earakely-scale/CuaDriverBench-AgentEnv) ran with `both`. An eval deploys several envs, so set each one, for example
 `--eval bench-v2 --set envs/desktop-benchlab.driver=reference --set envs/desktop-s02.driver=reference
 --set envs/desktop-s03.driver=reference --set envs/desktop-s04.driver=reference`. The `macos-agent-desktop-…`,
-`macos-macos-harness-…` and `macos-cua-driver-…` task files are these settings written out, and they are what the
-dataset's macOS runs ran; in the foreground they also start agent-desktop headed, which `--set` can't. A driver that doesn't run
+`macos-macos-harness-…`, `macos-codex-computer-use-…` and `macos-cua-driver-…` task files are these settings written
+out, and they are what the dataset's macOS runs ran; in the foreground they also start agent-desktop headed, and
+Codex's trials name the apps it may act on, which `--set` can't. A driver that doesn't run
 on the computer, such as macos-harness on Linux, is refused before any task runs.
 
 ## What's here
