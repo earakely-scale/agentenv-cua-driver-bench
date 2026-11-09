@@ -337,6 +337,20 @@ def _runner(board, tmp_path, monkeypatch, hosts, started=None, **settings):
     return runner, calls
 
 
+def test_a_board_that_keeps_its_hosts_benches_starts_its_workers_on_them_as_they_are(board, tmp_path, monkeypatch):
+    host = board.Host("b4", "i-4", workers=[_worker(board, "r", "lab", 1)])
+    kept, calls = _runner(board, tmp_path, monkeypatch, [host], keep=True)
+    board.common.replies["i-4"] = _peek(False)
+    kept.poll(host)
+    (tmp_path / "moved").mkdir()
+    moved, more = _runner(board, tmp_path / "moved", monkeypatch, [board.Host("b5", "i-5", workers=[
+        _worker(board, "r", "lab", 1)])])
+    board.common.replies["i-5"] = _peek(False)
+    moved.poll(moved.hosts[0])
+
+    assert "--keep" in calls[0] and "--keep" not in more[0]
+
+
 def test_a_host_runs_its_workers_one_after_another_and_never_starts_one_twice(board, tmp_path, monkeypatch):
     first, second = _worker(board, "r", "lab", 2), _worker(board, "r", "s02", 1)
     host = board.Host("b4", "i-4", workers=[first, second])

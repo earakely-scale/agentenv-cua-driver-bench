@@ -11,8 +11,8 @@ worker's trials' digest, so nothing starts twice. A host that can't be asked is 
 fails is tried again; a worker that ended with trials left resumes, up to `RESUMES` times, then counts as failed; one
 whose trials all ended but some failed their export or upload exports and uploads just those again, from their
 finished task instances, as many times. A host's framework is checked out and installed at its pin only while it runs
-nothing. `--plan` prints the plan and
-starts nothing. What happens goes to BOARD.log."""
+nothing. With `keep`, each host's bench runs as its checkout is, a branch say, rather than moved to origin/main.
+`--plan` prints the plan and starts nothing. What happens goes to BOARD.log."""
 import argparse
 import hashlib
 import json
@@ -255,6 +255,8 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
                 str(self.work / f"{worker.run}.run.txt"), "--os", self.os]
         if taskpack := self.board.get("taskpack"):
             argv += ["--taskpack", str(ROOT / taskpack)]
+        if self.board.get("keep"):
+            argv.append("--keep")
         if fresh:
             argv.append("--fresh")
         done = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, env=env)
