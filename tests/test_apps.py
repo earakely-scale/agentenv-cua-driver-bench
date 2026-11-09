@@ -242,18 +242,28 @@ def test_a_tip_setting_takes_its_keys_place_in_a_keyfile_and_keeps_the_rest(benc
     assert keyfile.read_text() == f"[org/gnucash/GnuCash/general]\nprefs-version=5005\n\n{section}\n{line}\n"
 
 
-def test_libreoffice_starts_without_its_tip_in_a_new_profile_and_in_one_it_wrote(bench_app, tmp_path):
+def test_libreoffice_starts_without_its_tip_or_welcome_in_a_new_profile_and_in_one_it_wrote(bench_app, tmp_path):
     profile = tmp_path / "lo"
     command = ["libreoffice", "--calc", f"-env:UserInstallation={profile.as_uri()}", "/w/a.ods"]
     xcu = profile / "user" / "registrymodifications.xcu"
+    quiet = ('<item oor:path="/org.openoffice.Office.Common/Misc"><prop oor:name="ShowTipOfTheDay" oor:op="fuse">'
+             "<value>false</value>",
+             '<item oor:path="/org.openoffice.Office.Common/Misc"><prop oor:name="FirstRun" oor:op="fuse">'
+             "<value>false</value>",
+             '<item oor:path="/org.openoffice.Setup/Product"><prop oor:name="ooSetupLastVersion" oor:op="fuse">'
+             "<value>25.8</value>")
 
     bench_app._quiet(command, {})
-    assert '<prop oor:name="ShowTipOfTheDay" oor:op="fuse"><value>false</value>' in xcu.read_text()
+    assert all(item in xcu.read_text() for item in quiet)
     xcu.write_text('<?xml version="1.0"?>\n<oor:items xmlns:oor="http://openoffice.org/2001/registry">\n'
-                   '<item oor:path="/a"><prop oor:name="b"><value>1</value></prop></item>\n</oor:items>\n')
+                   '<item oor:path="/a"><prop oor:name="b"><value>1</value></prop></item>\n'
+                   '<item oor:path="/org.openoffice.Setup/Product"><prop oor:name="ooSetupLastVersion" oor:op="fuse">'
+                   "<value>25.8</value></prop></item>\n</oor:items>\n")
     bench_app._quiet(command, {})
     text = xcu.read_text()
-    assert '<prop oor:name="b">' in text and text.count("ShowTipOfTheDay") == 1 and text.endswith("</oor:items>\n")
+    assert '<prop oor:name="b">' in text and text.endswith("</oor:items>\n")
+    assert [text.count(f'oor:name="{name}"') for name in ("ShowTipOfTheDay", "FirstRun", "ooSetupLastVersion")] \
+        == [1, 1, 1]
 
 
 def test_a_launch_removes_the_locks_stopped_apps_left_and_nothing_else(bench_app, tmp_path):

@@ -90,6 +90,8 @@ DESKTOP_APT = ["libasound2t64", "libatk-bridge2.0-0t64", "libatk1.0-0t64", "libc
 #: archive and sha256 by arch, what it links against beyond DESKTOP_APT, a font for the pages it shows, and its window
 #: class, its own, so its windows are never taken for another app's Chromium.
 CHROMIUM = "156.0.8078.4"
+#: The LibreOffice the macOS and Windows descriptors run; its series is the version its profile says already ran.
+LIBREOFFICE = "25.8.7.3"
 CHROMIUM_ARCHIVES = {"amd64": ("linux64/chrome-linux64.zip",
                                "43fd31766c7533a02dda2ded5ad50c2f861cd5400be7509c0abad71129f79d79"),
                      "arm64": ("linux-arm64/chrome-linux-arm64.zip",
@@ -123,8 +125,8 @@ GNUCASH_APT = ["gnucash", "python3-gi"]
 MAC_ELECTRON_SHA256 = "01bb5d8756d220002ed5f8dccfb5a01391c4b919667af7156257cf5252e3e8ae"
 MAC_NODE_SHA256 = "037650d0839f457747396f052073fb48333d31bf5abd3c98b74da20d89ebb1ad"
 MAC_CHROMIUM_SHA256 = "987d2f8499c87d21676f78178550cfcbfb1bb53786821e2cff46c5a7e99b58be"
-LIBREOFFICE_DMG = ("https://downloadarchive.documentfoundation.org/libreoffice/old/25.8.7.3/mac/aarch64/"
-                   "LibreOffice_25.8.7.3_MacOS_aarch64.dmg",
+LIBREOFFICE_DMG = (f"https://downloadarchive.documentfoundation.org/libreoffice/old/{LIBREOFFICE}/mac/aarch64/"
+                   f"LibreOffice_{LIBREOFFICE}_MacOS_aarch64.dmg",
                    "e7556aa61e282f89578ebaf35afdb09c94dcf9d6ee7c137004377bee81a6e900")
 GNUCASH_DMG = ("https://github.com/Gnucash/gnucash/releases/download/5.17/Gnucash-Arm-5.17-1.dmg",
                "adbc91d6d69a297c1c599ad2849303a06c01310130d355473c0700f80dd2eb32")
@@ -135,8 +137,8 @@ MAC_POLICIES = Path("/Library/Managed Preferences/com.google.chrome.for.testing.
 WIN_ELECTRON_SHA256 = "ce7eedcef94de0d12b9ba54d5244f5a323c00e17b5cdea2ef0e4f440e1a74c4c"
 WIN_NODE_SHA256 = "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20"
 WIN_CHROMIUM_SHA256 = "220021ecfdad08c116fc71a153e65e3861ba841c531afc4f7acc7bd5d44b41db"
-LIBREOFFICE_MSI = ("https://downloadarchive.documentfoundation.org/libreoffice/old/25.8.7.3/win/x86_64/"
-                   "LibreOffice_25.8.7.3_Win_x86-64.msi",
+LIBREOFFICE_MSI = (f"https://downloadarchive.documentfoundation.org/libreoffice/old/{LIBREOFFICE}/win/x86_64/"
+                   f"LibreOffice_{LIBREOFFICE}_Win_x86-64.msi",
                    "ecdb65e76f5e91dc198b8c8dce5b5d6e1eb12fea6023553e52b591afd10b619d")
 GNUCASH_SETUP = ("https://github.com/Gnucash/gnucash/releases/download/5.17/gnucash-5.17.setup.exe",
                  "a3e8049755e536f647640762a483ebe1b6c79cc50cc81a746fa64a404e98d271")
@@ -428,9 +430,16 @@ def _hooked(command: list[str]) -> dict[str, str]:
     return {"NODE_OPTIONS": f"--require={DEVTOOLS_HOOK.as_posix()}"} if electron else {}
 
 
+#: What a LibreOffice profile starts with: no tip of the day, and no welcome dialog, which LibreOffice 24.8 and later
+#: show on a first start unless the profile says this series already ran.
+LIBREOFFICE_QUIET = (("/org.openoffice.Office.Common/Misc", "ShowTipOfTheDay", "false"),
+                     ("/org.openoffice.Office.Common/Misc", "FirstRun", "false"),
+                     ("/org.openoffice.Setup/Product", "ooSetupLastVersion", ".".join(LIBREOFFICE.split(".")[:2])))
+
+
 def _quiet(command: list[str], env: dict[str, str]) -> None:
-    """A first run's tip of the day off, GnuCash's and LibreOffice's, in the settings each keeps in the runtime folder
-    the task gives it, where a reset leaves none."""
+    """A first run's tip of the day off, GnuCash's and LibreOffice's, and LibreOffice's welcome dialog, in the settings
+    each keeps in the runtime folder the task gives it, where a reset leaves none."""
     if command[0] == "gnucash":
         _setting(Path(env["XDG_CONFIG_HOME"]) / "glib-2.0" / "settings" / "keyfile",
                  "[org/gnucash/GnuCash/dialogs/tip-of-the-day]", "show-at-startup=false")
@@ -441,15 +450,16 @@ def _quiet(command: list[str], env: dict[str, str]) -> None:
     profile = next((arg.split("=", 1)[1] for arg in command if arg.startswith("-env:UserInstallation=")), None)
     if Path(command[0]).stem in ("libreoffice", "soffice", "scalc") and profile:
         path = Path(urllib.request.url2pathname(profile.removeprefix("file://"))) / "user" / "registrymodifications.xcu"
-        tip = ('<item oor:path="/org.openoffice.Office.Common/Misc"><prop oor:name="ShowTipOfTheDay" oor:op="fuse">'
-               "<value>false</value></prop></item>")
-        if not path.exists():
+        text = path.read_text(encoding="utf-8") if path.exists() else (
+            '<?xml version="1.0" encoding="UTF-8"?>\n<oor:items xmlns:oor="http://openoffice.org/2001/registry" '
+            'xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n'
+            "</oor:items>\n")
+        missing = "".join(f'<item oor:path="{folder}"><prop oor:name="{name}" oor:op="fuse"><value>{value}</value>'
+                          "</prop></item>\n" for folder, name, value in LIBREOFFICE_QUIET
+                          if f'oor:name="{name}"' not in text)
+        if missing or not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('<?xml version="1.0" encoding="UTF-8"?>\n<oor:items xmlns:oor="http://openoffice.org/2001/'
-                            'registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/'
-                            f'XMLSchema-instance">\n{tip}\n</oor:items>\n', encoding="utf-8")
-        elif "ShowTipOfTheDay" not in (text := path.read_text(encoding="utf-8")):
-            path.write_text(text.replace("</oor:items>", f"{tip}\n</oor:items>"), encoding="utf-8")
+            path.write_text(text.replace("</oor:items>", f"{missing}</oor:items>"), encoding="utf-8")
 
 
 def _setting(keyfile: Path, section: str, line: str) -> None:
