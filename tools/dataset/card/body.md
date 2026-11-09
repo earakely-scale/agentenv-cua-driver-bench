@@ -48,11 +48,12 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    desktop" on Linux, as written on macOS), at most 45 turns and 360 seconds:
    - **Claude Code** for Claude Haiku, Sonnet and Opus 5.5, its built-in tools limited to `Skill` and `Read`, at its
      default effort for these models, medium (no `--effort` is passed).
-   - **OpenAI's Codex CLI 0.147.0** for GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol, as AgentEnv's `codex` agent runs
-     it (`tasks/codex-*.json`, each its Linux twin but for the agent), every tool of its own off (shell, patch, web
-     search, image viewing, plan, sub-agents), which leaves the driver's tools, `peer_agents` and Codex's reads of MCP
-     resources, at medium effort, set in the task. Codex has no turn limit of its own: AgentEnv's agent stops it after
-     45 tool calls, each one model request, since Codex sends these models no parallel calls.
+   - **OpenAI's Codex CLI 0.147.0** for GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol, as AgentEnv's `codex` agent runs it
+     (`tasks/codex-*.json`, each its Linux twin but for the agent, and on macOS GPT-6.1 Sol through Codex Computer
+     Use, `tasks/codex-macos-codex-computer-use-*.json`, each its Claude Code twin's), every tool of its own off
+     (shell, patch, web search, image viewing, plan, sub-agents), which leaves the driver's tools, `peer_agents` and
+     Codex's reads of MCP resources, at medium effort, set in the task. Codex has no turn limit of its own: AgentEnv's
+     agent stops it after 45 tool calls, each one model request, since Codex sends these models no parallel calls.
 3. Start recording the screen (10 fps), arm the sentinel, prompt the agent, disarm the sentinel.
 4. Snapshot the computer's app data and grade it in a separate container with no network.
 
@@ -148,11 +149,14 @@ runs/<os>/<run>/<trial>/
   0.160 trycua's runner pins included, and these runs keep Codex as it ships. Codex 0.147 has no settings for the
   GPT-6 models either, so they run on its generic ones (no code mode, no parallel tool calls, its default
   instructions), as a warning in each trajectory says. trycua's runner has published no Codex numbers, and runs its
-  Codex arms on macOS only.
-- **Codex Computer Use is OpenAI's app, driven by Claude.** Its rows (run `codex-computer-use-sonnet-5-5-2026-11-09`)
-  are the ChatGPT app 26.930.51102's `unified-computer-use` plugin, its `cua_repl` started as the app starts it,
-  through AgentEnv's `codex-computer-use` driver, with Claude Sonnet 5.5 in Claude Code writing the JavaScript it
-  runs against OpenAI's `cua` API: not OpenAI's own agent or models, and with no ChatGPT sign-in. The driver answers
+  Codex arms on macOS only. Codex Computer Use's `js` results carry no structured content, so its screenshots do reach
+  GPT-6.1 Sol.
+- **Codex Computer Use is OpenAI's app, driven by Claude and by GPT.** Its rows are the ChatGPT app 26.930.51102's
+  `unified-computer-use` plugin, its `cua_repl` started as the app starts it, through AgentEnv's `codex-computer-use`
+  driver, with the JavaScript it runs against OpenAI's `cua` API written by Claude Sonnet 5.5 in Claude Code (run
+  `codex-computer-use-sonnet-5-5-2026-11-09`) or by GPT-6.1 Sol in OpenAI's Codex CLI 0.147.0 at medium effort (run
+  `codex-computer-use-gpt-6-1-sol-2026-11-09`): neither is the ChatGPT app's own agent, and neither has a ChatGPT
+  sign-in. The driver answers
   each of Codex's requests to act on an app from the task's apps, and keeps Codex's read-only sandbox on its
   JavaScript, where trycua's filter (`codex_cu_filter.py`) turns it off. The GUI-only check reads its `js` as trycua's
   scan reads any tool input, and fails a call that names a Node module, the process, or loads a module. It needs
