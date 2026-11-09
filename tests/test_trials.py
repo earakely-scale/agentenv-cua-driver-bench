@@ -2,9 +2,10 @@
 trycua's runner prompts them, with the task's brief (a CDB task's with its workspace, a BenchLab task's rendered from
 the run's seed), in the background their background brief, and the time and turns they tell the agent, and with their
 system prompt for a Linux desktop, a browser task's allowing its localhost site, all checked against the fetched task
-pack; on macOS the same but on its macOS computers with their system prompt as it is; on Windows the BenchLab trials
-alone, on BenchLab's Windows computer with their system prompt for a Windows desktop and the brief as their Windows
-runner words it, BenchLab in the trial's condition too; with the sentinel in that condition and BenchLab in the
+pack; on macOS the same but on its macOS computers with their system prompt as it is; on Windows the same on its
+Windows computers with their system prompt for a Windows desktop, a CDB task's workspace at the Windows home and a
+BenchLab brief as their Windows runner words it, BenchLab in the trial's condition too; with the sentinel in that
+condition and BenchLab in the
 task's mode with the run's seed, claude-code with no built-in tools but Skill and Read, the sentinel armed just
 around the prompt within the task's time and turns; its grade, whatever became of the agent: in a container of its
 own with no network, on the trial's snapshot, and the trajectory's half outside; and the whole of Bench v2 in
@@ -30,13 +31,11 @@ LAB_TRIALS = tuple(f"{probe.lower()}-r{run}" for probe in LABS for run in RUNS)
 LAB_CELLS = tuple((probe, run, condition) for probe in LABS for run in RUNS for condition in CONDITIONS
                   if not (condition == "background" and probe in FOREGROUND_ONLY))
 EVERY = tuple((name, os, condition) for os in ("linux", "macos", "windows") for name in (*TRIALS, *LAB_TRIALS)
-              for condition in CONDITIONS if not (condition == "background" and name[:5].upper() in FOREGROUND_ONLY)
-              and not (os == "windows" and name in TRIALS))
-#: Where each OS's computer keeps a task's workspace: its session user's home.
-HOMES = {"linux": "/home/user", "macos": "/Users/lume"}
-OSES = ("linux", "macos")
-#: The OSes the BenchLab trials run on: on Windows they alone, so far.
-LAB_OSES = (*OSES, "windows")
+              for condition in CONDITIONS if not (condition == "background" and name[:5].upper() in FOREGROUND_ONLY))
+#: Where each OS's computer keeps a task's workspace, its session user's home, and how a path there is joined.
+HOMES = {"linux": "/home/user", "macos": "/Users/lume", "windows": "C:\\Users\\user"}
+SEPARATORS = {"windows": "\\"}
+OSES = ("linux", "macos", "windows")
 #: How trycua's Windows runner words a BenchLab brief, which says Mac on every other OS.
 PLATFORM_WORDS = {"windows": ("on your Mac", "on this Windows PC")}
 
@@ -64,12 +63,13 @@ def test_each_trial_is_prompted_as_trycuas_runner_prompts_it(trycua, probe, cond
     trial = _trial(probe, condition, os)
 
     assert trial["task"]["prompt"] == _prompt(
-        trycua, f"{brief}\n\nYour workspace directory is `{HOMES[os]}/{task}`.", condition, limits)
+        trycua, f"{brief}\n\nYour workspace directory is `{HOMES[os]}{SEPARATORS.get(os, '/')}{task}`.", condition,
+        limits)
     assert trial["agent"]["system_prompt"] == _system(limits, os)
     assert (trial["task"]["timeout_seconds"], trial["task"]["max_turns"]) == (limits["timeout_s"], limits["max_turns"])
 
 
-@pytest.mark.parametrize("os", LAB_OSES)
+@pytest.mark.parametrize("os", OSES)
 @pytest.mark.parametrize(("probe", "run", "condition"), LAB_CELLS)
 def test_each_benchlab_trial_is_seeded_and_prompted_as_trycuas_runner_does_it(trycua, probe, run, condition, os):
     seed = _module(PACK / "runner" / "bench_core.py").probe_seed(probe, run - 1)
@@ -136,8 +136,8 @@ def test_each_trial_is_graded_in_a_sandbox_of_its_own_with_no_network_and_its_tr
 def test_bench_v2_is_each_task_five_runs_in_each_of_its_conditions_in_trycuas_schedule(trycua):
     """trycua's schedule: the v2 tasks in order, runs 1 to 3, then runs 4 and 5, a whole run in one condition, MB-10
     and MB-11 in the foreground alone, with no background task file. A CDB task's runs are one task file, its seed
-    unused; the eval runs each task file once, and a condition's eval its half. On macOS, the same trials in the same
-    order; on Windows, the BenchLab trials of them."""
+    unused; the eval runs each task file once, and a condition's eval its half. On macOS and on Windows, the same
+    trials in the same order, and on Windows its BenchLab trials alone too."""
     trials = (ROOT / "evals" / "bench-v2-trials.txt").read_text().split()
     expected = [f"{task.lower()}-{condition}" if task.startswith("CDB-") else f"{task.lower()}-r{run}-{condition}"
                 for condition in ("foreground", "background") for runs in ((1, 2, 3), (4, 5))
@@ -157,10 +157,12 @@ def test_bench_v2_is_each_task_five_runs_in_each_of_its_conditions_in_trycuas_sc
     assert macos == [f"macos-{name}" for name in trials]
     assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in macos)
     assert tomllib.loads((ROOT / "evals" / "macos-bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(macos))
-    windows = (ROOT / "evals" / "windows-benchlab-trials.txt").read_text().split()
-    assert windows == [f"windows-{name}" for name in trials if not name.startswith("cdb-")]
+    windows = (ROOT / "evals" / "windows-bench-v2-trials.txt").read_text().split()
+    assert windows == [f"windows-{name}" for name in trials]
     assert all((ROOT / "tasks" / f"{name}.json").is_file() for name in windows)
     assert tomllib.loads((ROOT / "evals" / "windows-bench-v2.toml").read_text())["tasks"] == list(dict.fromkeys(windows))
+    assert (ROOT / "evals" / "windows-benchlab-trials.txt").read_text().split() == [
+        name for name in windows if not name.startswith("windows-cdb-")]
 
 
 @pytest.mark.parametrize("path", sorted((ROOT / "tasks").glob("codex-*.json")), ids=lambda path: path.stem)

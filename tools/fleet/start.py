@@ -2,7 +2,8 @@
 worker on INSTANCE for the trials SPECS lists (a file plan.py wrote; FILE, its run.txt, lists the whole run's, which
 the run's manifest pins), on the bench's main, as the systemd unit `fleet` on a Linux VM, or
 on an EC2 Mac (`--os macos`) as the launchd job `dev.fleet.worker` of ec2-user's login session, where the lume
-provider runs its macOS computers; its trials and manifest go under runs/OS/RUN (OS linux by default).
+provider runs its macOS computers; a Windows run (`--os windows`) runs on a Linux VM with KVM, as a Linux run does;
+its trials and manifest go under runs/OS/RUN (OS linux by default).
 
 The model key (`FLEET_MODEL_KEY`) and the Hugging Face token (huggingface_hub's login) are encrypted to a key the VM
 makes for this job; the job decrypts them into its own environment and deletes the files. `--taskpack` ships a task
@@ -18,7 +19,7 @@ from huggingface_hub import get_token
 from common import HOSTS, opener, sealer, setting, ship, ssm
 
 #: Where each OS's worker keeps the job's key pair: a folder its boot empties.
-KEYS = {"linux": "/run/trialkey", "macos": "/private/var/run/trialkey"}
+KEYS = {"linux": "/run/trialkey", "macos": "/private/var/run/trialkey", "windows": "/run/trialkey"}
 #: The launchd job a Mac worker runs as, in ec2-user's login session.
 MAC_JOB = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

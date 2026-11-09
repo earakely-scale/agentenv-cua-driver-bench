@@ -213,10 +213,14 @@ def failure(instance):
 
 
 def _instances(stem):
+    """The task instances of ``stem`` in agent-env's store: none before the store has one, as when a run stopped before
+    its first task's instance was written."""
     if not DB.exists():
         return {}
     con = sqlite3.connect(DB)
     try:
+        if not con.execute("select 1 from sqlite_master where name = 'docs_task_instances'").fetchone():
+            return {}
         rows = [json.loads(doc) for (doc,) in con.execute("select doc from docs_task_instances")]
     finally:
         con.close()

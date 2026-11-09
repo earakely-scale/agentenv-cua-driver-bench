@@ -1,6 +1,6 @@
 """The bench's CDB-S03, invoice reconciliation, as one computer app: the bench's Ledger Lantern Mail Electron app,
 LibreOffice Calc on the task's workbook and GnuCash on its book, all on its workspace, ~/cdb-s03."""
-from agentenv_protocol.computer import computer_app, install, linux
+from agentenv_protocol.computer import computer_app, install, linux, windows
 
 import bench_app as bench
 
@@ -9,5 +9,6 @@ import bench_app as bench
 @linux(**bench.install(workspace="cdb-s03", first_window="Ledger Lantern Mail",
                        apt=[*bench.CALC_APT, *bench.GNUCASH_APT]))
 @install("macos", **bench.macos(workspace="cdb-s03", calc=True, gnucash=True))
+@windows(**bench.windows(workspace="cdb-s03", first_window="Ledger Lantern Mail", calc=True, gnucash=True))
 class CdbS03(bench.BenchTaskApp):
     pass

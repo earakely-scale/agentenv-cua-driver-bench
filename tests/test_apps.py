@@ -23,7 +23,8 @@ from agentenv_protocol.computer.app import ComputerAppEnvironment  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TASKS = {"cdb-s02": "CdbS02", "cdb-s03": "CdbS03", "cdb-s04": "CdbS04"}
-SHARED = ("bench_app.py", "install.sh", "install-macos.sh", "devtools_hook.js", "requirements-macos.txt")
+SHARED = ("bench_app.py", "install.sh", "install-macos.sh", "install-windows.ps1", "devtools_hook.js",
+          "requirements-macos.txt")
 
 
 def _declared(task):
@@ -56,7 +57,7 @@ def test_a_task_app_lists_its_tasks_files_at_the_locks_commit(task):
     assert listed["commit"] == commit
     assert {f["path"].split("/")[0] for f in listed["files"]} <= {"apps", "fixture", "reset", "platform", "brief.md",
                                                                   "task.cuabench.json"}
-    assert "platform/launch.linux.json" in {f["path"] for f in listed["files"]}
+    assert {"platform/launch.linux.json", "platform/launch.windows.json"} <= {f["path"] for f in listed["files"]}
     for f in listed["files"]:
         assert f["url"].startswith(f"https://raw.githubusercontent.com/trycua/cua/{commit}/libs/cua-driver-bench/"
                                    f"taskpack/tasks/shared/{task}/")
@@ -81,8 +82,8 @@ def test_a_task_app_declares_its_files_runtimes_workspace_and_launch(task):
     assert ("fonts-liberation" in apt) == (task == "cdb-s04")
     assert linux.paths == [task]
     assert linux.launch.command == ["venv/bin/python", "bench_app.py"] and linux.launch.at == "boot"
-    assert [step.name for step in declared.install_steps] == ["workspace", "browser", "browser_policies",
-                                                              "electron_apps"]
+    assert [step.name for step in declared.install_steps] == ["workspace", "browser", "browser_policies_windows",
+                                                              "browser_policies", "electron_apps"]
     assert [check.name for check in declared.ready_checks] == ["windows"]
 
     macos = declared.os["macos"]
@@ -96,6 +97,16 @@ def test_a_task_app_declares_its_files_runtimes_workspace_and_launch(task):
     assert macos.install["grants"] == [{"executable": "venv/bin/python", "services": ["accessibility"]}]
     assert macos.paths == [task] and macos.launch.command == ["venv/bin/python", "bench_app.py"]
     assert macos.launch.ready is None
+
+    windows = declared.os["windows"]
+    tos = [download["to"] for download in windows.install["downloads"]]
+    assert tos[:len(files)] == [f"task/{f['path']}" for f in files]
+    assert sorted(tos[len(files):]) == sorted(["runtime/electron.zip", *{
+        "cdb-s02": ["runtime/LibreOffice.msi"], "cdb-s03": ["runtime/LibreOffice.msi", "runtime/gnucash-setup.exe"],
+        "cdb-s04": ["runtime/node.zip", "runtime/chromium.zip"]}[task]])
+    assert [run["script"] for run in windows.install["run"]] == ["install-windows.ps1"]
+    assert windows.paths == [task] and windows.launch.command == ["venv/Scripts/python.exe", "bench_app.py"]
+    assert windows.launch.window == linux.launch.window and windows.launch.ready.window
 
 
 def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node_with_electrons_devtools_hooked(
@@ -135,6 +146,30 @@ def test_the_launcher_runs_the_apps_runtimes_in_place_of_npx_and_node_with_elect
         "runtime/chromium/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")
     assert bench_app._hooked(bench_app._command(electron, values)) == {
         "NODE_OPTIONS": f"--require={bench_app.HERE / 'devtools_hook.js'}"}
+
+
+def test_on_windows_the_launcher_runs_the_apps_runtimes_in_place_of_npx_node_and_chrome_without_a_console(
+        bench_app, monkeypatch):
+    monkeypatch.setattr(bench_app, "WINDOWS", True)
+    values = {"${bundle}": "C:/agentenv/apps/cdb-s04/task", "${workspace}": "C:/Users/user/cdb-s04",
+              "${workspace_uri}": "file:///C:/Users/user/cdb-s04", "${python}": "C:/py.exe"}
+    cases = {"id": "cases", "command": ["npx", "electron", ".", "--workspace=${workspace}"]}
+    mail = {"id": "mail", "command": ["npx.cmd", "electron", ".", "--surface=mail"]}
+    archive = {"id": "archive", "command": ["node", "server.js"]}
+    browser = {"id": "browser", "command": [bench_app.WIN_CHROME, "--no-first-run", "http://127.0.0.1:4184/"]}
+    calc = {"id": "calc", "command": ["C:\\Program Files\\LibreOffice\\program\\scalc.exe", "--calc"]}
+    electron = str(bench_app.HERE / "runtime/electron/electron.exe")
+
+    assert bench_app._command(cases, values) == [electron, ".", "--workspace=C:/Users/user/cdb-s04",
+                                                 "--user-data-dir=C:/Users/user/cdb-s04/.runtime/electron-cases"]
+    assert bench_app._command(mail, values)[:3] == [electron, ".", "--surface=mail"]
+    assert bench_app._command(archive, values) == [str(bench_app.HERE / "runtime/node/node.exe"), "server.js"]
+    assert bench_app._command(browser, values) == [str(bench_app.HERE / "runtime/chromium/chrome.exe"), "--no-first-run",
+                                                   "http://127.0.0.1:4184/"]
+    assert bench_app._command(calc, values) == calc["command"]
+    assert bench_app._hooked(bench_app._command(cases, values)) == {
+        "NODE_OPTIONS": f"--require={(bench_app.HERE / 'devtools_hook.js').as_posix()}"}
+    assert bench_app._hooked(bench_app._command(browser, values)) == {}
 
 
 def test_on_macos_the_launcher_finds_and_places_windows_through_the_accessibility_api(bench_app, monkeypatch):
@@ -207,18 +242,28 @@ def test_a_tip_setting_takes_its_keys_place_in_a_keyfile_and_keeps_the_rest(benc
     assert keyfile.read_text() == f"[org/gnucash/GnuCash/general]\nprefs-version=5005\n\n{section}\n{line}\n"
 
 
-def test_libreoffice_starts_without_its_tip_in_a_new_profile_and_in_one_it_wrote(bench_app, tmp_path):
+def test_libreoffice_starts_without_its_tip_or_welcome_in_a_new_profile_and_in_one_it_wrote(bench_app, tmp_path):
     profile = tmp_path / "lo"
     command = ["libreoffice", "--calc", f"-env:UserInstallation={profile.as_uri()}", "/w/a.ods"]
     xcu = profile / "user" / "registrymodifications.xcu"
+    quiet = ('<item oor:path="/org.openoffice.Office.Common/Misc"><prop oor:name="ShowTipOfTheDay" oor:op="fuse">'
+             "<value>false</value>",
+             '<item oor:path="/org.openoffice.Office.Common/Misc"><prop oor:name="FirstRun" oor:op="fuse">'
+             "<value>false</value>",
+             '<item oor:path="/org.openoffice.Setup/Product"><prop oor:name="ooSetupLastVersion" oor:op="fuse">'
+             "<value>25.8</value>")
 
     bench_app._quiet(command, {})
-    assert '<prop oor:name="ShowTipOfTheDay" oor:op="fuse"><value>false</value>' in xcu.read_text()
+    assert all(item in xcu.read_text() for item in quiet)
     xcu.write_text('<?xml version="1.0"?>\n<oor:items xmlns:oor="http://openoffice.org/2001/registry">\n'
-                   '<item oor:path="/a"><prop oor:name="b"><value>1</value></prop></item>\n</oor:items>\n')
+                   '<item oor:path="/a"><prop oor:name="b"><value>1</value></prop></item>\n'
+                   '<item oor:path="/org.openoffice.Setup/Product"><prop oor:name="ooSetupLastVersion" oor:op="fuse">'
+                   "<value>25.8</value></prop></item>\n</oor:items>\n")
     bench_app._quiet(command, {})
     text = xcu.read_text()
-    assert '<prop oor:name="b">' in text and text.count("ShowTipOfTheDay") == 1 and text.endswith("</oor:items>\n")
+    assert '<prop oor:name="b">' in text and text.endswith("</oor:items>\n")
+    assert [text.count(f'oor:name="{name}"') for name in ("ShowTipOfTheDay", "FirstRun", "ooSetupLastVersion")] \
+        == [1, 1, 1]
 
 
 def test_a_launch_removes_the_locks_stopped_apps_left_and_nothing_else(bench_app, tmp_path):

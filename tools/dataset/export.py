@@ -69,7 +69,7 @@ def export(instance, artifacts, out, name, run_index):
                 source = _path(artifacts[(ref["id"], ref["version"])]["object_url"])
                 if app == "bench-sentinel":
                     shutil.copy(source, folder / Path(rel).name)
-                elif "/.runtime/" not in f"/{rel}" and not rel.startswith(".runtime"):
+                elif in_workspace(rel):
                     workspace_app = app
                     target = folder / "workspace" / rel
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -287,6 +287,12 @@ def from_calls(events):
                              ("cacheCreationInputTokens", "cache_creation_input_tokens")):
             entry[ours] = entry.get(ours, 0) + usage.get(theirs, 0)
     return totals
+
+
+def in_workspace(rel):
+    """Whether a snapshot's file is the trial's workspace: not under an app's .runtime (its browser profile and such),
+    nor Explorer's desktop.ini, which each shell folder of a Windows home holds."""
+    return "/.runtime/" not in f"/{rel}" and Path(rel).name.lower() != "desktop.ini"
 
 
 def _tiered(tiers, usage, events):
