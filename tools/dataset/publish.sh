@@ -3,7 +3,8 @@
 # the dataset holds, and upload them. Run it in the bench's checkout with HF_TOKEN set (tools/fleet/hfjob.py does), on
 # a machine with ffmpeg; it needs some GB of disk for the recordings. HF_REPO picks the dataset and Space (default
 # earakely-scale/CuaDriverBench-AgentEnv), WORK where it works (default ~/publish), JOBS its parallel video encodes;
-# DRY_RUN=1 builds everything under WORK and uploads nothing.
+# DRY_RUN=1 builds everything under WORK and uploads nothing. The web copies the dataset holds are downloaded after
+# their recordings, so only a trial without one, or whose recording is newer, is encoded again.
 set -euo pipefail
 bench=${BENCH:-$(cd "$(dirname "$0")/../.." && pwd)}
 work=${WORK:-$HOME/publish}
@@ -16,6 +17,8 @@ import os, sys
 from huggingface_hub import snapshot_download
 snapshot_download(os.environ["HF_REPO"], repo_type="dataset", local_dir=sys.argv[1], allow_patterns=["runs/**"],
                   ignore_patterns=["**/trajectory.json", "**/workspace/**", "**/web.mp4"], max_workers=16)
+snapshot_download(os.environ["HF_REPO"], repo_type="dataset", local_dir=sys.argv[1], allow_patterns=["runs/**/web.mp4"],
+                  max_workers=16)
 PY
 "$python" "$bench/tools/dataset/tables.py" "$bench" "$work/dataset"
 "$python" "$bench/tools/space/build.py" "$work/dataset" "$work/out" --jobs "${JOBS:-8}"

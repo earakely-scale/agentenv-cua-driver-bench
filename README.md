@@ -353,7 +353,8 @@ on one of the workers, which has ffmpeg and room for the recordings:
 python tools/fleet/hfjob.py <instance> tools/dataset/publish.sh --pull --wait
 ```
 
-`publish.sh` downloads the runs (not their trajectories), then writes:
+`publish.sh` downloads the runs (not their trajectories) and the web copies of their recordings the dataset holds, so
+it encodes only the trials that have none, then writes:
 - the tables (`tools/dataset/tables.py`);
 - the Space, the figures, the hero and the web videos (`tools/space/build.py`);
 - the card (`tools/dataset/card.py`);
