@@ -54,6 +54,16 @@ with the OS, the model, the prompts, the seeds and the grade held fixed, each dr
   keyboard in 4 of G03's 5. In the foreground it passes 19 of 20 interruption trials and G04 every time, but neither
   G02 nor G03; its API has no hover, so MB-10 and MB-11 fail, and it passes MB-09's drag 2 of 5. 21 of its 90 trials
   end on the 45-turn limit, none leaves the GUI, and a trial costs $0.34 at list price.
+- **Codex Computer Use with OpenAI's model: GPT-6.1 Sol in Codex CLI passes 28 of 50 in the foreground and 8 of 40
+  in the background** (run `codex-computer-use-gpt-6-1-sol-2026-11-09`, Codex CLI 0.147.0 at medium effort), against
+  Sonnet's 26 and 11 through the same driver, at $0.10 a trial against $0.34. In the foreground it passes MB-09's drag
+  every time, 4 of G04's 5 and 3 of G02's, but 1 of IR-02's 5: it chooses a menu item and presses Apply in one call,
+  and Apply lands before the choice. It stops and reports itself blocked in 36 of its 90 trials rather than disturb
+  the user or guess: wherever Codex's drag would bring BenchLab forward (all five of MB-09's background trials), where
+  GnuCash shows Codex no ledger controls (all ten of G03's), and where MB-10 and MB-11 need the hover Codex hasn't. In
+  the background Codex still raises a window over the user's in 24 of 40. One trial leaves the GUI: in G04's
+  background GPT imports Node's `fs` through `js` and reads the task's files, and the trajectory check fails it. None
+  ends on the turn limit.
 
 **Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.
 
