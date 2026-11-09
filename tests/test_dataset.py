@@ -112,6 +112,23 @@ def test_the_timeline_puts_calls_text_and_the_users_lane_on_the_recordings_clock
     assert len(timeline["samples"]) == 3 and (timeline["armed_at"], timeline["disarmed_at"]) == (5, 20)
 
 
+def test_a_windows_sentinels_samples_take_their_armed_focus_and_activation_from_its_events(export):
+    sample = {"ev": "s", "front": {"bid": "ai.cua.benchsentinel"}, "above_n": 0, "mouse": [960, 540]}
+    sentinel = [{"ev": "ready", "t": (START + 1) * 1000, "hwnd": 7},
+                {**sample, "t": (START + 2) * 1000},
+                {"ev": "armed", "t": (START + 5) * 1000, "front": {"bid": "ai.cua.benchsentinel"}},
+                *({**sample, "t": (START + 5 + i) * 1000} for i in range(10)),
+                {"ev": "didResignKey", "t": (START + 15) * 1000},
+                {"ev": "didResignActive", "t": (START + 15) * 1000},
+                *({**sample, "t": (START + 16 + i) * 1000} for i in range(10)),
+                {"ev": "disarmed", "t": (START + 26) * 1000}]
+    scripts = {"arm": {"line": {"t": (START + 5) * 1000}}, "disarm": {"line": {"t": (START + 26) * 1000}}}
+
+    timeline = export.timeline([], sentinel, START, START + 30, scripts)
+
+    assert [(s["t"], s["active"], s["key"]) for s in timeline["samples"]] == [(5, True, True), (16, False, False)]
+
+
 def test_codexs_events_read_as_claude_codes_its_calls_timed_its_usage_priced_and_its_requests_its_turns(export):
     def item(kind, t, item_id, **fields):
         return {"type": kind, "timestamp": _stamp(t), "item": {"id": item_id, **fields}}

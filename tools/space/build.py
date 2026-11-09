@@ -76,7 +76,7 @@ def pairs(loaded, cat, cfg, data_dir, assets, space):
 
 def gallery(loaded, cat, cfg, assets, space):
     """Each configured trial's failure as a short clip, a GIF for the card and an MP4 for the Space, as the catalog's
-    ``gallery`` with what goes wrong in it."""
+    ``gallery`` with what goes wrong in it, named for its ``name`` where two clips share a mode."""
     by = {(t["meta"]["os"], t["meta"]["run"], t["meta"]["id"]): t for t in loaded}
     out = []
     for want in cfg.get("gallery") or []:
@@ -84,7 +84,7 @@ def gallery(loaded, cat, cfg, assets, space):
         if not t:
             print(f"gallery {want['mode']}: no trial {want['os']}/{want['run']}/{want['trial']}")
             continue
-        name = f"gallery-{want['mode']}"
+        name = f"gallery-{want.get('name', want['mode'])}"
         gif, mp4 = clip.render(t, want, cat, cfg, assets, name)
         (space / "media").mkdir(exist_ok=True)
         shutil.copy2(mp4, space / "media" / mp4.name)

@@ -13,14 +13,14 @@
     "seconds": 7,
     "scenes": [
       {"os": "linux", "run": "cua-driver-sonnet-5-5-2026-11-06", "task": "ir-02", "run_index": 2},
-      {"os": "macos", "run": "cua-driver-sonnet-5-5-2026-11-05", "task": "ir-02", "run_index": 2},
+      {"os": "macos", "run": "cua-driver-sonnet-5-5-2026-11-05", "task": "ir-02", "run_index": 2}, {"os": "windows", "run": "cua-driver-sonnet-5-5-2026-11-09", "task": "ir-02", "run_index": 2},
       {"os": "macos", "run": "agent-desktop-sonnet-5-5-2026-11-05", "task": "ir-02", "run_index": 2},
       {"os": "macos", "run": "macos-harness-sonnet-5-5-2026-11-05", "task": "ir-02", "run_index": 2}
     ]
   },
   "pairs": [
     {"os": "linux", "run": "cua-driver-sonnet-5-5-2026-11-06", "task": "ir-02", "run_index": 4},
-    {"os": "macos", "run": "cua-driver-sonnet-5-5-2026-11-05", "task": "cdb-g04", "run_index": 4}
+    {"os": "macos", "run": "cua-driver-sonnet-5-5-2026-11-05", "task": "cdb-g04", "run_index": 4}, {"os": "windows", "run": "cua-driver-sonnet-5-5-2026-11-09", "task": "mb-09", "run_index": 1}
   ],
   "gallery": [
     {"os": "macos", "run": "agent-desktop-sonnet-5-5-2026-11-05", "trial": "ir-02-r2-background", "mode": "focus",
@@ -49,7 +49,13 @@
     {"os": "macos", "run": "macos-harness-sonnet-5-5-2026-11-05", "trial": "mb-11-r2-foreground", "mode": "hover",
      "title": "Has no hover, so the tooltip never shows",
      "caption": "browser-use's harness has no command that just points. To show the Cube icon's tooltip the agent clicks, holds, drags and scrolls on it; the tooltip never appears, and it replies BLOCKED. Through browser-use, Sonnet and Haiku fail all 20 hover trials (MB-10 and MB-11); through cua-driver and agent-desktop they pass every one.",
-     "view": [0, 30, 1156, 650]}
+     "view": [0, 30, 1156, 650]},
+    {"os": "windows", "run": "cua-driver-sonnet-5-5-2026-11-09", "trial": "ir-01-r1-background", "mode": "dialog", "name": "dialog-windows",
+     "title": "On Windows too, a modal dialog takes the user's keyboard",
+     "caption": "After the form's first step BenchLab opens a permission dialog, and Windows gives it the keyboard: the user's window loses focus and the keystrokes they type next are blocked. The agent denies the permission and submits the form, so the task is done and the trial fails."},
+    {"os": "windows", "run": "cua-driver-sonnet-5-5-2026-11-09", "trial": "cdb-g02-r2-foreground", "mode": "turns", "name": "turns-windows",
+     "title": "Runs out of turns on Windows",
+     "caption": "It has fixed the calendar and recorded the blocker, and is reading the workbook's Controls sheet when it takes its 45th turn, so the schedule rows stay tentative. 23 of the 30 multi-app trials on Windows end on the turn limit."}
   ],
   "hero": {
     "trial": "linux--cua-driver-sonnet-5-5-2026-11-06--ir-02-r3-background",
@@ -569,6 +575,19 @@
       "mark": "§",
       "short": "Needs the pointer",
       "reason": "A real drag moves the user's pointer, so in the background the task keeps the user undisturbed only through a driver that drags without it."
+    },
+    {
+      "os": "windows",
+      "condition": "background",
+      "tasks": [
+        "ir-01",
+        "ir-03",
+        "ir-04"
+      ],
+      "mark": "†",
+      "short": "A dialog takes the keyboard on Windows",
+      "dialog": true,
+      "reason": "The interruption is a modal dialog. When it opens, Windows usually gives it the keyboard and activates it, so the user's window loses focus and the keystrokes they type next are blocked."
     }
   ]
 }

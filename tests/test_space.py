@@ -273,6 +273,22 @@ LINUX_DIALOG = {**CONFIG, "caveats": [{"os": "linux", "condition": "background",
                                         "short": "Not passable on Linux", "passable": False}]}
 
 
+WINDOWS_DIALOG = {**CONFIG, "caveats": [{"os": "windows", "condition": "background", "tasks": ["ir-01"], "mark": "†",
+                                          "short": "A dialog takes the keyboard on Windows", "dialog": True}]}
+
+
+def test_a_dialog_caveat_counts_the_disturbance_as_the_dialogs_without_calling_the_task_unpassable(space):
+    failures, figures = space("failures"), space("figures")
+    loaded = [_trial("ir-01", "background", 1, score=1.0, user=False, os="windows"),
+              _trial("ir-02", "background", 1, score=1.0, user=False, os="windows")]
+    cat = _catalog(space, [t["meta"] for t in loaded], WINDOWS_DIALOG)
+
+    got = failures.build(loaded, cat)
+
+    assert [got["by_trial"][t["meta"]["uid"]] for t in loaded] == ["dialog", "disturbed"]
+    assert figures.unpassable(cat) == ""
+
+
 def test_a_failed_trial_counts_under_the_gravest_way_it_failed(space):
     failures = space("failures")
     loaded = [

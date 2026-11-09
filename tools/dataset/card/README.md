@@ -102,6 +102,13 @@ Codex Computer Use (agentenv-framework 0.9.1482 or later), as the drivers compar
 example `agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background --model
 anthropic/claude-sonnet-5-5`.
 
+On Windows 11 the same tasks run as the `windows-` tasks, on a Linux machine with KVM (we used EC2 c8i hosts with
+nested virtualization) and Docker with a registry on `localhost:5000`, with agentenv-framework 0.9.1480 or later, as the
+board's Windows rows ran them, for example `agent-env run hf://earakely-scale/cua-driver-bench --task
+windows-ir-01-r1-background --model anthropic/claude-sonnet-5-5 --set envs/desktop-benchlab-windows.tools=driver`. The
+first run fetches Microsoft's 90-day evaluation of Windows 11 Enterprise and installs it unattended, about 13 minutes,
+then composes the task's computer, 7 to 9 minutes; whether the evaluation's terms allow your use is yours to check.
+
 Load our results:
 
 ```python
@@ -173,12 +180,29 @@ The first run pulls Cua's macOS base (about 29 GB) and composes the task's compu
 comparison's trials name their driver: `macos-agent-desktop-ir-01-r1-foreground`, `macos-macos-harness-…`,
 `macos-codex-computer-use-…`, and cua-driver on its own tools alone, `macos-cua-driver-…`.
 
+On Windows 11, the tasks run in a VM of Microsoft's evaluation of Windows 11 Enterprise on a Linux amd64 machine with
+KVM (`/dev/kvm`), Docker and a registry on `localhost:5000`:
+
+```bash
+pip install 'agentenv-framework>=0.9.1480'
+docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
+export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
+agent-env run . --task windows-ir-01-r1-foreground --model anthropic/claude-sonnet-5-5 \
+  --set envs/desktop-benchlab-windows.tools=driver                                       # one trial
+agent-env run . --eval windows-bench-v2 --model anthropic/claude-sonnet-5-5 \
+  --set envs/desktop-benchlab-windows.tools=driver --set envs/desktop-s02-windows.tools=driver \
+  --set envs/desktop-s03-windows.tools=driver --set envs/desktop-s04-windows.tools=driver  # every task of Bench v2 once
+```
+
+The first run fetches the evaluation's ISO and installs Windows unattended, about 13 minutes, then composes the task's
+computer, 7 to 9 minutes; later runs reuse both.
+
 ### Run another driver or tool set
 
 With agentenv-framework 0.9.1453 or later, `--set envs/NAME.KEY=VALUE` changes one of the bench's computer envs for a
 single run and leaves the bench as written. Each task deploys one computer env: `desktop-benchlab` for the precision
 and interruption tasks on Linux, `desktop-s02`, `desktop-s03` and `desktop-s04` for the multi-app tasks, and the same
-names ending in `-macos` on macOS. What a setting changes runs under ids ending in it, such as
+names ending in `-macos` on macOS and `-windows` on Windows. What a setting changes runs under ids ending in it, such as
 `desktop-benchlab(desktop-benchlab.driver reference)`, so its trials stay apart from the bench's own.
 
 ```bash
@@ -195,7 +219,7 @@ agent-env run . --task macos-ir-01-r1-background --set envs/desktop-benchlab-mac
 ```
 
 `tools` is `standard` (AgentEnv's `computer_*` tools alone), `driver` (the driver's own alone) or `both`, the default;
-the Linux rows on the board ran with `driver`, and the first Linux runs, which stay in the dataset, with `both`. An eval deploys several envs, so set each one, for example
+the Linux and Windows rows on the board ran with `driver`, and the first Linux runs, which stay in the dataset, with `both`. An eval deploys several envs, so set each one, for example
 `--eval bench-v2 --set envs/desktop-benchlab.driver=reference --set envs/desktop-s02.driver=reference
 --set envs/desktop-s03.driver=reference --set envs/desktop-s04.driver=reference`. The `macos-agent-desktop-…`,
 `macos-macos-harness-…`, `macos-codex-computer-use-…` and `macos-cua-driver-…` task files are these settings written

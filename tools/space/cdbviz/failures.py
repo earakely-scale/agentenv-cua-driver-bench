@@ -64,7 +64,7 @@ def outcome(meta, calls, cat):
         return "left_gui"
     if g["user_undisturbed"] and not g["user_undisturbed"]["result"]:
         cv = catalog.caveat(cat, meta["os"], meta["condition"], meta["task"])
-        return "dialog" if cv and cv.get("passable") is False else "disturbed"
+        return "dialog" if cv and (cv.get("passable") is False or cv.get("dialog")) else "disturbed"
     ending = meta["ending"] or ""
     if ending.startswith("Replied BLOCKED"):
         refused = meta["condition"] == "background" and any(REFUSED.search(c["err"] or "") for c in calls)

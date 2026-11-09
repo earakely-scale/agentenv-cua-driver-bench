@@ -195,7 +195,7 @@ def timeline(events, sentinel, start, end, scripts):
     samples = [{"t": line["t"] / 1000 - start, "active": line.get("active"), "key": line.get("key"),
                 "front": (line.get("front") or {}).get("bid"), "above_n": line.get("above_n"),
                 "mouse": line.get("mouse")}
-               for line in sentinel if line.get("ev") == "s" and line.get("armed")][::10]
+               for line in _states(sentinel) if line.get("ev") == "s" and line.get("armed")][::10]
     arm = (scripts.get("arm") or {}).get("line") or {}
     disarm = (scripts.get("disarm") or {}).get("line") or {}
     return {"duration": end - start, "armed_at": arm.get("t", 0) / 1000 - start if arm else None,
@@ -287,6 +287,24 @@ def from_calls(events):
                              ("cacheCreationInputTokens", "cache_creation_input_tokens")):
             entry[ours] = entry.get(ours, 0) + usage.get(theirs, 0)
     return totals
+
+
+def _states(sentinel):
+    """The sentinel's lines, each sample with whether the bench armed it and the user's window was active and held the
+    keyboard: as Linux's and macOS's sentinels write on each, and for Windows', whose samples carry none of them, from
+    its armed and disarmed lines and its focus events, the user's window holding both once it's armed."""
+    armed = active = key = False
+    for line in sentinel:
+        ev = line.get("ev")
+        if ev == "armed":
+            armed = active = key = True
+        elif ev == "disarmed":
+            armed = False
+        elif ev in ("didResignKey", "didBecomeKey"):
+            key = ev == "didBecomeKey"
+        elif ev in ("didResignActive", "didBecomeActive"):
+            active = ev == "didBecomeActive"
+        yield {**line, "armed": armed, "active": active, "key": key} if ev == "s" and "armed" not in line else line
 
 
 def in_workspace(rel):
