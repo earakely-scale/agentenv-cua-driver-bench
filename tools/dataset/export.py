@@ -21,8 +21,8 @@ STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "
 DB = STATE / "document_store" / "local.db"
 KEY = re.compile(r"sk-[A-Za-z0-9_\-]{12,}")
 PRICES = {"claude-sonnet-4-5": (3.0, 15.0, 0.30), "claude-sonnet-5-5": (2.0, 10.0, 0.20),
-          "claude-opus-5-5": (4.0, 20.0, 0.40), "gpt-6-luna": (0.10, 0.50, 0.01), "gpt-6.1-terra": (1.0, 5.0, 0.05),
-          "gpt-6.1-sol": (2.0, 10.0, 0.10), "gpt-6-astra": (10.0, 50.0, 1.0)}
+          "claude-opus-5-5": (4.0, 20.0, 0.40), "claude-fable-5-2": (8.0, 40.0, 0.20), "gpt-6-luna": (0.10, 0.50, 0.01),
+          "gpt-6.1-terra": (1.0, 5.0, 0.05), "gpt-6.1-sol": (2.0, 10.0, 0.10), "gpt-6-astra": (10.0, 50.0, 1.0)}
 TIERED = {"claude-haiku-5-5": (100_000, (0.10, 0.50, 0.01), (0.50, 2.50, 0.05))}
 BENCH = Path(os.environ.get("BENCH", Path.home() / "bench"))
 STEM = re.compile(r"^(?:codex-)?(?:macos-|windows-|omarchy-)?(?:(?P<driver>agent-desktop|macos-harness|codex-computer-use|cua-driver)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?"

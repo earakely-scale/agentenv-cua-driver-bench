@@ -17,6 +17,8 @@ keep = false
 name = "agent-desktop-sonnet-5-5-2026-11-05"
 model = "anthropic/claude-sonnet-5-5"
 trials = "evals/macos-agent-desktop-bench-v2-trials.txt"
+# Optional: `agent-env run --set` settings each of the run's trials gets; {computer} is the worker's computer, as
+# cua-driver's Linux runs keep its agents to its own tools: set = ["envs/{computer}.tools=driver"].
 
 [[run]]
 name = "agent-desktop-haiku-5-5-2026-11-05"

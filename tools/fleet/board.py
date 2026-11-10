@@ -45,6 +45,7 @@ class Worker:
     model: str
     computer: str
     specs: list[str]
+    settings: list[str] = field(default_factory=list)
 
     @property
     def digest(self) -> str:
@@ -100,7 +101,8 @@ def planned(board: dict) -> tuple[list[Worker], dict[str, list[str]]]:
         split = plan.split(ROOT, stems, board.get("per", 35))
         runs[run["name"]] = [line for _, specs in split for line in specs]
         for n, (computer, specs) in enumerate(split, 1):
-            workers.append(Worker(f"{run['name']}/{n:02d}", run["name"], run["model"], computer, specs))
+            settings = [line.format(computer=computer) for line in run.get("set", [])]
+            workers.append(Worker(f"{run['name']}/{n:02d}", run["name"], run["model"], computer, specs, settings))
     return workers, runs
 
 
@@ -259,6 +261,8 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
             argv.append("--keep")
         if fresh:
             argv.append("--fresh")
+        for line in worker.settings:
+            argv += ["--set", line]
         done = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, env=env)
         said = (done.stdout + done.stderr).strip().splitlines()
         if done.returncode or not said or said[-1] != "started":

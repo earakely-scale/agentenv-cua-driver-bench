@@ -357,6 +357,22 @@ def test_a_boards_runs_are_planned_as_plan_py_plans_them_each_worker_one_compute
     assert runs["mh"] == workers[0].specs + workers[1].specs and len(runs["mh"]) == 60
 
 
+def test_a_runs_settings_reach_each_of_its_workers_named_for_the_workers_computer(board, tmp_path, monkeypatch):
+    workers, _ = board.planned({"per": 5, "run": [
+        {"name": "f", "model": "m", "trials": "evals/bench-v2-trials.txt", "set": ["envs/{computer}.tools=driver"]},
+        {"name": "a", "model": "m", "trials": "evals/agent-desktop-bench-v2-trials.txt"}]})
+    first = next(w for w in workers if w.run == "f" and w.computer == "desktop-s02")
+    host = board.Host("b1", "i-1", workers=[first])
+    runner, calls = _runner(board, tmp_path, monkeypatch, [host])
+    board.common.replies["i-1"] = _peek(False)
+    runner.poll(host)
+
+    assert {w.computer: w.settings for w in workers if w.run == "f"}["desktop-benchlab"] == [
+        "envs/desktop-benchlab.tools=driver"]
+    assert all(w.settings == [] for w in workers if w.run == "a")
+    assert calls[0][calls[0].index("--set") + 1] == "envs/desktop-s02.tools=driver"
+
+
 def _peek(running, digest="", ended=0, framework=None, failed=0):
     return (f"running={int(running)}\ndigest={digest}\nended={ended}\nfailed={failed}\n"
             + (f"framework={framework}\n" if framework else "") + "log=last line\n")
