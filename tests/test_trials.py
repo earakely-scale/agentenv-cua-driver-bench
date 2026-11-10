@@ -185,9 +185,20 @@ def test_each_codex_trial_is_its_linux_twin_with_codex_as_the_agent_its_own_tool
 def test_every_linux_trial_has_its_codex_twin():
     trials = set((ROOT / "evals" / "bench-v2-trials.txt").read_text().split())
 
-    linux = {path.stem for path in (ROOT / "tasks").glob("codex-*.json") if not path.stem.startswith("codex-macos-")}
+    linux = {path.stem for path in (ROOT / "tasks").glob("codex-*.json")
+             if not path.stem.startswith(("codex-macos-", "codex-windows-"))}
 
     assert linux == {f"codex-{name}" for name in trials}
+
+
+def test_every_windows_trial_has_its_codex_twin_and_their_lists_are_its():
+    windows = (ROOT / "evals" / "windows-bench-v2-trials.txt").read_text().split()
+    twins = {path.stem for path in (ROOT / "tasks").glob("codex-windows-*.json")}
+
+    assert twins == {f"codex-{name}" for name in windows}
+    for kind in ("bench-v2", "benchlab"):
+        assert (ROOT / "evals" / f"codex-windows-{kind}-trials.txt").read_text().split() == [
+            f"codex-{name}" for name in (ROOT / "evals" / f"windows-{kind}-trials.txt").read_text().split()]
 
 
 def _prompt(v2, brief, condition, limits):

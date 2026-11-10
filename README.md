@@ -154,6 +154,10 @@ foreground. `evals/windows-agent-desktop-bench-v2-trials.txt` lists the 90 trial
 0.9.1494 or later, the first with agent-desktop on Windows and a Windows base without OneDrive, whose console windows
 at sign-in would take the agent's typing.
 
+**GPT on Windows.** `tasks/codex-windows-*.json` are the Windows trials' Codex CLI twins, as `tasks/codex-*.json` are
+Linux's: the agent `codex`, with its own tools off and at medium effort, on the same computers through cua-driver.
+`evals/codex-windows-bench-v2-trials.txt` lists the 90 trials.
+
 ## The task apps
 
 Each shared task (`cdb-s02`, `cdb-s03`, `cdb-s04`) is one computer app, so that every window it opens stops and starts
