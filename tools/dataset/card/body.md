@@ -49,8 +49,9 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    - **Claude Code** for Claude Haiku, Sonnet and Opus 5.5, its built-in tools limited to `Skill` and `Read`, at its
      default effort for these models, medium (no `--effort` is passed).
    - **OpenAI's Codex CLI 0.147.0** for GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol, as AgentEnv's `codex` agent runs it
-     (`tasks/codex-*.json`, each its Linux twin but for the agent, and on macOS GPT-6.1 Sol through Codex Computer
-     Use, `tasks/codex-macos-codex-computer-use-*.json`, each its Claude Code twin's), every tool of its own off
+     (`tasks/codex-*.json`, each its Linux twin but for the agent, and on macOS GPT-6.1 Sol through cua-driver and
+     Codex Computer Use, `tasks/codex-macos-cua-driver-*.json` and `tasks/codex-macos-codex-computer-use-*.json`,
+     each its Claude Code twin's), every tool of its own off
      (shell, patch, web search, image viewing, plan, sub-agents), which leaves the driver's tools, `peer_agents` and
      Codex's reads of MCP resources, at medium effort, set in the task. Codex has no turn limit of its own: AgentEnv's
      agent stops it after 45 tool calls, each one model request, since Codex sends these models no parallel calls.

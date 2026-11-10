@@ -64,6 +64,15 @@ with the OS, the model, the prompts, the seeds and the grade held fixed, each dr
   the background Codex still raises a window over the user's in 24 of 40. One trial leaves the GUI: in G04's
   background GPT imports Node's `fs` through `js` and reads the task's files, and the trajectory check fails it. None
   ends on the turn limit.
+- **cua-driver with the same model: GPT-6.1 Sol in Codex CLI passes 30 of 50 in the foreground and 16 of 40 in the
+  background** (run `cua-driver-gpt-6-1-sol-2026-11-09`, Codex CLI 0.147.0 at medium effort), against 28 and 8
+  through Codex Computer Use, at $0.18 a trial against $0.10. In the background it does the task in 25 of 40 trials
+  and disturbs the user in 10, against Codex Computer Use's 18 and 24: it writes the user's clipboard in 4 of IR-04's
+  5, and raises a window or takes the keyboard in 3 of G04's. In the foreground it passes all 20 interruption trials,
+  MB-09's drag 4 of 5 and G04 4 of 5, but G02 2 of 5 and G03 none. Codex sends GPT cua-driver's structured results
+  without their screenshots (as on Linux, below), so MB-10 and MB-11 pass none of their ten, and 19 of the 30 trials
+  it stops in, reporting itself blocked, say its screenshots are empty. None leaves the GUI; one ends on the turn
+  limit.
 
 **Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.
 
