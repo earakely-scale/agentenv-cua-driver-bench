@@ -7,8 +7,8 @@ the sentinel's lines don't carry. And trycua's GUI-only guard on Hyprland, which
 ``GUARD_S`` while it's armed: a terminal started since arming, outside this launch's own processes, is a violation, and
 is ended, as their runner ends it; one cua-driver's own program started is the tool's, logged as ``gui_only_helper``, as
 their Windows guard has it; a terminal's window in front ``FRONT_GRACE_SAMPLES`` looks in a row is a violation, in front
-for less a ``gui_only_transient``; and Omarchy's launcher, walker, which runs a command typed into it, is a side door in
-front the same way, as the X11 port counts xfce4-appfinder; each logged once into the same log. Staying while
+for less a ``gui_only_transient``; and Omarchy's launchers, its shell's menu and its Apps panel, are side doors in front
+the same way, as the X11 port counts xfce4-appfinder; each logged once into the same log. Staying while
 BenchSentinel runs."""
 import json
 import os
@@ -33,8 +33,9 @@ WITNESS_FRAME = (1000, 640, 600, 320)
 #: The driver's own programs: a terminal one of them starts for itself is the tool's, as trycua's Windows runner's
 #: ``--tool-exe``.
 TOOL_PROGRAMS = ("cua-driver",)
-#: Omarchy's launcher, a side door in front by its window's class or its layer surface's namespace.
-LAUNCHERS = {"walker": "walker"}
+#: Omarchy's launchers, its shell's menu (Super+Space) and its Apps panel (Super+Alt+Space), side doors in front by
+#: their layer surfaces' namespaces.
+LAUNCHERS = {"omarchy-menu": "omarchy-menu", "omarchy-dock-apps": "omarchy-apps"}
 #: Hyprland's layers drawn over windows: top and overlay.
 OVER_WINDOWS = ("2", "3")
 GUARD_S = 0.5
@@ -113,7 +114,7 @@ class Guard:
             _kill(pid)
         try:
             window = H.active_window().get("class", "")
-            launcher = launcher_shown(window, H.query("layers") or {})
+            launcher = launcher_shown(H.query("layers") or {})
         except (OSError, ValueError, RuntimeError):
             return
         if hit := self.front.sample(window):
@@ -147,10 +148,8 @@ def terminal_class(window_class: str) -> str | None:
     return G.TERMINAL_CLASSES.get(name) or ("Omarchy TUI" if name.startswith("org.omarchy.") else None)
 
 
-def launcher_shown(window_class: str, layers: dict) -> str | None:
-    """Omarchy's launcher, when it's the active window or shows as a layer over the windows; else None."""
-    if launcher := LAUNCHERS.get((window_class or "").lower()):
-        return launcher
+def launcher_shown(layers: dict) -> str | None:
+    """Omarchy's launcher that shows as a layer over the windows; else None."""
     for monitor in layers.values():
         for level in OVER_WINDOWS:
             for layer in (monitor.get("levels") or {}).get(level, []):

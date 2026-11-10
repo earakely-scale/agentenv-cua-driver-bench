@@ -3,7 +3,7 @@ into ``~/bench``: the sentinel's window is its condition's, with its title and f
 summarizer and A22 criteria, from the task pack, find each disturbance their Hyprland oracle causes on purpose
 (``oracle.py --disturb``) in its own criterion, and a quiet window and a background action in none, with every criterion
 measured; their GUI-only guard on Hyprland, beside the sentinel, logs a terminal opened, and Omarchy's launcher in
-front, and nothing else; and the sentinel's data plane returns its log, which a reset starts afresh. Their oracle moves
+front, its shell's menu, and nothing else; and the sentinel's data plane returns its log, which a reset starts afresh. Their oracle moves
 the pointer and types through /dev/uinput; where the session user can't open it, their same ``disturb`` runs here with
 the pointer moved through Hyprland's IPC, as their runner parks it, and each scenario says which it took (``via``).
 ``args``: ``condition``, the sentinel's."""
@@ -73,7 +73,7 @@ def _scenarios(uinput):
                   DISTURBANCES]
     if shutil.which(TERMINAL):
         scenarios.append(("a terminal opened", set(), {"process:Alacritty"}, _terminal))
-    scenarios.append(("Omarchy's launcher shown", set(), {"front:walker"}, _launcher))
+    scenarios.append(("Omarchy's launcher shown", set(), {"front:omarchy-menu"}, _launcher))
     scenarios.append(("BACKGROUND another app's window moved beneath", set(), set(),
                       lambda: hypr.dispatch(f"hl.dsp.window.move({{ x = 1300, y = 650, {hypr.window_ref(lab['address'])} }})")))
     return scenarios
@@ -143,10 +143,11 @@ def _terminal():
 
 
 def _launcher():
-    """Omarchy's launcher shown past the guard's grace, then closed."""
-    subprocess.run(["omarchy-launch-walker"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+    """Omarchy's launcher, its shell's menu, shown past the guard's grace, then closed."""
+    subprocess.run(["omarchy-menu", "summon", "root"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   timeout=30, check=True)
     time.sleep(SETTLE_S)
-    subprocess.run(["wtype", "-k", "Escape"], timeout=30)
+    subprocess.run(["omarchy-menu", "close"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
 
 
 def _data_plane(log, env):

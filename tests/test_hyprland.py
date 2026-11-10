@@ -2,7 +2,8 @@
 the sentinel install trycua's Hyprland port at the lock's commit and start as their Hyprland runner starts them, after
 their window rules, sent as their runner sends them, at their runner's frames; their GUI-only guard beside the sentinel,
 which once armed logs a terminal started since then as a violation, once, and ends it, one cua-driver's own program
-started as that tool's helper, a terminal's window or Omarchy's launcher in front three looks in a row as a violation
+started as that tool's helper, a terminal's window or one of Omarchy's launchers in front three looks in a row as a
+violation
 and for less as a transient. The arming script activates the sentinel until its window is the active window on top,
 then arms it; the grade takes a Hyprland log's armed part by its place and the sentinel in front by its armed sample;
 and the sentinel's self-check asks for disturbances trycua's oracle causes and criteria trycua's A22 scores."""
@@ -265,9 +266,9 @@ def test_a_terminal_the_drivers_own_program_starts_is_its_helper(sentinel_hyprla
 @pytest.mark.parametrize("front, layers, detail", [
     ({"class": "Alacritty"}, {}, "front:Alacritty"),
     ({"class": "org.omarchy.btop"}, {}, "front:Omarchy TUI"),
-    ({"class": "BenchLab"}, {"DP-1": {"levels": {"2": [{"namespace": "walker"}]}}}, "front:walker"),
-    ({"class": "walker"}, {}, "front:walker"),
-], ids=["a terminal", "an Omarchy TUI", "Omarchy's launcher as a layer", "Omarchy's launcher as a window"])
+    ({"class": "BenchLab"}, {"DP-1": {"levels": {"2": [{"namespace": "omarchy-menu"}]}}}, "front:omarchy-menu"),
+    ({"class": "BenchLab"}, {"DP-1": {"levels": {"3": [{"namespace": "omarchy-dock-apps"}]}}}, "front:omarchy-apps"),
+], ids=["a terminal", "an Omarchy TUI", "Omarchy's menu", "Omarchy's Apps panel"])
 def test_a_side_door_in_front_three_looks_in_a_row_is_a_violation_and_for_less_a_transient(sentinel_hyprland, tmp_path,
                                                                                          monkeypatch, front, layers,
                                                                                          detail):
@@ -286,7 +287,7 @@ def test_a_side_door_in_front_three_looks_in_a_row_is_a_violation_and_for_less_a
 def test_benchlab_or_a_layer_of_another_namespace_in_front_is_no_side_door(sentinel_hyprland, tmp_path, monkeypatch):
     guard, hypr, log, _ = _guard(sentinel_hyprland, tmp_path, monkeypatch, BASE)
     hypr.active = {"class": "BenchLab"}
-    hypr.layers = {"DP-1": {"levels": {"2": [{"namespace": "waybar"}], "0": [{"namespace": "walker"}]}}}
+    hypr.layers = {"DP-1": {"levels": {"2": [{"namespace": "omarchy-bar"}], "0": [{"namespace": "omarchy-menu"}]}}}
 
     for _ in range(4):
         guard.sample()
