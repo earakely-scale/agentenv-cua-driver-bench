@@ -43,6 +43,25 @@ and `cua-driver-haiku-5-5-2026-11-09`):
   host Haiku ran on, they opened during each multi-app trial, and the guard counted them as leaving the GUI. None of
   those 30 trials had passed its task.
 
+**On Windows, agent-desktop and cua-driver part in the background** (run `agent-desktop-sonnet-5-5-2026-11-10`: Claude
+Sonnet 5.5 on the same 90 trials through Vercel Labs' agent-desktop 1.2.0, its own tools alone, headed in the
+foreground, on agentenv-framework 0.9.1494):
+
+| Driver | Foreground | Background | Multi-app (fg) | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| cua-driver | 35 of 50 | 11 of 40 | 2 of 15 | 15 of 15 | 18 of 20 | 1 | $0.66 |
+| agent-desktop | 37 of 50 | 0 of 40 | 3 of 15 | 14 of 15 | 20 of 20 | 1 | $0.36 |
+
+- **In the background, agent-desktop does the task but takes the user's keyboard.** It finishes all 20 interruption
+  trials' tasks, but in each of the 35 background trials other than MB-09's the user's window loses keyboard focus and
+  activation to the window agent-desktop acts on. On IR-02, which opens no dialog, cua-driver leaves the user
+  undisturbed in all five; IR-01's, IR-03's and IR-04's dialogs take the keyboard with either driver (†).
+- **MB-09's drag can't be done headless.** In the background agent-desktop acts through UI Automation alone and refuses
+  physical input, so MB-09 fails its task in all five, with the user undisturbed.
+- **In the foreground it passes 37 of 50:** all 20 interruption trials, 14 of the 15 precision trials (MB-10's first
+  fails) and 3 of the 15 multi-app ones. 23 of its 30 multi-app trials end on the 45-turn limit, as 23 of cua-driver's
+  do, and a trial costs about half as much.
+
 **On macOS the driver decides whether the user stays undisturbed.** Four computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all

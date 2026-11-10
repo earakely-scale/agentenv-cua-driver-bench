@@ -139,8 +139,7 @@
   },
   "exclude_runs": ["macos/sonnet-5-5-2026-11-05",
     "macos/sonnet-5-5-2026-11-05-multiapp", "macos/haiku-5-5-2026-11-05", "linux/sonnet-5-5-2026-11-03",
-    "linux/haiku-5-5-2026-11-02", "linux/sonnet-4-5-2026-11-02", "windows/sonnet-5-5-2026-11-09",
-    "windows/agent-desktop-sonnet-5-5-2026-11-10"],
+    "linux/haiku-5-5-2026-11-02", "linux/sonnet-4-5-2026-11-02", "windows/sonnet-5-5-2026-11-09"],
   "drivers": {
     "cua-driver": {
       "name": "cua-driver",
