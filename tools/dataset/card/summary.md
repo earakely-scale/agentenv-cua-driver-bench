@@ -25,6 +25,24 @@ the macOS cua-driver run above still opened LibreOffice's welcome dialog in 6 of
 first Windows run, which also offered its agents AgentEnv's `computer_*` tools beside its own, stays in the dataset
 but not on the board (`sonnet-5-5-2026-11-09`, 63 trials).
 
+**Opus 5.5 and Haiku 5.5 ran the same 90 Windows trials through cua-driver** (runs `cua-driver-opus-5-5-2026-11-09`
+and `cua-driver-haiku-5-5-2026-11-09`):
+
+| Model | Foreground | Background | Multi-app (fg) | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Opus 5.5 | 37 of 50 | 10 of 40 | 7 of 15 | 15 of 15 | 15 of 20 | 2 | $0.87 |
+| Sonnet 5.5 | 35 of 50 | 11 of 40 | 2 of 15 | 15 of 15 | 18 of 20 | 1 | $0.66 |
+| Haiku 5.5 | 35 of 50 | 8 of 40 | 0 of 15 | 15 of 15 | 20 of 20 | 8 | $0.09 |
+
+- **Opus finishes the multi-app tasks within their turns.** It ends 4 of its 30 multi-app trials on the 45-turn limit,
+  against Sonnet's 23 and Haiku's 25, and passes 7 of the 15 in the foreground.
+- **Haiku leaves the GUI in 8 trials, all G04's:** it opens the access log by handing it to an app on the command line
+  through cua-driver's `launch_app`.
+- **Haiku's 30 multi-app trials ran again on agentenv-framework 0.9.1494.** That release's Windows base drops OneDrive's
+  per-user setup. On 0.9.1480's base, OneDrive's sign-in cleanup opened two console windows at every boot. On the slower
+  host Haiku ran on, they opened during each multi-app trial, and the guard counted them as leaving the GUI. None of
+  those 30 trials had passed its task.
+
 **On macOS the driver decides whether the user stays undisturbed.** Four computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
