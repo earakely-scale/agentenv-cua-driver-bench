@@ -2,7 +2,8 @@
 an agent works, on Linux our port (``sentinel.py``), on macOS trycua's BenchSentinel.app, built from their Swift sources
 at the pinned commit (``files.json``, ``build-macos.sh``) and run beside their GUI-only guard (``sentinel_macos.py``), on
 Windows their wxPython port, run as their runner runs it from ``BenchSentinel.exe``, a copy of the Python's pythonw.exe
-beside it, and beside their GUI-only guard on Windows (``install-windows.ps1``, ``sentinel_windows.py``).
+beside it, and beside their GUI-only guard on Windows (``install-windows.ps1``, ``sentinel_windows.py``), on Omarchy
+their Hyprland port, beside their GUI-only guard on Hyprland (``sentinel_hyprland.py``).
 Its data is its log, ``~/.bench-sentinel/sentinel.jsonl``, which a reset starts afresh; a task arms it around the agent
 with the ``sentinel`` artifact's run_code steps, as trycua's runner does."""
 import json
@@ -16,7 +17,8 @@ from pydantic import BaseModel
 HERE = Path(__file__).resolve().parent
 SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm64"]},
             {"os": {"type": "macos", "display": ["aqua"]}, "arch": ["arm64"]},
-            {"os": {"type": "windows", "display": ["dwm"]}, "arch": ["amd64"]}]
+            {"os": {"type": "windows", "display": ["dwm"]}, "arch": ["amd64"]},
+            {"os": {"type": "linux", "distribution": ["omarchy"], "display": ["wayland"]}, "arch": ["amd64"]}]
 LOG_FOLDER = ".bench-sentinel"
 PINNED = json.loads((HERE / "files.json").read_text(encoding="utf-8"))
 #: Microsoft's Visual C++ runtime, which wxPython's DLLs need and a trimmed Windows lacks, at its versioned URL.
@@ -45,6 +47,11 @@ class MacOS(BaseModel):
          python="requirements-windows.txt", run=[RunScript(script="install-windows.ps1")], paths=[LOG_FOLDER],
          launch=Launch(at="boot", command=["venv/Scripts/python.exe", "sentinel_windows.py"],
                        window={"instance": "benchsentinel.exe"}, ready=Ready(window=True)))
+@linux(distribution="omarchy",
+       downloads=[Download(url=f["url"], sha256=f["sha256"], to=f"lab/{f['path']}") for f in PINNED["omarchy"]],
+       paths=[LOG_FOLDER],
+       launch=Launch(at="boot", command=["venv/bin/python", "sentinel_hyprland.py"],
+                     window={"class": "BenchSentinel"}, ready=Ready(window=True)))
 class BenchSentinel(ComputerAppEnvironment):
     class Settings(BaseModel):
         #: trycua's two conditions: ``background``, the user's "User activity" window, which types; ``foreground``,
@@ -55,9 +62,10 @@ class BenchSentinel(ComputerAppEnvironment):
     def log_folder(self) -> None:
         (Path.home() / LOG_FOLDER).mkdir(exist_ok=True)
 
-    @ready_check(os=["macos", "windows"])
+    @ready_check(os=["macos", "windows", "linux/omarchy"])
     def started(self) -> bool:
-        """BenchSentinel's log begun: its start line written on macOS, its ready line on Windows."""
+        """BenchSentinel's log begun: its start line written on macOS, its ready line on Windows and Omarchy, once its
+        window is placed."""
         try:
             first = (Path.home() / LOG_FOLDER / "sentinel.jsonl").read_text().splitlines()[0]
             return json.loads(first)["ev"] in ("start", "ready")

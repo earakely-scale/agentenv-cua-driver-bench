@@ -92,6 +92,10 @@
     "windows": {
       "name": "Windows",
       "detail": "Windows 11 Enterprise evaluation, 25H2 (build 26200) · 1920×1080 · QEMU/KVM on EC2"
+    },
+    "omarchy": {
+      "name": "Omarchy",
+      "detail": "Omarchy 4.5 (Arch Linux, Hyprland on Wayland) · 1920×1080 · QEMU/KVM on EC2 · BenchLab's tasks only, MB-09 to IR-04"
     }
   },
   "conditions": {

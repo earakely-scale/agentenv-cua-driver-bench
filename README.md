@@ -11,7 +11,8 @@ at the build agentenv's `chromium` app pins, pinned again here so the bench's br
 framework release ships), and the seven BenchLab tasks, MB-09 to MB-11 and IR-01 to IR-04, in trycua's own Linux
 BenchLab. Beside each task's app, the bench's sentinel, with trycua's GUI-only guard in it, and the grade, which scores
 a trial outside the computer with trycua's own evaluator, A22 criteria and GUI-only scan. Every task runs on macOS and
-Windows 11 too, BenchLab, the sentinel and the guard on Windows in trycua's Windows ports of them.
+Windows 11 too, BenchLab, the sentinel and the guard on Windows in trycua's Windows ports of them, and the BenchLab tasks
+on Omarchy, in trycua's Hyprland ports.
 
 ## What's here
 
@@ -158,6 +159,58 @@ at sign-in would take the agent's typing.
 Linux's: the agent `codex`, with its own tools off and at medium effort, on the same computers through cua-driver.
 `evals/codex-windows-bench-v2-trials.txt` lists the 90 trials.
 
+### On Omarchy
+
+The seven BenchLab tasks run on Omarchy 4.5 (Arch Linux, Hyprland on Wayland), in both conditions (MB-10 and MB-11 in
+the foreground only), five runs each: `tasks/omarchy-*.json`, the 60 trials `evals/omarchy-benchlab-trials.txt` lists.
+G02 to G04 don't run there: their shared task's apps have no Omarchy install yet.
+
+BenchLab and the sentinel are trycua's Hyprland port at the pinned commit: their Linux BenchLab (`linux/benchlab.py`,
+GTK 3 on Wayland) and `hyprland/sentinel.py`, on Omarchy's own Python. They start as trycua's Hyprland runner starts
+them, after its window rules (`hyprland/bench.lua`: BenchLab and its dialogs float and don't take the focus as they
+open, the dialogs over BenchLab's top left), at its frames, placed through Hyprland's IPC. Beside the sentinel runs
+trycua's `hyprland/guard.py`. Once it's armed:
+
+- a terminal started since then is a violation and is ended, unless cua-driver's own program started it, which makes it
+  that tool's helper, as their Windows guard has it;
+- a terminal's window, or one of Omarchy's launchers in front, is a violation after three samples in a row. The launchers
+  are its shell's menu (Super+Space) and its Apps panel.
+
+The trajectory's GUI-only check scans an Omarchy trial with their Hyprland guard's patterns too. The sentinel and the
+launches talk to Hyprland through their `hypr.py`, made to wait out a busy Hyprland (`hyprland_ipc.py`). At boot,
+Omarchy's shell asks Hyprland so much that its socket refuses connections for a moment, which used to end their
+sentinel's search for its own window. The computer is agent-env's `omarchy-4.5` base, Omarchy's own stable image, with
+cua-driver and its Hyprland plugin, booted as a disk under KVM.
+
+You need:
+
+- a Linux amd64 machine with KVM (`/dev/kvm`);
+- Docker on the overlay2 storage driver, with a registry on `localhost:5000`;
+- a model endpoint.
+
+```bash
+pip install 'agentenv-framework>=0.9.1497'
+docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
+python tools/taskpack.py
+agent-env run . --task omarchy-ir-01-r1-foreground
+agent-env run . --eval omarchy-benchlab   # BenchLab's checks on Omarchy, no model (13)
+agent-env run . --eval omarchy-sentinel   # the sentinel's and the guard's, through trycua's oracle (2)
+```
+
+**The first run takes a while.** Unless your image store already holds the base, it fetches Omarchy's 4.2 GB image,
+checked by sha256, and makes it a base, about 5 minutes. It then composes the computer, BenchLab and the sentinel onto
+the base, and probes it, about 7 minutes. Later runs reuse the composed computer, and a BenchLab trial then takes about
+a minute.
+
+**What differs from Linux:** the Omarchy trial files carry trycua's system prompt for "a Linux desktop", and their
+prompts say "on this Linux computer", as trycua's Hyprland runner words them. BenchLab gets the trial's condition, as on
+Windows: in the foreground it's focused once placed, as their runner does.
+
+**The sentinel's check on Omarchy** (`artifacts/check_sentinel_hyprland`) causes each disturbance with trycua's
+`hyprland/oracle.py --disturb`. Their oracle moves the pointer through `/dev/uinput`, which only root can open on
+Omarchy, so the check runs their same `disturb` with the pointer moved through Hyprland's IPC, and each scenario says
+which it took (`via`).
+
 ## The task apps
 
 Each shared task (`cdb-s02`, `cdb-s03`, `cdb-s04`) is one computer app, so that every window it opens stops and starts
@@ -213,6 +266,13 @@ can pass. The `background` checks report `user_kept_focus` and `user_window_on_t
 Windows does the same. In one background trial of each with cua-driver, IR-01's, IR-03's and IR-04's dialogs took the
 user's keyboard and activation when they opened, so A22's `key_focus`, `typing` and `activation` failed, while the agent
 did the task each time. MB-09 and IR-02, whose clicks land in BenchLab's own window, kept the user undisturbed.
+
+Omarchy doesn't. trycua's window rules for Hyprland keep a BenchLab dialog from taking the focus as it opens, and open it
+over BenchLab's top left, clear of the user's window. Measured with no model by the `background` checks, IR-01's,
+IR-03's and IR-04's dialogs, each opened by a background click, left the user's window with the keyboard and on top in
+every sample (13 of 13 each). A dropdown is another matter: GTK opens one as a popup that grabs the keyboard, so an agent
+that opens BenchLab's Status or Plan dropdown with a click takes the user's typing until it picks an item, where
+`set_value` would have picked it without one.
 
 ## The sentinel and the GUI-only guard
 

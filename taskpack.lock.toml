@@ -3,7 +3,7 @@
 # python tools/taskpack.py pin <commit>.
 repo = "trycua/cua"
 commit = "69b459b33ca001a5e7026dee4f57da1ec02ee53f"
-sha256 = "9c9648ef24642c7635f8fbfbb09d271fe38272c4025265c833de7b6262a24eaf"
+sha256 = "c76be21227e310c838f7ead37d0cbee8bc22fc344770924a318bc6695f99638f"
 
 [[include]]
 from = "libs/cua-driver-bench/LICENSE"
@@ -124,3 +124,11 @@ to = "swift/build.sh"
 [[include]]
 from = "libs/cua-driver-bench/automated-eval/macos_bench/windows"
 to = "windows"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/hyprland"
+to = "hyprland"
+
+[[include]]
+from = "libs/cua-driver-bench/automated-eval/macos_bench/launch/hyprland_session.py"
+to = "launch/hyprland_session.py"

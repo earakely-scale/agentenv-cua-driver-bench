@@ -58,6 +58,28 @@ def test_windows_bench_v2_splits_by_windows_computer_each_trial_named_as_its_lin
         line.split("|")[1:] for _, specs in linux for line in specs]
 
 
+def test_omarchys_benchlab_trials_split_onto_its_computer_each_named_as_its_linux_twin(plan):
+    linux = plan.split(ROOT, (ROOT / "evals" / "bench-v2-trials.txt").read_text().split(), 10)
+    omarchy = plan.split(ROOT, (ROOT / "evals" / "omarchy-benchlab-trials.txt").read_text().split(), 10)
+
+    assert {env for env, _ in omarchy} == {"desktop-benchlab-omarchy"} and len(omarchy) == 6
+    assert [line.split("|")[1:] for _, specs in omarchy for line in specs] == [
+        line.split("|")[1:] for env, specs in linux if env == "desktop-benchlab" for line in specs]
+
+
+def test_an_omarchy_runs_manifest_pins_cua_drivers_hyprland_tool_list(manifest, tmp_path):
+    driver = tmp_path / "cua-driver"
+    driver.mkdir()
+    for name in ("mcp.json", "mcp-hyprland.json"):
+        (driver / name).write_text(json.dumps({"tools": [name]}))
+
+    computer = manifest._computer(ROOT, "desktop-benchlab-omarchy", tmp_path, "omarchy")
+
+    assert (computer["computer"], computer["driver"], computer["tool_list"]) == (
+        "omarchy-4.5", "cua-driver", "mcp-hyprland.json")
+    assert computer["apps"] == ["benchlab", "bench-sentinel"]
+
+
 def test_a_plan_writes_each_workers_trials_and_the_whole_runs_for_its_manifest(plan, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(plan.sys, "argv", ["plan.py", str(ROOT / "evals" / "macos-bench-v2-trials.txt"), str(tmp_path),
                                            "24"])

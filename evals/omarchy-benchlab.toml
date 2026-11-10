@@ -1,0 +1,15 @@
+tasks = [
+  "omarchy-benchlab-listdrag",
+  "omarchy-benchlab-hover",
+  "omarchy-benchlab-tooltip",
+  "omarchy-benchlab-irmodal",
+  "omarchy-benchlab-irbanner",
+  "omarchy-benchlab-irunsaved",
+  "omarchy-benchlab-irconsent",
+  "omarchy-benchlab-solve-ir-01",
+  "omarchy-benchlab-solve-mb-10",
+  "omarchy-benchlab-solve-mb-11",
+  "omarchy-benchlab-background-ir-01",
+  "omarchy-benchlab-background-ir-03",
+  "omarchy-benchlab-background-ir-04",
+]

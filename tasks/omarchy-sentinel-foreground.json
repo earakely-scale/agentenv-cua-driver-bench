@@ -1,0 +1,7 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-benchlab-omarchy",
+   "env_params": {"app_settings": {"benchlab": {"mode": "hover", "seed": 1, "condition": "foreground"}, "bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop-benchlab-omarchy", "artifact_id": "taskpack", "destination_path": "bench"},
+  {"id": "check", "type": "run_code", "env_id": "desktop-benchlab-omarchy", "script_artifact_id": "check_sentinel_hyprland",
+   "args": {"condition": "foreground"}, "timeout_seconds": 900}
+]
