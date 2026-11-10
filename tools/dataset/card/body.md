@@ -3,7 +3,8 @@
 trycua's Bench v2: ten GUI-only tasks in three groups. The multi-app tasks use their task pack's own Electron apps
 (Calc and GnuCash are Ubuntu's on Linux; on macOS, LibreOffice 25.8 and GnuCash 5.17 for Apple silicon); the precision and interruption tasks run in BenchLab, trycua's test app, in a mode
 and with a seed of their own for each run: on Linux the GTK version of their Linux port, on macOS their own app, built
-from their Swift sources at the pinned commit.
+from their Swift sources at the pinned commit, and on Omarchy their Linux port on Wayland with their Hyprland sentinel
+and guard. Omarchy runs the seven BenchLab tasks alone.
 
 | Probe | Task | Apps | What is checked |
 |---|---|---|---|
@@ -42,6 +43,9 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    drivers comparison's trials (`tasks/macos-agent-desktop-*.json`, `tasks/macos-macos-harness-*.json`,
    `tasks/macos-codex-computer-use-*.json`) are those with Vercel Labs' agent-desktop, browser-use's macOS harness or
    OpenAI's Codex Computer Use in cua-driver's place, Codex let act on the task's apps alone, and nothing else changed.
+   On Omarchy (`tasks/omarchy-*.json`): Omarchy 4.5, Hyprland on Wayland at 1920x1080, booted as a disk under QEMU/KVM
+   on EC2, with cua-driver and its Hyprland plugin, BenchLab and trycua's Hyprland sentinel placed at their runner's
+   frames after their window rules (`hyprland/bench.lua`), and their Hyprland guard beside the sentinel.
 2. Deploy the agent with the computer's driver's MCP server, its own tools alone (on Linux through
    `--set envs/<computer>.tools=driver`, since the Linux task files keep the default, which adds AgentEnv's
    `computer_*` tools), AgentEnv's `peer_agents` server, which no task uses, trycua's system prompt (for "a Linux
@@ -138,6 +142,10 @@ runs/<os>/<run>/<trial>/
   | openbox | comes to the front: IR-01's, IR-03's and IR-04's dialogs over the user's window in 63 of 66, 64 of 66 and 46 of 52 samples | neither (0 of 3) |
 
   IR-02's banner is drawn inside BenchLab's window, so it can pass.
+- **On Omarchy those dialogs can pass.** trycua's Hyprland window rules keep a BenchLab dialog from taking the focus
+  as it opens, and open it over BenchLab's top left, clear of the user's window. So Omarchy's background cells aren't
+  comparable with Linux's. A GTK dropdown's popup there takes the user's keyboard, which Omarchy's sentinel sees and
+  the X11 one doesn't.
 - trycua's text is kept as written: the BenchLab briefs say BenchLab "is already open on your Mac", and MB-10's
   brief names an "Actions" strip that their Linux BenchLab labels "Hover here to reveal actions".
 - MB-10 and MB-11 run in the foreground only, as trycua's task manifest lists them ([`taskpack/v2-taskset.json`](https://github.com/trycua/cua/blob/60ed3eb5f038e090629f39687ec8b937724548f9/libs/cua-driver-bench/taskpack/v2-taskset.json), added in
