@@ -204,9 +204,18 @@ def test_every_linux_trial_has_its_codex_twin():
     trials = set((ROOT / "evals" / "bench-v2-trials.txt").read_text().split())
 
     linux = {path.stem for path in (ROOT / "tasks").glob("codex-*.json")
-             if not path.stem.startswith(("codex-macos-", "codex-windows-"))}
+             if not path.stem.startswith(("codex-macos-", "codex-windows-", "codex-omarchy-"))}
 
     assert linux == {f"codex-{name}" for name in trials}
+
+
+def test_every_omarchy_trial_has_its_codex_twin_and_their_list_is_its():
+    omarchy = (ROOT / "evals" / "omarchy-benchlab-trials.txt").read_text().split()
+    twins = {path.stem for path in (ROOT / "tasks").glob("codex-omarchy-*.json")}
+
+    assert twins == {f"codex-{name}" for name in omarchy}
+    assert (ROOT / "evals" / "codex-omarchy-benchlab-trials.txt").read_text().split() == [
+        f"codex-{name}" for name in omarchy]
 
 
 def test_every_windows_trial_has_its_codex_twin_and_their_lists_are_its():
