@@ -25,7 +25,7 @@ PRICES = {"claude-sonnet-4-5": (3.0, 15.0, 0.30), "claude-sonnet-5-5": (2.0, 10.
           "gpt-6.1-sol": (2.0, 10.0, 0.10), "gpt-6-astra": (10.0, 50.0, 1.0)}
 TIERED = {"claude-haiku-5-5": (100_000, (0.10, 0.50, 0.01), (0.50, 2.50, 0.05))}
 BENCH = Path(os.environ.get("BENCH", Path.home() / "bench"))
-STEM = re.compile(r"^(?:codex-)?(?:macos-|windows-)?(?:(?P<driver>agent-desktop|macos-harness|codex-computer-use|cua-driver)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?"
+STEM = re.compile(r"^(?:codex-)?(?:macos-|windows-|omarchy-)?(?:(?P<driver>agent-desktop|macos-harness|codex-computer-use|cua-driver)-)?(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r\d)?"
                   r"-(?P<condition>foreground|background)$")
 
 

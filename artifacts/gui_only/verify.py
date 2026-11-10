@@ -1,7 +1,8 @@
 """The trajectory's half of the bench's GUI-only check, outside the computer: trycua's scan of the agent's tool calls
 (their ``bench_v2``, and for a computer whose card says it's Windows their Windows guard's, which adds Windows' shells
-and script hosts, each fetched at the lock's commit and checked against its sha256, as ``TRYCUA`` pins it, written by
-``python tools/taskpack.py grader``), on claude-code's stream-json, or codex-cli's exec events read as trycua's runner
+and script hosts, or Omarchy their Hyprland guard's, which adds Hyprland's dispatchers, Omarchy's and uwsm's launchers
+and terminals' names, each fetched at the lock's commit and checked against its sha256, as ``TRYCUA`` pins it by its
+path in the task pack, written by ``python tools/taskpack.py grader``), on claude-code's stream-json, or codex-cli's exec events read as trycua's runner
 reads its Codex arm's: its own tools as the built-ins trycua forbids; the grade in its container is the guard's half.
 
 It holds when claude-code was offered no built-in tool but Skill and Read beside the computer env's, tried none trycua
@@ -35,6 +36,8 @@ _COMMAND = re.compile(r"[;|&$`<>]|^[/.~]")
 #: What Codex Computer Use's ``js`` reaches outside the GUI beyond trycua's patterns: a Node module its REPL holds as a
 #: global, used without a require; the process; or any module loaded at all, since the cua API it drives apps with is a
 #: global and needs none.
+#: The platforms whose trials trycua's guard of their own scans, by its path in ``TRYCUA``.
+GUARDS = {"windows": "windows/guard.py", "linux/omarchy": "hyprland/guard.py"}
 _CODEX_JS = re.compile(
     r"\b(?P<module>fs|os|net|https?|child_process|worker_threads|vm|module|dgram|tls|cluster|inspector)\s*\.\s*[A-Za-z_$]"
     r"|\b(?:globalThis\s*\.\s*)?(?P<process>process)\s*\.\s*[A-Za-z_$]"
@@ -43,23 +46,27 @@ _CODEX_JS = re.compile(
 
 TRYCUA = {
  "commit": "69b459b33ca001a5e7026dee4f57da1ec02ee53f",
- "bench_v2.py": {
+ "scoring/bench_v2.py": {
   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
   "sha256": "204eaeadb97b2f20225bd99f52b706d26a11aaec270ee364f3fb3def25446727"
  },
- "guard.py": {
+ "windows/guard.py": {
   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/windows/guard.py",
   "sha256": "44f22d382ad02bb676fea2e9e8583a0a24ecc1fa7bf399126020e5ba0aae0611"
+ },
+ "hyprland/guard.py": {
+  "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/hyprland/guard.py",
+  "sha256": "d20577182136f23c10f1478d9bc4b0fb190879e0538e7ed17c3d8fa267247715"
  }
 }
 
 
 async def verify(mcp_url, env_url, trajectory=None):
-    windows = _os(env_url) == "windows"
+    guard = GUARDS.get(_platform(env_url))
     with tempfile.TemporaryDirectory() as scratch:
-        v2 = _module(_fetched(TRYCUA["bench_v2.py"], Path(scratch) / "bench_v2.py"), "trycua_bench_v2")
-        scan = (_module(_fetched(TRYCUA["guard.py"], Path(scratch) / "windows" / "guard.py"), "trycua_windows_guard")
-                if windows else v2)
+        v2 = _module(_fetched(TRYCUA["scoring/bench_v2.py"], Path(scratch) / "bench_v2.py"), "trycua_bench_v2")
+        scan = (_module(_fetched(TRYCUA[guard], Path(scratch) / guard), f"trycua_{guard.split('/')[0]}_guard")
+                if guard else v2)
     events = _events(trajectory)
     violations, mentions = _scan(v2, events or [], scan)
     return [{"id": "gui_only_trajectory", "result": bool(events) and not violations, "violations": violations,
@@ -105,9 +112,9 @@ def _codex_calls(document):
     return calls
 
 
-def _os(env_url):
-    """The OS type the computer's card says it runs, its computer/v1 platform's; None for a card it can't read, whose
-    trial keeps trycua's own scan."""
+def _platform(env_url):
+    """The OS type the computer's card says it runs, its computer/v1 platform's, or for a Linux distribution with a
+    guard of its own, ``os/distribution``; None for a card it can't read, whose trial keeps trycua's own scan."""
     try:
         with urllib.request.urlopen(f"{env_url.rstrip('/')}/.well-known/agent-env.json", timeout=30) as response:
             card = json.load(response)
@@ -115,11 +122,13 @@ def _os(env_url):
         return None
     extensions = (card.get("capabilities") or {}).get("extensions") or []
     computer = next((ext.get("params") or {} for ext in extensions if ext.get("uri") == "urn:agentenv:computer/v1"), {})
-    return (computer.get("platform") or {}).get("os")
+    platform = computer.get("platform") or {}
+    distribution = f"{platform.get('os')}/{platform.get('distribution')}"
+    return distribution if distribution in GUARDS else platform.get("os")
 
 
 def _scan(v2, events, scan):
-    """trycua's scan (``scan``, their Windows guard's on Windows), a forbidden built-in tried or code in a tool input; any built-in the CLI offered beside the
+    """trycua's scan (``scan``, their Windows guard's on Windows, their Hyprland guard's on Omarchy), a forbidden built-in tried or code in a tool input; any built-in the CLI offered beside the
     computer env's tools and Skill and Read; and launch_app running a command: with arguments, a launch path that isn't
     an app's .desktop file, or a name a shell would read as more than an app's. A call to a tool the CLI never offered
     ran nothing, so it isn't one, unless trycua forbids it. The violations, and the side doors merely named."""

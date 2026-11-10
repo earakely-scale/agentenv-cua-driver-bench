@@ -1,7 +1,7 @@
 """The fleet's settings, from the environment or `tools/fleet/fleet.env` (git-ignored; `fleet.env.example` lists them),
 and what every fleet tool does over SSM: run a script as the VM's user, copy a small file, make a key pair on the VM
 and encrypt a secret to it, so that only ciphertext ever crosses SSM. A worker is a Linux VM, its user ubuntu, or an EC2
-Mac, its user ec2-user (`HOSTS`); a Windows run's is a Linux VM with KVM, which runs its Windows computers."""
+Mac, its user ec2-user (`HOSTS`); a Windows or Omarchy run's is a Linux VM with KVM, which runs its computers."""
 import base64
 import hashlib
 import os
@@ -18,7 +18,8 @@ CHUNK = 80_000
 #: Each OS's worker: its user, the user's group and home, and the command that prints a file's sha256.
 HOSTS = {"linux": ("ubuntu", "ubuntu", "/home/ubuntu", "sha256sum"),
          "macos": ("ec2-user", "staff", "/Users/ec2-user", "shasum -a 256"),
-         "windows": ("ubuntu", "ubuntu", "/home/ubuntu", "sha256sum")}
+         "windows": ("ubuntu", "ubuntu", "/home/ubuntu", "sha256sum"),
+         "omarchy": ("ubuntu", "ubuntu", "/home/ubuntu", "sha256sum")}
 
 
 def _load(path):

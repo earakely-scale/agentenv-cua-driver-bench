@@ -2,9 +2,11 @@
 holds for claude-code offered and calling only the computer env's tools and Skill and Read, with no code in a tool
 input and no command run through launch_app; a call to a tool the CLI never offered ran nothing; and a trajectory that
 isn't claude-code's stream-json can't be checked; codex-cli's events read as trycua's runner reads its Codex arm's.
-Also its table: trycua's scan at the lock's commit."""
+On Windows and Omarchy trycua's guard of their own scans the calls, by the platform the computer's card names. Also
+its table: trycua's scan and their guards at the lock's commit."""
 import asyncio
 import importlib.util
+import io
 import json
 import shutil
 from pathlib import Path
@@ -39,12 +41,12 @@ def gui_only(tmp_path, monkeypatch):
     spec.loader.exec_module(module)
     cache = tmp_path / "cache"
     cache.mkdir()
-    shutil.copy(PACK / "scoring" / "bench_v2.py", cache / module.TRYCUA["bench_v2.py"]["sha256"])
-    shutil.copy(PACK / "windows" / "guard.py", cache / module.TRYCUA["guard.py"]["sha256"])
+    for name in ("scoring/bench_v2.py", "windows/guard.py", "hyprland/guard.py"):
+        shutil.copy(PACK / name, cache / module.TRYCUA[name]["sha256"])
     monkeypatch.setattr(module, "CACHE", cache)
 
     def verify(trajectory, os=None):
-        monkeypatch.setattr(module, "_os", lambda env_url: os)
+        monkeypatch.setattr(module, "_platform", lambda env_url: os)
         return asyncio.run(module.verify("http://mcp", "http://env", trajectory))[0]
     return verify
 
@@ -76,6 +78,48 @@ def test_on_windows_a_shell_or_script_host_in_a_tool_input_fails_as_trycuas_wind
     assert windows["result"] is False
     assert "mcp__desktop-benchlab-windows__type_text:powershell" in windows["violations"]
     assert "mcp__desktop-benchlab-windows__type_text:powershell" not in linux["violations"]
+
+
+@pytest.mark.parametrize("text, violation", [
+    ("hyprctl dispatch exec alacritty", "hyprctl"),
+    ("uwsm app -- foot", "uwsm app"),
+    ("omarchy-launch-editor", "omarchy-launch"),
+    ("open ghostty please", "ghostty"),
+], ids=["Hyprland's dispatcher", "uwsm's launcher", "Omarchy's launchers", "a terminal's name"])
+def test_on_omarchy_a_launcher_or_terminal_in_a_tool_input_fails_as_trycuas_hyprland_guard_scans_it(gui_only, text,
+                                                                                                   violation):
+    call = _tool("mcp__desktop-benchlab-omarchy__type_text", text=text)
+
+    omarchy = gui_only(_trajectory(CLICK, call), os="linux/omarchy")
+    linux = gui_only(_trajectory(CLICK, call), os="linux")
+
+    assert omarchy["result"] is False
+    assert f"mcp__desktop-benchlab-omarchy__type_text:{violation}" in omarchy["violations"]
+    assert f"mcp__desktop-benchlab-omarchy__type_text:{violation}" not in linux["violations"]
+
+
+@pytest.mark.parametrize("platform, scan", [
+    ({"os": "linux", "distribution": "omarchy", "display": "wayland"}, "linux/omarchy"),
+    ({"os": "linux", "distribution": "ubuntu", "display": "x11"}, "linux"),
+    ({"os": "windows", "display": "dwm"}, "windows"),
+    ({"os": "macos", "display": "aqua"}, "macos"),
+], ids=["Omarchy", "Ubuntu", "Windows", "macOS"])
+def test_a_computer_gets_the_scan_its_cards_platform_names(monkeypatch, platform, scan):
+    spec = importlib.util.spec_from_file_location("bench_gui_only", ROOT / "artifacts" / "gui_only" / "verify.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    card = {"capabilities": {"extensions": [{"uri": "urn:agentenv:computer/v1", "params": {"platform": platform}}]}}
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda url, timeout: Response(json.dumps(card).encode()))
+
+    assert module._platform("http://env") == scan
 
 
 @pytest.mark.parametrize("launch, violation", [
@@ -179,11 +223,15 @@ def test_its_table_pins_trycuas_scan_at_the_locks_commit():
     manifest = dict(reversed(line.split("  ", 1)) for line in (PACK / "MANIFEST.sha256").read_text().splitlines())
 
     assert f'commit = "{module.TRYCUA["commit"]}"' in (ROOT / "taskpack.lock.toml").read_text()
-    assert module.TRYCUA["bench_v2.py"]["sha256"] == manifest["scoring/bench_v2.py"]
-    assert module.TRYCUA["bench_v2.py"]["url"].startswith(
-        f"https://raw.githubusercontent.com/trycua/cua/{module.TRYCUA['commit']}/")
-    assert module.TRYCUA["guard.py"]["sha256"] == manifest["windows/guard.py"]
-    assert module.TRYCUA["guard.py"]["url"].endswith("/automated-eval/macos_bench/windows/guard.py")
+    assert set(module.TRYCUA) == {"commit", "scoring/bench_v2.py", "windows/guard.py", "hyprland/guard.py"}
+    assert set(module.GUARDS.values()) == {"windows/guard.py", "hyprland/guard.py"}
+    for name in ("scoring/bench_v2.py", "windows/guard.py", "hyprland/guard.py"):
+        assert module.TRYCUA[name]["sha256"] == manifest[name]
+        assert module.TRYCUA[name]["url"].startswith(
+            f"https://raw.githubusercontent.com/trycua/cua/{module.TRYCUA['commit']}/")
+    assert module.TRYCUA["scoring/bench_v2.py"]["url"].endswith("/automated-eval/macos_bench/bench_v2.py")
+    assert module.TRYCUA["windows/guard.py"]["url"].endswith("/automated-eval/macos_bench/windows/guard.py")
+    assert module.TRYCUA["hyprland/guard.py"]["url"].endswith("/automated-eval/macos_bench/hyprland/guard.py")
 
 
 JS = "mcp__desktop-s02-macos-codex-computer-use__js"

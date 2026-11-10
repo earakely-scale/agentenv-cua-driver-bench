@@ -48,5 +48,32 @@
    "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
    "sha256": "204eaeadb97b2f20225bd99f52b706d26a11aaec270ee364f3fb3def25446727"
   }
+ ],
+ "omarchy": [
+  {
+   "path": "hyprland/sentinel.py",
+   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/hyprland/sentinel.py",
+   "sha256": "017817fc62a9c9de00e79b9780434a44c10d71c9d4c25acfb11d77d5bdd9da19"
+  },
+  {
+   "path": "hyprland/hypr.py",
+   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/hyprland/hypr.py",
+   "sha256": "dc8d95b5aa7ec4fb633a42d7fc0f99ecff79a222a226ec7637684bd6657a953b"
+  },
+  {
+   "path": "hyprland/guard.py",
+   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/hyprland/guard.py",
+   "sha256": "d20577182136f23c10f1478d9bc4b0fb190879e0538e7ed17c3d8fa267247715"
+  },
+  {
+   "path": "hyprland/bench.lua",
+   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/hyprland/bench.lua",
+   "sha256": "c705bf1a4a1f471db23317dc613e55e8e3d3edbc1181c39525816a802e0594ef"
+  },
+  {
+   "path": "scoring/bench_v2.py",
+   "url": "https://raw.githubusercontent.com/trycua/cua/69b459b33ca001a5e7026dee4f57da1ec02ee53f/libs/cua-driver-bench/automated-eval/macos_bench/bench_v2.py",
+   "sha256": "204eaeadb97b2f20225bd99f52b706d26a11aaec270ee364f3fb3def25446727"
+  }
  ]
 }
