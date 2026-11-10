@@ -309,6 +309,7 @@ The Hugging Face token is huggingface_hub's login (`hf auth login`).
 ```bash
 python tools/fleet/plan.py evals/bench-v2-trials.txt plan 10   # 90 trials, 9 workers, each on one computer
 tools/fleet/launch.sh 10 c6i.2xlarge > instances.txt           # the workers set themselves up in a few minutes
+FLEET_DISK_GB=250 python tools/fleet/launch.py 2 c8i.4xlarge --nested   # a Windows run's: nested KVM
 tar czf taskpack.tgz -C artifacts taskpack                     # the task pack, fetched once here
 export FLEET_MODEL_KEY=...
 python tools/fleet/start.py <instance> haiku-5-5-2026-11-02 anthropic/claude-haiku-5-5 plan/worker-01.txt \

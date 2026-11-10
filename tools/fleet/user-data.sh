@@ -1,6 +1,6 @@
 #!/bin/bash
 # A fleet worker's setup at first boot: Docker with a local registry, the agentenv framework in ~/venv, the bench in
-# ~/bench. launch.sh fills in the @...@ values. The VM shuts down, and so terminates, after @MAX_MINUTES@ minutes.
+# ~/bench. launch.sh or launch.py fills in the @...@ values. The VM shuts down, and so terminates, after @MAX_MINUTES@ minutes.
 set -x
 shutdown -h +@MAX_MINUTES@
 systemctl stop unattended-upgrades || true
@@ -15,6 +15,8 @@ for attempt in 1 2 3 4 5; do
 done
 mkdir -p /etc/docker && echo '{"default-address-pools":[{"base":"172.20.0.0/14","size":24}]}' > /etc/docker/daemon.json && systemctl restart docker
 usermod -aG docker ubuntu
+# A Windows run's computers boot under KVM, which agent-env uses only when the user can open /dev/kvm.
+getent group kvm >/dev/null && usermod -aG kvm ubuntu
 sysctl -w fs.inotify.max_user_instances=8192 fs.inotify.max_user_watches=1048576
 docker run -d --restart=always -p 5000:5000 --name registry public.ecr.aws/docker/library/registry:2
 sudo -iu ubuntu bash <<'INNER'

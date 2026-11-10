@@ -1,0 +1,4 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-s03-windows-codex-computer-use", "env_params": {"driver_settings": {"allowed_apps": null}, "app_settings": {"bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "discover", "type": "run_code", "env_id": "desktop-s03-windows-codex-computer-use", "script_artifact_id": "cu6_discover", "timeout_s": 1200, "depends_on": ["env"]}
+]

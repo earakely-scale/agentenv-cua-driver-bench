@@ -29,7 +29,7 @@ SENTINEL = Path(sys.base_prefix) / "BenchSentinel.exe"
 #: trycua's runner's frame for the witness, the sentinel in the foreground: x, y, width, height.
 WITNESS_FRAME = (1000, 640, 600, 320)
 #: The driver's own programs: a shell one of them starts for itself is the tool's, as trycua's runner's ``--tool-exe``.
-TOOL_EXES = ("cua-driver.exe",)
+TOOL_EXES = ("cua-driver.exe", "codex-computer-use.exe")
 GUARD_S = 0.5
 READ_S = 0.1
 
