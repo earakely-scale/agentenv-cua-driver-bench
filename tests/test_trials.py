@@ -202,11 +202,14 @@ def test_each_codex_trial_is_its_linux_twin_with_codex_as_the_agent_its_own_tool
 
 def test_every_linux_trial_has_its_codex_twin():
     trials = set((ROOT / "evals" / "bench-v2-trials.txt").read_text().split())
+    agent_desktop = (ROOT / "evals" / "agent-desktop-bench-v2-trials.txt").read_text().split()
 
     linux = {path.stem for path in (ROOT / "tasks").glob("codex-*.json")
              if not path.stem.startswith(("codex-macos-", "codex-windows-"))}
 
-    assert linux == {f"codex-{name}" for name in trials}
+    assert linux == {f"codex-{name}" for name in trials | set(agent_desktop)}
+    assert (ROOT / "evals" / "codex-agent-desktop-bench-v2-trials.txt").read_text().split() == [
+        f"codex-{name}" for name in agent_desktop]
 
 
 def test_every_windows_trial_has_its_codex_twin_and_their_lists_are_its():

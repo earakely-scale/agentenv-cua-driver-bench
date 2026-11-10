@@ -4,7 +4,7 @@ framework commit its checkout is pinned to and the agent-env state its computers
 planned as plan.py plans them, at most `per` trials each, one computer per worker, and each computer's workers go to
 one host, the busiest computers first to the least loaded host, so a host composes only the computers it runs; a
 computer is split over hosts only where one host would carry more than its share. Each host runs its workers one after
-another, through start.py.
+another, through start.py; the board asks and starts its hosts concurrently.
 
 It's restart-safe: what it started is kept in BOARD.state.json, and each poll reads what each host runs, by its
 worker's trials' digest, so nothing starts twice. A host that can't be asked is passed over for that poll; a start that
@@ -21,7 +21,10 @@ import shlex
 import subprocess
 import sys
 import time
+import threading
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -36,6 +39,8 @@ RESUMES = 2
 #: How far over its share of the board's trials a host takes another of a computer's workers before the computer is
 #: split onto the least loaded host.
 SLACK = 1.25
+#: How many hosts the board asks, and starts workers on, at once.
+CONCURRENT = 16
 
 
 @dataclass
@@ -145,13 +150,31 @@ class Runner:
         self.board, self.hosts, self.work, self.state_path, self.log = board, hosts, work, state_path, log
         self.os = board.get("os", "macos")
         self.state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        self.lock = threading.Lock()
 
     def run(self) -> None:
-        while not all(self._finished(h) for h in self.hosts):
-            for host in self.hosts:
-                self.poll(host)
-            time.sleep(POLL_S)
+        with ThreadPoolExecutor(max_workers=min(CONCURRENT, len(self.hosts))) as pool:
+            while not all(self._finished(h) for h in self.hosts):
+                list(pool.map(self._poll, self.hosts))
+                time.sleep(POLL_S)
         self.say("board done: " + ", ".join(f"{w}: {s['status']}" for w, s in sorted(self.state.items())))
+
+    def _poll(self, host: Host) -> None:
+        with self.lock:
+            self.poll(host)
+
+    @contextmanager
+    def _unlocked(self):
+        """The board's lock let go while a host is asked or a worker started, the slow part of a poll, so other hosts'
+        polls go on meanwhile; a poll outside run() holds no lock."""
+        held = self.lock.locked()
+        if held:
+            self.lock.release()
+        try:
+            yield
+        finally:
+            if held:
+                self.lock.acquire()
 
     def poll(self, host: Host) -> None:
         """One look at ``host``: what it runs recorded, and its next worker started when it runs nothing."""
@@ -197,7 +220,8 @@ class Runner:
         framework = (f'echo "framework=$(git -C {self.board["framework_checkout"]} rev-parse HEAD 2>/dev/null)"\n'
                      if host.framework else "")
         try:
-            out = ssm(host.instance, PEEK.format(framework=framework), timeout=90, os_type=self.os)
+            with self._unlocked():
+                out = ssm(host.instance, PEEK.format(framework=framework), timeout=90, os_type=self.os)
         except (Exception, SystemExit) as error:
             self.say(f"{host.name} couldn't be asked: {error}"[:300])
             return None
@@ -214,11 +238,12 @@ class Runner:
         checkout, venv = self.board["framework_checkout"], self.board["venv"]
         ref = shlex.quote(host.framework)
         try:
-            out = ssm(host.instance, f"""export PATH=$HOME/.local/bin:/opt/homebrew/bin:$PATH
+            with self._unlocked():
+                out = ssm(host.instance, f"""export PATH=$HOME/.local/bin:/opt/homebrew/bin:$PATH
 cd {checkout} && git fetch -q origin && git checkout -q -f {ref}
 git rev-parse HEAD
 uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e '.[dev]' 2>&1 | tail -1""",
-                      timeout=900, os_type=self.os)
+                          timeout=900, os_type=self.os)
         except (Exception, SystemExit) as error:
             return self.say(f"{host.name} couldn't be pinned to {host.framework}: {error}"[:300])
         head = (out.split() or [""])[0]
@@ -231,7 +256,8 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
         """``worker``'s trials that failed their export or upload exported and uploaded again on ``host``, from the task
         instances they finished on, without running them."""
         try:
-            out = ssm(host.instance, "cat ~/fleet/progress.jsonl", timeout=90, os_type=self.os)
+            with self._unlocked():
+                out = ssm(host.instance, "cat ~/fleet/progress.jsonl", timeout=90, os_type=self.os)
         except (Exception, SystemExit) as error:
             return self.say(f"{host.name} couldn't read {worker.id}'s progress: {error}"[:300])
         records = [json.loads(line) for line in out.splitlines() if line.startswith("{")]
@@ -263,7 +289,8 @@ uv pip install -q --python {venv}/bin/python -e ./packages/agentenv-protocol -e 
             argv.append("--fresh")
         for line in worker.settings:
             argv += ["--set", line]
-        done = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, env=env)
+        with self._unlocked():
+            done = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, env=env)
         said = (done.stdout + done.stderr).strip().splitlines()
         if done.returncode or not said or said[-1] != "started":
             return self.say(f"{host.name} couldn't start {worker.id}: {said[-1:] or done.returncode}; trying again")

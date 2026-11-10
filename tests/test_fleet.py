@@ -8,6 +8,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -371,6 +372,25 @@ def test_a_runs_settings_reach_each_of_its_workers_named_for_the_workers_compute
         "envs/desktop-benchlab.tools=driver"]
     assert all(w.settings == [] for w in workers if w.run == "a")
     assert calls[0][calls[0].index("--set") + 1] == "envs/desktop-s02.tools=driver"
+
+
+def test_a_board_starts_its_hosts_workers_at_once_rather_than_one_host_after_another(board, tmp_path, monkeypatch):
+    hosts = [board.Host(f"b{n}", f"i-{n}", workers=[_worker(board, "r", f"c{n}", 1)]) for n in (1, 2)]
+    runner, _ = _runner(board, tmp_path, monkeypatch, hosts)
+    both = threading.Barrier(2, timeout=5)
+
+    def run(argv, **kwargs):
+        both.wait()
+        return types.SimpleNamespace(returncode=0, stdout="started\n", stderr="")
+    monkeypatch.setattr(board.subprocess, "run", run)
+    for n in (1, 2):
+        board.common.replies[f"i-{n}"] = _peek(False)
+    rounds = []
+    monkeypatch.setattr(board.time, "sleep", rounds.append)
+    monkeypatch.setattr(runner, "_finished", lambda host: bool(rounds))
+    runner.run()
+
+    assert {record["host"] for record in runner.state.values()} == {"b1", "b2"}
 
 
 def _peek(running, digest="", ended=0, framework=None, failed=0):
