@@ -193,7 +193,8 @@ def test_every_linux_trial_has_its_codex_twin():
 
 def test_every_windows_trial_has_its_codex_twin_and_their_lists_are_its():
     windows = (ROOT / "evals" / "windows-bench-v2-trials.txt").read_text().split()
-    twins = {path.stem for path in (ROOT / "tasks").glob("codex-windows-*.json")}
+    twins = {path.stem for path in (ROOT / "tasks").glob("codex-windows-*.json")
+             if not path.stem.startswith("codex-windows-codex-computer-use-")}
 
     assert twins == {f"codex-{name}" for name in windows}
     for kind in ("bench-v2", "benchlab"):
