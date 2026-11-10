@@ -147,6 +147,13 @@ Whether the evaluation's terms allow your use is yours to check.
 **What differs from Linux:** the Windows trial files (`tasks/windows-*.json`) carry trycua's system prompt for "a
 Windows desktop", and their prompts say "on this Windows PC", as trycua's Windows runner words them.
 
+**agent-desktop on Windows.** `tasks/windows-agent-desktop-*.json` run the same trials on
+`envs/desktop-*-windows-agent-desktop/`, the same computers with Vercel Labs' agent-desktop as the driver. As on
+macOS, the agent gets agent-desktop's own tools with the `computer_*` ones hidden, and agent-desktop is headed in the
+foreground. `evals/windows-agent-desktop-bench-v2-trials.txt` lists the 90 trials. They need agentenv-framework
+0.9.1494 or later, the first with agent-desktop on Windows and a Windows base without OneDrive, whose console windows
+at sign-in would take the agent's typing.
+
 ## The task apps
 
 Each shared task (`cdb-s02`, `cdb-s03`, `cdb-s04`) is one computer app, so that every window it opens stops and starts
