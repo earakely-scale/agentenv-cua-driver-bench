@@ -2,7 +2,8 @@
 started as their runner starts it, from BenchSentinel.exe, in each condition, with the condition beside its log and its
 control file empty; their GUI-only guard beside it, which once armed logs a side door started in the session since then
 as a violation, once, and ends it, a shell the driver's own program started as that tool's helper, and a side door in
-front three looks in a row as a violation, for less as a transient. The arming script commands it through its control
+front three looks in a row as a violation, for less as a transient; Codex Computer Use's service is a driver's
+own program too. The arming script commands it through its control
 file: it activates it until its window is in front, arms it only then, and finds it gone when its window is. The grade
 takes the armed part of a log by its place, as a Windows sentinel writes only while armed, and the sentinel in front by
 its armed sample's front window."""
@@ -96,6 +97,24 @@ def test_a_shell_the_drivers_own_program_starts_is_its_helper(windows_sentinel, 
 
     assert [(line["ev"], line["evidence"]["parent"]) for line in log.read()] == [("gui_only_helper", "cua-driver")]
     assert ended == []
+
+
+def test_a_shell_codex_computer_uses_own_program_starts_is_its_helper_and_one_its_js_starts_isnt(
+        windows_sentinel, tmp_path, monkeypatch):
+    """Codex's service is codex-computer-use.exe, as trycua's runner names it to its guard; the agent's JavaScript runs
+    in Codex's Node, which is never the tool."""
+    guard, win, log, ended = _guard(windows_sentinel, tmp_path, monkeypatch)
+    service = r"C:\agentenv\drivers\codex-computer-use\ChatGPT\resources\cua_node\bin\node_modules\@oai\sky\bin" \
+              r"\windows\codex-computer-use.exe"
+    node = r"C:\agentenv\drivers\codex-computer-use\ChatGPT\resources\cua_node\bin\node.exe"
+    win.rows += [(70, 2, service), (71, 70, "powershell.exe"), (72, 2, node), (73, 72, "cmd.exe")]
+
+    guard.sample()
+
+    lines = log.read()
+    assert [(line["ev"], (line.get("evidence") or {}).get("parent")) for line in lines] == [
+        ("gui_only_helper", "codex-computer-use"), ("gui_only_violation", None)]
+    assert ended == [["taskkill", "/T", "/F", "/PID", "73"]]
 
 
 def test_a_side_door_in_front_three_looks_in_a_row_is_a_violation_and_for_less_a_transient(windows_sentinel, tmp_path,

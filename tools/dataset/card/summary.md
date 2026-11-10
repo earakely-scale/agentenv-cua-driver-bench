@@ -93,6 +93,33 @@ foreground, on agentenv-framework 0.9.1494):
   fails) and 3 of the 15 multi-app ones. 23 of its 30 multi-app trials end on the 45-turn limit, as 23 of cua-driver's
   do, and a trial costs about half as much.
 
+**On Windows, Codex Computer Use ties cua-driver in the foreground** (runs `codex-computer-use-sonnet-5-5-2026-11-10`
+and `codex-computer-use-gpt-6-1-sol-2026-11-10`: the 50 foreground trials of Bench v2 through OpenAI's Codex Computer
+Use, the Codex app 26.1103.7773.0's plugin with no ChatGPT sign-in, driven by Claude Sonnet 5.5 in Claude Code and by
+GPT-6.1 Sol in Codex CLI 0.147.0 at medium effort, on agentenv-framework 0.9.1500). On Windows, Codex acts only on the
+app in front, so these runs have no background trials. Each column counts foreground trials alone:
+
+| Driver | Model | Foreground | Multi-app | Precision | Interruption | Left the GUI | Cost per trial |
+|---|---|---:|---:|---:|---:|---:|---:|
+| cua-driver | Sonnet 5.5 | 35 of 50 | 2 of 15 | 15 of 15 | 18 of 20 | 0 | $0.63 |
+| agent-desktop | Sonnet 5.5 | 37 of 50 | 3 of 15 | 14 of 15 | 20 of 20 | 0 | $0.34 |
+| Codex Computer Use | Sonnet 5.5 | 35 of 50 | 2 of 15 | 13 of 15 | 20 of 20 | 0 | $0.32 |
+| Codex Computer Use | GPT-6.1 Sol | 35 of 50 | 2 of 15 | 13 of 15 | 20 of 20 | 0 | $0.13 |
+
+- **Without a ChatGPT sign-in, G04 can't pass.** Before it acts on a browser window, Codex asks OpenAI whether the
+  page's site is allowed. Unsigned, it stops the turn the first time the agent reaches Chromium, and both models report
+  themselves blocked in all five of G04's trials, which cua-driver and agent-desktop pass 2 of 5. These runs keep Codex
+  as it ships.
+- **G02 passes 2 of 5 for each model**, against cua-driver's none and agent-desktop's 1, and **G03 none**. Sonnet's
+  three G02 failures and five G03 failures all end on the 45-turn limit, with 21% of its multi-app calls erring,
+  most of them in Codex: an element no longer in Codex's cached state, a point outside the window it acts on,
+  coordinate input without the window's geometry, or a window Codex failed to activate. GPT ends one trial on the
+  limit; it reports itself blocked in all five of G03's, after Codex's input fails in GnuCash and its dialogs, and two
+  of its G02 trials end done without the blocker recorded.
+- **Every interruption trial passes, and 13 of 15 precision trials.** MB-09's drag passes all five for each model. Codex's
+  API has no hover, and MB-10 fails 2 of 5 for each model: the overlay its click needs isn't showing when the click lands.
+- No trial leaves the GUI, though Codex runs its JavaScript outside its sandbox on Windows (see the notes).
+
 **On macOS the driver decides whether the user stays undisturbed.** Four computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all

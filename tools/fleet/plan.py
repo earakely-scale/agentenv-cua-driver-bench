@@ -17,7 +17,7 @@ RUN = re.compile(r"-r(\d)-(foreground|background)$")
 #: A Codex trial's harness, which its name leaves to its run's folder, then a macOS trial's OS and its driver, an
 #: arm's or cua-driver's on its own tools, a Windows trial's OS and its arm's driver, or an Omarchy trial's OS.
 PREFIX = re.compile(r"^(?:codex-)?(?:agent-desktop-|macos-(?:agent-desktop-|macos-harness-|codex-computer-use-|"
-                    r"cua-driver-)?|windows-(?:agent-desktop-)?|omarchy-)?")
+                    r"cua-driver-)?|windows-(?:agent-desktop-|codex-computer-use-)?|omarchy-)?")
 
 
 def main():

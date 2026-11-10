@@ -128,24 +128,26 @@ def driver_why(cfg, uids):
 
 
 def comparisons(rows, oses, models, drivers, tasks, entries):
-    """Each OS and model that two drivers or more ran in both conditions, over the tasks every one of them ran in each
-    of the task's conditions, so that the drivers figures, the Space's comparison and the card's table each compare
-    like with like; an OS's widest first."""
+    """Each OS and model that two drivers or more ran, over the tasks every one of them ran in each of the task's
+    conditions it ran, so that the drivers figures, the Space's comparison and the card's table each compare like with
+    like; a driver that runs in one condition alone, as Codex Computer Use on Windows does, has no summary for the
+    other. An OS's widest first."""
     by = defaultdict(dict)
     for r in rows:
         by[(r["os"], r["model"], r["driver"])][r["condition"]] = r
     out = []
     for os_ in oses:
         for model in models:
-            ran = [d for d in drivers if all(c in by.get((os_, model, d), {}) for c in CONDITIONS)]
-            sets = [set(by[(os_, model, d)][c]["tasks"]) for d in ran for c in CONDITIONS]
+            ran = {d: [c for c in CONDITIONS if c in by[(os_, model, d)]] for d in drivers if by.get((os_, model, d))}
+            sets = [set(by[(os_, model, d)][c]["tasks"]) for d, conds in ran.items() for c in conds]
             common = [t for t in tasks if any(t in s for s in sets) and all(
-                t in by[(os_, model, d)][c]["tasks"] or c not in entries[t]["conditions"] for d in ran for c in CONDITIONS)]
+                t in by[(os_, model, d)][c]["tasks"] or c not in entries[t]["conditions"]
+                for d, conds in ran.items() for c in conds)]
             if len(ran) < 2 or not common:
                 continue
             out.append({"os": os_, "model": model, "tasks": common, "of": len(set().union(*sets)),
-                        "drivers": [{"id": d, **{c: summary(by[(os_, model, d)][c], common) for c in CONDITIONS}}
-                                    for d in ran]})
+                        "drivers": [{"id": d, **{c: summary(by[(os_, model, d)][c], common) for c in conds}}
+                                    for d, conds in ran.items()]})
     return sorted(out, key=lambda c: (oses.index(c["os"]), -len(c["tasks"]), models.index(c["model"])))
 
 
@@ -227,7 +229,8 @@ def results_md(cat):
 
 def drivers_md(cat):
     """The card's drivers table: a row per driver of each OS and model that several drivers ran, over the tasks they
-    all ran in both conditions, each condition's best full pass and task score among a model's drivers in bold."""
+    all ran in each condition they ran, each condition's best full pass and task score among a model's drivers in bold,
+    and "not run" where a driver has no trials."""
     if not cat["comparisons"]:
         return ""
     names = {m["id"]: m["name"] for m in cat["models"]}
@@ -239,21 +242,25 @@ def drivers_md(cat):
     for c in cat["comparisons"]:
         for d in c["drivers"]:
             cells = []
+            ran = [cond for cond in CONDITIONS if cond in d]
             for cond in CONDITIONS:
                 for k in ("pass", "score"):
-                    shown = [round(100 * (x[cond][k] or 0)) for x in c["drivers"]]
+                    if cond not in d:
+                        cells.append("not run")
+                        continue
+                    shown = [round(100 * (x[cond][k] or 0)) for x in c["drivers"] if cond in x]
                     text = pct(d[cond][k]) + (f" ({d[cond]['passed']}/{d[cond]['n']})" if k == "pass" else "")
                     best = round(100 * (d[cond][k] or 0)) == max(shown) > min(shown)
                     cells.append(f"**{text}**" if best else text)
-            lost = sum(d[cond]["missing"] for cond in CONDITIONS)
+            lost = sum(d[cond]["missing"] for cond in ran)
             lines.append(f"| {osn[c['os']]} | {names[c['model']]} | {drivers[d['id']]['name']}"
                          f"{f' (incomplete: {lost} missing)' if lost else ''} | " + " | ".join(cells)
-                         + f" | {sum(d[cond]['n'] for cond in CONDITIONS)} |")
+                         + f" | {sum(d[cond]['n'] for cond in ran)} |")
     spans = "; ".join(f"{names[c['model']]} on {osn[c['os']]}, {ranges([probes[t] for t in c['tasks']])}"
                       + (f" (the {len(c['tasks'])} of {c['of']} every driver has finished)" if len(c["tasks"]) < c["of"]
                          else "") for c in cat["comparisons"])
     only = only_in(cat, {t for c in cat["comparisons"] for t in c["tasks"]})
-    lines += ["", f"Each model's rows average the same tasks, the ones every driver ran in both conditions"
+    lines += ["", f"Each model's rows average the same tasks, the ones every driver ran in each condition it ran"
               f"{f' ({only})' if only else ''}: {spans}. "
               "The OS, the model, the tasks, their seeds and the grade are the same; only the computer-use driver "
               "changes. In bold, the best of a model's drivers in each condition; n counts the trials."]

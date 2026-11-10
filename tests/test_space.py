@@ -146,6 +146,36 @@ def test_a_task_the_config_runs_in_the_foreground_alone_counts_there_and_is_said
     assert [s["values"] for s in panel["series"]] == [[1.0, 0.0], [1.0, 0.0]]
 
 
+def test_a_driver_that_runs_in_the_foreground_alone_is_compared_there_and_not_run_in_the_background(space):
+    catalog = space("catalog")
+    codex = {"name": "Codex Computer Use", "detail": "OpenAI's Codex Computer Use", "slot": 4}
+    cfg = {**CONFIG, "drivers": {**CONFIG["drivers"], "codex-computer-use": codex}}
+    metas = (_cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)] * 2), ("ir-01", "background", [(False, 0.5)] * 2)])
+             + _cells("agent-desktop", [("ir-01", "foreground", [(False, 0.5)] * 2),
+                                        ("ir-01", "background", [(True, 1.0)] * 2)])
+             + _cells("codex-computer-use", [("ir-01", "foreground", [(True, 1.0), (False, 0.25)])]))
+    metas = [{**m, "cost": 0.1} for m in metas]
+    cat = _catalog(space, metas, cfg)
+
+    [comparison] = cat["comparisons"]
+    drivers = {d["id"]: d for d in comparison["drivers"]}
+    table = catalog.drivers_md(cat)
+
+    assert list(drivers) == ["cua-driver", "agent-desktop", "codex-computer-use"]
+    assert "background" not in drivers["codex-computer-use"]
+    assert (drivers["codex-computer-use"]["foreground"]["passed"], drivers["codex-computer-use"]["foreground"]["n"]) == (1, 2)
+    assert "| macOS | Claude Sonnet 5.5 | Codex Computer Use | 50% (1/2) | 63% | not run | not run | 2 |" in table
+    assert "| macOS | Claude Sonnet 5.5 | agent-desktop | 0% (0/2) | 50% | **100% (2/2)** | **100%** | 4 |" in table
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    figures = space("figures")
+    [panel] = figures.driver_specs(cat)["drivers-full-pass"]["panels"]
+    assert [s["values"] for s in panel["series"]] == [[1.0, 0.0], [0.0, 1.0], [0.5, None]]
+    panels = {p["cond"]: [q["name"] for q in p["points"]] for p in figures.pareto_spec(cat)["panels"] if p["kind"] == "drivers"}
+    assert panels == {"foreground": ["cua-driver", "agent-desktop", "Codex Computer Use"],
+                      "background": ["cua-driver", "agent-desktop"]}
+
+
 def test_the_card_tables_name_each_rows_driver_and_bold_a_models_best_driver(space):
     catalog = space("catalog")
     metas = (_cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)] * 2), ("ir-01", "background", [(False, 0.5)] * 2)])

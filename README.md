@@ -126,7 +126,8 @@ workspace they hold stops the app, copies the workspace and starts the app again
 
 You need:
 
-- a Linux amd64 machine with KVM (`/dev/kvm`);
+- a Linux amd64 machine with KVM (`/dev/kvm`) that the user who runs agent-env can read and write (the `kvm`
+  group); on EC2 a c8i, m8i or r8i with nested virtualization on (`tools/fleet/launch.py --kvm`);
 - Docker, with a registry on `localhost:5000`;
 - a model endpoint.
 
@@ -154,6 +155,25 @@ macOS, the agent gets agent-desktop's own tools with the `computer_*` ones hidde
 foreground. `evals/windows-agent-desktop-bench-v2-trials.txt` lists the 90 trials. They need agentenv-framework
 0.9.1494 or later, the first with agent-desktop on Windows and a Windows base without OneDrive, whose console windows
 at sign-in would take the agent's typing.
+
+**Codex Computer Use on Windows.** `tasks/windows-codex-computer-use-*.json` run the foreground trials on
+`envs/desktop-*-windows-codex-computer-use/`, the same computers with OpenAI's Codex Computer Use as the driver: the
+Codex app's plugin, unpacked from its MSIX and never run, the agent writing JavaScript against its `cua` API through
+`js` and `js_reset` with the `computer_*` tools hidden. OpenAI runs it on Windows only on the active desktop, so the arm
+has no background trials. `evals/windows-codex-computer-use-bench-v2-trials.txt` lists the 50, and
+`tasks/codex-windows-codex-computer-use-*.json` are their Codex CLI twins, for GPT. They need agentenv-framework 0.9.1500
+or later. What differs from macOS:
+
+- OpenAI serves only its latest MSIX, so the driver pins that link's sha256 and the pin is bumped when OpenAI ships a
+  new build; a computer composed from a pin keeps working, and a compose after a new build fails until the bump.
+- Codex's own sandbox on Windows refuses to start Codex Computer Use's service, so the JavaScript runs unsandboxed
+  there; the GUI-only check still fails a trial whose `js` reaches outside the GUI.
+- Codex names an app's approval by the program it runs from, which is Python for BenchLab and the sentinel alike, so
+  `allowed_apps` names each task's apps as Codex shows them.
+- The Windows guard counts a shell that `codex-computer-use.exe` starts as that tool's, as it does `cua-driver.exe`'s.
+- Before it acts on a browser window, Codex Computer Use asks OpenAI whether the page's site is allowed, which takes a
+  ChatGPT sign-in. With none, it stops the turn on the first browser window, so G04, which reads a page in Chromium,
+  can't pass. The arm runs Codex as it ships, unsigned.
 
 **GPT on Windows.** `tasks/codex-windows-*.json` are the Windows trials' Codex CLI twins, as `tasks/codex-*.json` are
 Linux's: the agent `codex`, with its own tools off and at medium effort, on the same computers through cua-driver.

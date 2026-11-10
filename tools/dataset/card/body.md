@@ -159,7 +159,7 @@ runs/<os>/<run>/<trial>/
   GPT-6 models either, so they run on its generic ones (no code mode, no parallel tool calls, its default
   instructions), as a warning in each trajectory says. trycua's runner has published no Codex numbers, and runs its
   Codex arms on macOS only. Codex Computer Use's `js` results carry no structured content, so its screenshots do reach
-  GPT-6.1 Sol.
+  GPT-6.1 Sol, on macOS and Windows alike.
 - **Codex Computer Use is OpenAI's app, driven by Claude and by GPT.** Its rows are the ChatGPT app 26.930.51102's
   `unified-computer-use` plugin, its `cua_repl` started as the app starts it, through AgentEnv's `codex-computer-use`
   driver, with the JavaScript it runs against OpenAI's `cua` API written by Claude Sonnet 5.5 in Claude Code (run
@@ -170,7 +170,13 @@ runs/<os>/<run>/<trial>/
   JavaScript, where trycua's filter (`codex_cu_filter.py`) turns it off. The GUI-only check reads its `js` as trycua's
   scan reads any tool input, and fails a call that names a Node module, the process, or loads a module. It needs
   agentenv-framework 0.9.1482 or later: on an earlier one macOS's prompt to let Codex's helper bypass the private
-  window picker takes the user's focus in the background.
+  window picker takes the user's focus in the background. On Windows its rows are the same plugin of the Codex app
+  26.1103.7773.0, unpacked from OpenAI's MSIX and never run (runs `codex-computer-use-sonnet-5-5-2026-11-10` and
+  `codex-computer-use-gpt-6-1-sol-2026-11-10`, agentenv-framework 0.9.1500). There Codex acts only on the app in
+  front, so it has no background trials. Codex's sandbox can't start its service on Windows, so the JavaScript runs
+  unsandboxed there, and the GUI-only check reads it as on macOS. Unsigned, it stops the turn on a browser window,
+  since it can't have OpenAI check the page's site, so G04 can't pass. OpenAI serves only its latest Windows build, so
+  the driver pins that build's sha256 and the pin is bumped when a new one ships.
 - **Setup differences from trycua's runner**, found auditing these runs and not corrected in them: cua-driver's arm
   offers `run_script`, as trycua's `cc-cua-driver-script` arm does, without the short `run_script` paragraph that arm
   adds to the system prompt; agent-desktop's foreground trials run every command headed, with real pointer and keys,

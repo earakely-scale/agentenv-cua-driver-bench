@@ -1,5 +1,5 @@
-"""The arms beside cua-driver's, agent-desktop's, macos-harness's and codex-computer-use's on macOS and agent-desktop's
-on Linux and Windows: their computers and trials are cua-driver's twins but for the driver and the env ids, the computer/v1 tools
+"""The arms beside cua-driver's, agent-desktop's, macos-harness's and codex-computer-use's on macOS, agent-desktop's
+on Linux and Windows, and codex-computer-use's on Windows in the foreground: their computers and trials are cua-driver's twins but for the driver and the env ids, the computer/v1 tools
 hidden from the agent so it runs on the arm's own, agent-desktop's foreground trials with its server headed, and
 codex-computer-use's with Codex let act on the task's apps alone; their trial lists are the twins'; a trial is named as
 its twin, its driver in the dataset; and the GUI-only check judges agent-desktop's launch as cua-driver's
@@ -18,17 +18,22 @@ LINUX_ENVS = ("desktop-benchlab", "desktop-s02", "desktop-s03", "desktop-s04")
 LINUX_STEMS = list(dict.fromkeys((ROOT / "evals" / "bench-v2-trials.txt").read_text().split()))
 WINDOWS_ENVS = ("desktop-benchlab-windows", "desktop-s02-windows", "desktop-s03-windows", "desktop-s04-windows")
 WINDOWS_STEMS = list(dict.fromkeys((ROOT / "evals" / "windows-bench-v2-trials.txt").read_text().split()))
-#: Each arm and its twin's trials: macOS's for every arm, Linux's and Windows' for agent-desktop.
+#: Each arm and its twin's trials: macOS's for every arm, Linux's and Windows' for agent-desktop, and Windows' foreground
+#: ones for codex-computer-use, which OpenAI runs on Windows only on the active desktop.
 ARM_STEMS = [(arm, stem) for arm in ARMS for stem in STEMS] + [("agent-desktop", stem) for stem in LINUX_STEMS] + [
-    ("agent-desktop", stem) for stem in WINDOWS_STEMS]
+    ("agent-desktop", stem) for stem in WINDOWS_STEMS] + [
+    ("codex-computer-use", stem) for stem in WINDOWS_STEMS if stem.endswith("-foreground")]
 #: Every computer/v1 tool a driver can serve, its required ones and the pointer and keyboard groups: an arm's agent
 #: runs on the arm's own tools, these hidden from it, while the grader and the recordings still use them.
-#: The apps codex-computer-use's arm lets Codex act on in each computer, as macOS names them: the task's own, never the
-#: sentinel, the user's window.
+#: The apps codex-computer-use's arm lets Codex act on in each computer, as macOS names them, and on Windows as Codex
+#: shows them there, by their programs (one Electron app for all of a task's Electron windows, LibreOffice as
+#: soffice.bin): the task's own, never the sentinel, the user's window.
 CODEX_APPS = {"desktop-benchlab-macos": ["BenchLab"],
               "desktop-s02-macos": ["Copperfield Mail", "Signal Quay Chat", "Daymark Calendar", "LibreOffice"],
               "desktop-s03-macos": ["Ledger Lantern Mail", "LibreOffice", "GnuCash"],
-              "desktop-s04-macos": ["Rillwatch Cases", "Margin Lantern Manual", "Google Chrome for Testing"]}
+              "desktop-s04-macos": ["Rillwatch Cases", "Margin Lantern Manual", "Google Chrome for Testing"],
+              "desktop-benchlab-windows": ["BenchLab"], "desktop-s02-windows": ["electron", "soffice.bin"],
+              "desktop-s03-windows": ["electron", "soffice.bin", "GnuCash"], "desktop-s04-windows": ["electron", "chrome"]}
 COMPUTER_TOOLS = ["computer_click", "computer_drag", "computer_key", "computer_keyboard_down", "computer_keyboard_up",
                   "computer_pointer_down", "computer_pointer_list", "computer_pointer_move", "computer_pointer_position",
                   "computer_pointer_up", "computer_screenshot", "computer_scroll", "computer_type", "computer_wait"]
@@ -58,7 +63,8 @@ def _arm_stem(arm, stem):
 
 
 @pytest.mark.parametrize("arm, env", [(arm, env) for arm in ARMS for env in ENVS]
-                         + [("agent-desktop", env) for env in LINUX_ENVS + WINDOWS_ENVS])
+                         + [("agent-desktop", env) for env in LINUX_ENVS + WINDOWS_ENVS]
+                         + [("codex-computer-use", env) for env in WINDOWS_ENVS])
 def test_an_arms_computer_is_cua_drivers_but_for_its_driver(arm, env):
     twin = (ROOT / "envs" / env / "env.toml").read_text()
 
@@ -117,6 +123,17 @@ def test_agent_desktops_windows_trial_lists_are_cua_drivers(kind):
         f"windows-agent-desktop-{stem.removeprefix('windows-')}" for stem in twins]
 
 
+@pytest.mark.parametrize("kind", ["bench-v2", "benchlab"])
+def test_codex_computer_uses_windows_trial_lists_are_cua_drivers_foreground_ones_and_its_codex_clis_theirs(kind):
+    twins = (ROOT / "evals" / f"windows-{kind}-trials.txt").read_text().split()
+    every = (ROOT / "evals" / f"windows-codex-computer-use-{kind}-trials.txt").read_text().split()
+
+    assert every == [f"windows-codex-computer-use-{stem.removeprefix('windows-')}" for stem in twins
+                     if stem.endswith("-foreground")]
+    assert (ROOT / "evals" / f"codex-windows-codex-computer-use-{kind}-trials.txt").read_text().split() == [
+        f"codex-{stem}" for stem in every]
+
+
 def test_an_arms_trial_is_named_as_its_twin_and_its_driver_reaches_the_dataset():
     plan = _module(ROOT / "tools" / "fleet" / "plan.py")
     tables = _module(ROOT / "tools" / "dataset" / "tables.py")
@@ -135,6 +152,9 @@ def test_an_arms_trial_is_named_as_its_twin_and_its_driver_reaches_the_dataset()
                                                                           "codex-computer-use"]
     assert export.STEM.match("windows-agent-desktop-ir-02-r3-background").group("task", "driver") == (
         "ir-02", "agent-desktop")
+    for stem in ("windows-codex-computer-use-mb-09-r4-foreground", "codex-windows-codex-computer-use-mb-09-r4-foreground"):
+        assert [line.split("|")[1] for line in plan.split(ROOT, [stem], 10)[0][1]] == ["mb-09-r4-foreground"]
+        assert export.STEM.match(stem).group("task", "driver") == ("mb-09", "codex-computer-use")
     assert export.STEM.match("macos-agent-desktop-mb-10-r3-foreground").group("task", "driver") == (
         "mb-10", "agent-desktop")
     assert export.STEM.match("macos-codex-computer-use-cdb-g04-background").group("task", "driver") == (
@@ -167,14 +187,15 @@ def test_cua_drivers_trial_on_its_own_tools_is_its_twin_with_the_computer_tools_
         f"macos-cua-driver-{s.removeprefix('macos-')}" for s in (ROOT / "evals" / "macos-bench-v2-trials.txt").read_text().split()]
 
 
-#: The macOS arms OpenAI's Codex CLI also runs, GPT through each driver as it ships.
+#: The macOS arms OpenAI's Codex CLI also runs, GPT through each driver as it ships, and the Windows one.
 CODEX_ARMS = ("codex-computer-use", "cua-driver")
 CODEX_STEMS = [stem for arm in CODEX_ARMS
-               for stem in dict.fromkeys((ROOT / "evals" / f"macos-{arm}-bench-v2-trials.txt").read_text().split())]
+               for stem in dict.fromkeys((ROOT / "evals" / f"macos-{arm}-bench-v2-trials.txt").read_text().split())] + list(
+    dict.fromkeys((ROOT / "evals" / "windows-codex-computer-use-bench-v2-trials.txt").read_text().split()))
 
 
 @pytest.mark.parametrize("stem", CODEX_STEMS)
-def test_a_macos_codex_cli_trial_is_its_claude_code_twin_but_for_the_agent_and_its_effort(stem):
+def test_a_macos_or_windows_codex_cli_trial_is_its_claude_code_twin_but_for_the_agent_and_its_effort(stem):
     """As on Linux, the Codex CLI trials are Claude Code's but for the agent, its own tools all off, and the effort."""
     twin = json.loads((ROOT / "tasks" / f"{stem}.json").read_text())
     trial = json.loads((ROOT / "tasks" / f"codex-{stem}.json").read_text())
