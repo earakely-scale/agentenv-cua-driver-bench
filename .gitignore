@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 /tools/fleet/fleet.env
 /tools/space/checks/node_modules/
+/.agentenv/

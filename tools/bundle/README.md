@@ -65,7 +65,9 @@ also says it "can't build linux/arm64" for each computer: that form is skipped, 
 `macos-agent-desktop-…` for Vercel Labs' agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness,
 `macos-codex-computer-use-…` for OpenAI's Codex Computer Use, which acts only on the apps the task names (0.9.1482 or
 later), and
-`macos-cua-driver-…` for cua-driver on its own tools alone.
+`macos-cua-driver-…` for cua-driver on its own tools alone. `macos-aside-…` runs Aside Computer Use through its one
+tool, `repl`, and opens only the apps the task names. It needs an agentenv-framework release that ships the `aside`
+driver.
 
 To run exactly what this card describes, pin the repo's commit: `hf://{{REPO}}@<commit>`. Each commit of this repo is
 the bench at one commit of its [GitHub repo](https://github.com/earakely-scale/agentenv-cua-driver-bench), where its
@@ -100,7 +102,8 @@ the Linux runs in the
 --set envs/desktop-s03.driver=reference --set envs/desktop-s04.driver=reference`. The `macos-agent-desktop-…`,
 `macos-macos-harness-…`, `macos-codex-computer-use-…` and `macos-cua-driver-…` task files are these settings written
 out, and they are what the dataset's macOS runs ran; in the foreground they also start agent-desktop headed, and
-Codex's trials name the apps it may act on, which `--set` can't. A driver that doesn't run
+Codex's trials name the apps it may act on, which `--set` can't. The `macos-aside-…` task files are written out
+the same way, and name the apps Aside may open. A driver that doesn't run
 on the computer, such as macos-harness on Linux, is refused before any task runs.
 
 ## What's here

@@ -250,8 +250,13 @@ def test_another_drivers_calls_read_in_the_lane_as_steps_on_elements_points_and_
     assert said("js", {"code": "await app.drag([80,161],[80,114]); await app.pressKey('Tab')"}) == (
         "Run 2 steps", "drag from (80, 161) to (80, 114) → press Tab", None)
     assert said("js", {"code": "nodeRepl.write(1)"}) == ("Run JavaScript", "", None)
+    assert said("repl", {"code": 'const app = await computer.getApp("BenchLab"); await app.setValue(2, "Jonas");'}) == (
+        "Run 2 steps", "read window → set value “Jonas”", "BenchLab")
+    assert said("repl", {"code": "console.log(1)"}) == ("Run JavaScript", "", None)
     assert [trials.kind_of("js", {"code": code}) for code in (
         "await app.getAXState({disableDiffing: true})", "await app.click([102, 78])")] == ["look", "act"]
+    assert [trials.kind_of("repl", {"code": code}) for code in (
+        "await app.getAXState()", "await app.click(5)")] == ["look", "act"]
     assert [trials.kind_of(tool, inp) for tool, inp in (
         ("desktop_screenshot", {}), ("macos_harness", {"commands": [["get_app_state", "--app", "BenchLab"]]}),
         ("desktop_wait", {"ms": 800}), ("desktop_drag", {}), ("click", {}))] == ["look", "look", "wait", "act", "act"]

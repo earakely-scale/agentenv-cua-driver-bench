@@ -166,6 +166,11 @@
       "name": "Codex Computer Use",
       "detail": "OpenAI's Codex Computer Use, the unified-computer-use plugin of the ChatGPT app 26.930.51102 on macOS and of the Codex app 26.1103.7773.0 on Windows, driven through AgentEnv's codex-computer-use driver, not by OpenAI's own app: the agent writes JavaScript against OpenAI's cua API through cua_repl's js and js_reset, Codex acts only on the task's apps, with no ChatGPT sign-in, in Codex's read-only sandbox on macOS and unsandboxed on Windows, where that sandbox can't start its service; on Windows it acts only on the app in front, so it has no background trials there; its API has no hover",
       "slot": 4
+    },
+    "aside": {
+      "name": "Aside Computer Use",
+      "detail": "At Inc.'s Aside Computer Use, driven through AgentEnv's aside driver, not by Aside's own agent: the agent writes JavaScript against Aside's computer API through its one tool, repl, and Aside opens only the task's apps, with no Aside sign-in",
+      "slot": 5
     }
   },
   "families": {
