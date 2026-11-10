@@ -150,11 +150,14 @@ def test_cua_drivers_trial_on_its_own_tools_is_its_twin_with_the_computer_tools_
         f"macos-cua-driver-{s.removeprefix('macos-')}" for s in (ROOT / "evals" / "macos-bench-v2-trials.txt").read_text().split()]
 
 
-CODEX_STEMS = list(dict.fromkeys((ROOT / "evals" / "macos-codex-computer-use-bench-v2-trials.txt").read_text().split()))
+#: The macOS arms OpenAI's Codex CLI also runs, GPT through each driver as it ships.
+CODEX_ARMS = ("codex-computer-use", "cua-driver")
+CODEX_STEMS = [stem for arm in CODEX_ARMS
+               for stem in dict.fromkeys((ROOT / "evals" / f"macos-{arm}-bench-v2-trials.txt").read_text().split())]
 
 
 @pytest.mark.parametrize("stem", CODEX_STEMS)
-def test_a_codex_cli_trial_on_codex_computer_use_is_its_claude_code_twin_but_for_the_agent_and_its_effort(stem):
+def test_a_macos_codex_cli_trial_is_its_claude_code_twin_but_for_the_agent_and_its_effort(stem):
     """As on Linux, the Codex CLI trials are Claude Code's but for the agent, its own tools all off, and the effort."""
     twin = json.loads((ROOT / "tasks" / f"{stem}.json").read_text())
     trial = json.loads((ROOT / "tasks" / f"codex-{stem}.json").read_text())
@@ -166,16 +169,17 @@ def test_a_codex_cli_trial_on_codex_computer_use_is_its_claude_code_twin_but_for
                      for step in twin]
 
 
-def test_codex_clis_trial_lists_on_codex_computer_use_are_claude_codes_and_its_trials_are_named_as_theirs():
+@pytest.mark.parametrize("arm", CODEX_ARMS)
+def test_codex_clis_macos_trial_lists_are_claude_codes_and_its_trials_are_named_as_theirs(arm):
     plan = _module(ROOT / "tools" / "fleet" / "plan.py")
     export = _module(ROOT / "tools" / "dataset" / "export.py")
     tables = _module(ROOT / "tools" / "dataset" / "tables.py")
     for kind in ("bench-v2", "benchlab"):
-        twins = (ROOT / "evals" / f"macos-codex-computer-use-{kind}-trials.txt").read_text().split()
-        assert (ROOT / "evals" / f"codex-macos-codex-computer-use-{kind}-trials.txt").read_text().split() == [
+        twins = (ROOT / "evals" / f"macos-{arm}-{kind}-trials.txt").read_text().split()
+        assert (ROOT / "evals" / f"codex-macos-{arm}-{kind}-trials.txt").read_text().split() == [
             f"codex-{stem}" for stem in twins]
-    stem = "codex-macos-codex-computer-use-ir-01-r2-background"
+    stem = f"codex-macos-{arm}-ir-01-r2-background"
 
     assert [line.split("|")[1] for line in plan.split(ROOT, [stem], 10)[0][1]] == ["ir-01-r2-background"]
-    assert export.STEM.match(stem).group("task", "driver") == ("ir-01", "codex-computer-use")
+    assert export.STEM.match(stem).group("task", "driver") == ("ir-01", arm)
     assert not tables.STEM.match(stem)
