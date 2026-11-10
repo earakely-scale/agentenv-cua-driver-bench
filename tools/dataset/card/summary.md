@@ -71,8 +71,8 @@ with the OS, the model, the prompts, the seeds and the grade held fixed, each dr
   5, and raises a window or takes the keyboard in 3 of G04's. In the foreground it passes all 20 interruption trials,
   MB-09's drag 4 of 5 and G04 4 of 5, but G02 2 of 5 and G03 none. Codex sends GPT cua-driver's structured results
   without their screenshots (as on Linux, below), so MB-10 and MB-11 pass none of their ten, and 19 of the 30 trials
-  it stops in, reporting itself blocked, say its screenshots are empty. None leaves the GUI; one ends on the turn
-  limit.
+  it stops in, reporting itself blocked, say its screenshots are empty. One trial leaves the GUI: in G04's foreground
+  GPT runs a command through cua-driver's `launch_app`, and the trajectory check fails it. One ends on the turn limit.
 
 **Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.
 

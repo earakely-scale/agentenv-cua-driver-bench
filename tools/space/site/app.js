@@ -1132,7 +1132,7 @@ function compareView() {
   };
   const render = () => {
     const c = pick();
-    host.replaceChildren(compareHead(c, select), compareGrid(c), compareFoot(c));
+    host.replaceChildren(compareHead(c, select), compareGrid(c), ...compareWhy(c), compareFoot(c));
   };
   render();
   return host;
@@ -1249,6 +1249,24 @@ function totalsRows(c, conds) {
   });
   return out;
 }
+
+/** The config's account of why two drivers differ on this OS, when both are in the comparison: each point with the
+ * trials that show it, whatever the model held fixed. */
+function compareWhy(c) {
+  const ids = c.drivers.map((d) => d.id);
+  const notes = (CAT.driver_why || []).filter((w) => w.os === c.os && w.drivers.every((d) => ids.includes(d)));
+  return notes.map((w) => h("div", { class: "cmp-why" },
+    h("h3", {}, w.title),
+    h("p", { class: "why-lead" }, w.lead),
+    h("ul", {}, w.points.map((p) => h("li", {}, h("b", {}, p.head), " ", codeText(p.text),
+      p.examples.length ? h("span", { class: "why-ex" }, " Replay ", p.examples.map((uid, i) => {
+        const t = CAT.trials.find((x) => x.uid === uid);
+        return t ? [i ? " · " : "", h("a", { href: hashOf(t) }, `${probeOf(t.task)} ${t.condition} r${t.run_index ?? t.nth}, ${driverLabel(t.driver)}, ${t.model_name}`)] : null;
+      }), ".") : null)))));
+}
+
+/** Text with `code` spans, as the config writes tool and field names. */
+const codeText = (s) => s.split("`").map((part, i) => (i % 2 ? h("code", {}, part) : part));
 
 function compareFoot(c) {
   const used = [...new Map(c.tasks.flatMap((t) => CAT.conditions.map((k) => caveatOf(c.os, k.id, t))).filter(Boolean).map((cv) => [cv.mark, cv])).values()];

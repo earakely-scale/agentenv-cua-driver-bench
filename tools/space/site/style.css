@@ -273,6 +273,15 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
 .delta.up { color: var(--good-ink); }
 .delta.down { color: var(--bad-ink); }
 .delta.flat { color: var(--ink-3); }
+.cmp-why { padding: 14px 16px 10px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 13px; line-height: 1.55; }
+.cmp-why h3 { margin: 0 0 4px; color: var(--ink); font-size: 14.5px; }
+.cmp-why .why-lead { margin: 0 0 10px; max-width: 120ch; color: var(--ink-3); }
+.cmp-why ul { margin: 0; padding-left: 18px; max-width: 120ch; }
+.cmp-why li { margin: 0 0 8px; }
+.cmp-why b { color: var(--ink); font-weight: 650; }
+.cmp-why code { font-family: var(--mono); font-size: 12px; }
+.cmp-why .why-ex { color: var(--ink-3); font-size: 12.5px; }
+.cmp-why .why-ex a { color: var(--agent-ink); font-weight: 600; }
 .cmp-foot { padding: 12px 16px 14px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12.5px; line-height: 1.55; }
 .cmp-foot p { margin: 0 0 4px; max-width: 120ch; }
 .cmp-foot b { color: var(--ink-2); }
