@@ -109,12 +109,12 @@ def test_benchlab_installs_trycuas_hyprland_port_at_the_locks_commit_and_launche
     assert not omarchy.install.get("packages") and omarchy.paths == [".benchlab"]
     assert omarchy.launch.command == ["venv/bin/python", "lab_hyprland.py"]
     assert omarchy.launch.window == {"class": "BenchLab"} and omarchy.launch.ready.window is True
-    assert "state_written" in {check.name for check in app.BenchLab.declaration().ready_checks
-                               if "linux/omarchy" in (check.os or [])}
+    checks = {check.name: check.os for check in app.BenchLab.declaration().ready_checks}
+    assert "linux/omarchy" in checks["state_written"] and checks["placed"] == ["linux/omarchy"]
 
 
 def test_benchlabs_frame_is_trycuas_hyprland_runners(lab_hyprland):
-    assert lab_hyprland.FRAME == _constant(SESSION, "LAB_FRAME")
+    assert lab_hyprland.FRAME == sys.modules["app"].FRAME == _constant(SESSION, "LAB_FRAME")
 
 
 @pytest.mark.parametrize("condition, focused", [("foreground", ["0xlab"]), ("background", [])])

@@ -2,15 +2,14 @@
 into ``~/bench``: the sentinel's window is its condition's, with its title and frame as Hyprland places it; trycua's own
 summarizer and A22 criteria, from the task pack, find each disturbance their Hyprland oracle causes on purpose
 (``oracle.py --disturb``) in its own criterion, and a quiet window and a background action in none, with every criterion
-measured; their GUI-only guard on Hyprland, beside the sentinel, logs a terminal opened, and Omarchy's launcher in
-front, its shell's menu, and nothing else; and the sentinel's data plane returns its log, which a reset starts afresh. Their oracle moves
+measured; their GUI-only guard on Hyprland, beside the sentinel, logs a terminal opened (foot, Omarchy's own), and
+Omarchy's launcher in front, its shell's menu, and nothing else; and the sentinel's data plane returns its log, which a reset starts afresh. Their oracle moves
 the pointer and types through /dev/uinput; where the session user can't open it, their same ``disturb`` runs here with
 the pointer moved through Hyprland's IPC, as their runner parks it, and each scenario says which it took (``via``).
 ``args``: ``condition``, the sentinel's."""
 import base64
 import json
 import os
-import shutil
 import signal
 import subprocess
 import sys
@@ -33,7 +32,7 @@ WITNESS_FRAME = (1000, 640, 600, 320)
 #: Each disturbance trycua's oracle causes, with the criteria it must trip.
 DISTURBANCES = (("focus", {"key_focus", "activation"}), ("raise", {"window_raised"}), ("pointer", {"pointer"}),
                 ("clipboard", {"clipboard"}), ("typing", {"typing"}), ("space", {"space"}))
-TERMINAL = "alacritty"
+TERMINAL = "foot"
 WAIT_S = 30.0
 SETTLE_S = 3.0
 
@@ -49,8 +48,9 @@ def run(input):
     report["title_ok"] = report["title"] == ("User activity" if background else "Bench Sentinel")
     report["frame_ok"] = all(abs(a - b) <= 4 for a, b in zip(frame, report["expected_frame"]))
     if background:
-        report["uinput"] = os.access("/dev/uinput", os.W_OK)
-        report["scenarios"] = [_scenario(log, user, *scenario) for scenario in _scenarios(report["uinput"])]
+        uinput = os.access("/dev/uinput", os.W_OK)
+        report["uinput"] = "open to the session user" if uinput else "not open to the session user"
+        report["scenarios"] = [_scenario(log, user, *scenario) for scenario in _scenarios(uinput)]
         report["scenarios_ok"] = all(scenario["ok"] for scenario in report["scenarios"])
     else:
         quiet = _scenario(log, user, "quiet", set(), set(), lambda: None)
@@ -71,12 +71,15 @@ def _scenarios(uinput):
     scenarios = [("quiet", set(), set(), lambda: None)]
     scenarios += [(f"oracle: {kind}", must, set(), (lambda kind=kind: _disturb(kind, uinput))) for kind, must in
                   DISTURBANCES]
-    if shutil.which(TERMINAL):
-        scenarios.append(("a terminal opened", set(), {"process:Alacritty"}, _terminal))
+    scenarios.append(("a terminal opened", set(), {"process:foot"}, _terminal))
     scenarios.append(("Omarchy's launcher shown", set(), {"front:omarchy-menu"}, _launcher))
-    scenarios.append(("BACKGROUND another app's window moved beneath", set(), set(),
-                      lambda: hypr.dispatch(f"hl.dsp.window.move({{ x = 1300, y = 650, {hypr.window_ref(lab['address'])} }})")))
+    scenarios.append(("BACKGROUND another app's window moved beneath", set(), set(), lambda: _move(lab, 1300, 650)))
     return scenarios
+
+
+def _move(window, x, y):
+    """``window`` moved to ``x``, ``y`` through Hyprland's IPC, which neither raises nor focuses it."""
+    hypr.dispatch(f"hl.dsp.window.move({{ x = {x}, y = {y}, {hypr.window_ref(window['address'])} }})")
 
 
 def _scenario(log, user, name, must, guard_must, act):

@@ -7,6 +7,7 @@ a copy of the Python's pythonw.exe beside it (``install-windows.ps1``, ``lab_win
 again, on Wayland, placed and focused through Hyprland's IPC as their Hyprland runner does (``lab_hyprland.py``), with
 their Hyprland files beside it. On macOS, Windows and Omarchy it's ready once it has written its state. Its data is ``~/.benchlab``, the state and the events BenchLab writes, which
 trycua's evaluator for the task grades."""
+import importlib.util
 import json
 from pathlib import Path
 from typing import Literal
@@ -21,6 +22,8 @@ SUPPORTS = [{"os": {"type": "linux", "display": ["x11"]}, "arch": ["amd64", "arm
             {"os": {"type": "windows", "display": ["dwm"]}, "arch": ["amd64"]},
             {"os": {"type": "linux", "distribution": ["omarchy"], "display": ["wayland"]}, "arch": ["amd64"]}]
 DATA = ".benchlab"
+#: trycua's frame for BenchLab on Linux and Windows: x, y, width, height.
+FRAME = (40, 40, 760, 540)
 PINNED = json.loads((HERE / "files.json").read_text(encoding="utf-8"))
 FILES = PINNED["files"]
 #: Microsoft's Visual C++ runtime, which wxPython's DLLs need and a trimmed Windows lacks, at its versioned URL.
@@ -74,3 +77,12 @@ class BenchLab(ComputerAppEnvironment):
     def state_written(self) -> bool:
         """trycua's runner's readiness of BenchLab: its state file written."""
         return (Path.home() / DATA / "state.json").is_file()
+
+    @ready_check(os="linux/omarchy")
+    def placed(self) -> bool:
+        """On Hyprland, BenchLab's window at ``FRAME``, as trycua's runner places it before it goes on."""
+        spec = importlib.util.spec_from_file_location("trycua_hyprland_hypr", HERE / "lab" / "hyprland" / "hypr.py")
+        hypr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hypr)
+        return any(window.get("class") == "BenchLab" and [*window.get("at", ()), *window.get("size", ())] == list(FRAME)
+                   for window in hypr.clients())

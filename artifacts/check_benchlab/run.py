@@ -60,6 +60,7 @@ def run(input):
     bounds = lab["bounds"]
     report = {"title_ok": lab["title"] == title and lab["app_name"] == "BenchLab",
               "placed_ok": 0 <= bounds["x"] - FRAME_AT[0] <= 12 and 0 <= bounds["y"] - FRAME_AT[1] <= 48,
+              "bounds": bounds,
               "state_ok": (state["mode"], state["seed"]) == (args["mode"], args["seed"]),
               "started_ok": events[0]["type"] == "app_start" and events[0]["details"] == {
                   "mode": args["mode"], "seed": args["seed"]},
