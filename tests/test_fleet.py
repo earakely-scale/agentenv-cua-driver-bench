@@ -244,6 +244,29 @@ def test_an_upload_the_hub_refuses_is_tried_again_after_a_growing_wait_and_gives
     assert waits[2:] == [30, 60]
 
 
+def test_a_runs_manifest_is_fetched_again_while_the_account_is_rate_limited_and_is_none_before_any_upload(
+        worker, tmp_path, monkeypatch):
+    waits, answers = [], [RuntimeError("429 Too Many Requests"), RuntimeError("429 Too Many Requests")]
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text('{"run": "r"}')
+    monkeypatch.setattr(worker.time, "sleep", waits.append)
+    monkeypatch.setenv("HF_TOKEN", "token")
+
+    def download(*args, **kwargs):
+        if answers:
+            raise answers.pop(0)
+        return str(manifest)
+
+    monkeypatch.setattr(worker, "hf_hub_download", download)
+    assert worker._uploaded("r") == {"run": "r"} and waits == [30, 60]
+
+    def missing(*args, **kwargs):
+        raise worker.EntryNotFoundError("no manifest")
+
+    monkeypatch.setattr(worker, "hf_hub_download", missing)
+    assert worker._uploaded("r") is None and waits == [30, 60]
+
+
 def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_dataset(worker, tmp_path, monkeypatch):
     uploaded = []
     monkeypatch.setattr(worker, "OUT", tmp_path / "out")

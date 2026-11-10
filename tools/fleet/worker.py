@@ -48,7 +48,7 @@ TRIAL_S, STOP_S = 3600, 120
 def main():
     run, specs = sys.argv[1], Path(sys.argv[2])
     api = HfApi(token=os.environ["HF_TOKEN"])
-    api.create_repo(REPO, repo_type="dataset", exist_ok=True)
+    _retried(lambda: api.create_repo(REPO, repo_type="dataset", exist_ok=True))
     done = {json.loads(line)["name"] for line in _progress().read_text().splitlines() if line.strip()} \
         if _progress().exists() else set()
     lines = specs.read_text().split()
@@ -175,12 +175,15 @@ def _harness():
 
 
 def _uploaded(run):
-    """The run's manifest as the dataset holds it, or None before any worker of the run uploaded one."""
-    try:
-        return json.loads(Path(hf_hub_download(REPO, f"runs/{OS}/{run}/manifest.json", repo_type="dataset",
-                                               token=os.environ["HF_TOKEN"], force_download=True)).read_text())
-    except EntryNotFoundError:
-        return None
+    """The run's manifest as the dataset holds it, or None before any worker of the run uploaded one; a refused
+    download, as when the account's requests are rate-limited, is tried again as an upload is."""
+    def fetched():
+        try:
+            return json.loads(Path(hf_hub_download(REPO, f"runs/{OS}/{run}/manifest.json", repo_type="dataset",
+                                                   token=os.environ["HF_TOKEN"], force_download=True)).read_text())
+        except EntryNotFoundError:
+            return None
+    return _retried(fetched)
 
 
 def _merged(built, uploaded):
