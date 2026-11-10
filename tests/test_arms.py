@@ -26,14 +26,14 @@ ARM_STEMS = [(arm, stem) for arm in ARMS for stem in STEMS] + [("agent-desktop",
 #: Every computer/v1 tool a driver can serve, its required ones and the pointer and keyboard groups: an arm's agent
 #: runs on the arm's own tools, these hidden from it, while the grader and the recordings still use them.
 #: The apps codex-computer-use's arm lets Codex act on in each computer, as macOS names them, and on Windows as Codex
-#: shows them, since there an app's request names the program it runs from: the task's own, never the sentinel, the
-#: user's window.
+#: shows them there, by their programs (one Electron app for all of a task's Electron windows, LibreOffice as
+#: soffice.bin): the task's own, never the sentinel, the user's window.
 CODEX_APPS = {"desktop-benchlab-macos": ["BenchLab"],
               "desktop-s02-macos": ["Copperfield Mail", "Signal Quay Chat", "Daymark Calendar", "LibreOffice"],
               "desktop-s03-macos": ["Ledger Lantern Mail", "LibreOffice", "GnuCash"],
               "desktop-s04-macos": ["Rillwatch Cases", "Margin Lantern Manual", "Google Chrome for Testing"],
-              "desktop-benchlab-windows": ["BenchLab"], "desktop-s02-windows": None, "desktop-s03-windows": None,
-              "desktop-s04-windows": None}
+              "desktop-benchlab-windows": ["BenchLab"], "desktop-s02-windows": ["electron", "soffice.bin"],
+              "desktop-s03-windows": ["electron", "soffice.bin", "GnuCash"], "desktop-s04-windows": ["electron", "chrome"]}
 COMPUTER_TOOLS = ["computer_click", "computer_drag", "computer_key", "computer_keyboard_down", "computer_keyboard_up",
                   "computer_pointer_down", "computer_pointer_list", "computer_pointer_move", "computer_pointer_position",
                   "computer_pointer_up", "computer_screenshot", "computer_scroll", "computer_type", "computer_wait"]

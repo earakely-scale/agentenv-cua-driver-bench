@@ -1,5 +1,5 @@
 [
-  {"id": "env", "type": "deploy_env", "env_id": "desktop-s03-windows-codex-computer-use", "env_params": {"driver_settings": {"allowed_apps": null}, "app_settings": {"bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-s03-windows-codex-computer-use", "env_params": {"driver_settings": {"allowed_apps": ["electron", "soffice.bin", "GnuCash"]}, "app_settings": {"bench-sentinel": {"condition": "foreground"}}}},
   {"id": "arm_tools", "type": "modify_env_tool_access", "env_id": "desktop-s03-windows-codex-computer-use", "action": "disable", "role": "default", "tools": ["computer_click", "computer_drag", "computer_key", "computer_keyboard_down", "computer_keyboard_up", "computer_pointer_down", "computer_pointer_list", "computer_pointer_move", "computer_pointer_position", "computer_pointer_up", "computer_screenshot", "computer_scroll", "computer_type", "computer_wait"], "depends_on": ["env"]},
   {"id": "sandbox", "type": "deploy_sandbox", "sandbox_name": "grader", "sandbox_mode": "vm"},
   {"id": "box", "type": "run_docker_container", "sandbox_name": "grader", "docker_context_artifact_id": "grader", "dockerfile_path": "grader.Dockerfile", "container_name": "grade", "command_override": "sleep infinity", "network": "none", "depends_on": ["sandbox"]},
