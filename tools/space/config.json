@@ -589,5 +589,94 @@
       "dialog": true,
       "reason": "The interruption is a modal dialog. When it opens, Windows usually gives it the keyboard and activates it, so the user's window loses focus and the keystrokes they type next are blocked."
     }
+  ],
+  "driver_why": [
+    {
+      "os": "macos",
+      "drivers": [
+        "cua-driver",
+        "codex-computer-use"
+      ],
+      "title": "Why cua-driver beats Codex Computer Use on macOS",
+      "lead": "Claude Sonnet 5.5 and GPT-6.1 Sol each ran every trial through both drivers, 360 trials in all. In the background cua-driver passes 23 and 16 of 40, Codex Computer Use 11 and 8; in the foreground cua-driver passes 39 and 30 of 50, Codex Computer Use 26 and 28. Each reason below is read from the trials' tool calls, the drivers' own replies and the sentinel's record of the user's screen.",
+      "points": [
+        {
+          "head": "cua-driver acts on an app without bringing it forward.",
+          "text": "Its background clicks are accessibility presses (`AXPress`), its text goes into a field's `AXValue`, it picks a pop-up's item through accessibility without opening the menu, and it sends keys to the app's own process. It disturbed the user in 4 of Sonnet's 40 background trials and 10 of GPT's.",
+          "examples": [
+            "macos--cua-driver-sonnet-5-5-2026-11-05--ir-01-r2-background",
+            "macos--cua-driver-sonnet-5-5-2026-11-05--cdb-g04-r1-background",
+            "macos--cua-driver-gpt-6-1-sol-2026-11-09--cdb-g04-r3-background"
+          ]
+        },
+        {
+          "head": "Codex Computer Use's click on a pop-up menu brings the app forward.",
+          "text": "Before a trial's first raise, 8 of Codex's 10 clicks on a pop-up button raised the app over the user's window, against 8 of its 62 clicks on plain buttons; cua-driver's 29 calls on a pop-up raised it in 3. IR-01's Team and IR-02's Priority are pop-ups, so each model passes 1 of 5 background trials of each through Codex, and 4 of 5 through cua-driver.",
+          "examples": [
+            "macos--codex-computer-use-gpt-6-1-sol-2026-11-09--ir-02-r2-background",
+            "macos--codex-computer-use-sonnet-5-5-2026-11-09--ir-01-r2-background",
+            "macos--cua-driver-gpt-6-1-sol-2026-11-09--ir-02-r1-background"
+          ]
+        },
+        {
+          "head": "In the multi-app tasks, Codex's first click in an app brings that app over the user's window.",
+          "text": "Every background trial in which Codex clicked one of the task's apps (mail, chat, calendar, cases, the manual or LibreOffice) raised it but one: Sonnet's 15 of 15 and GPT's 12 of 13, and none passed. cua-driver presses the same apps' buttons through accessibility, and Sonnet passes G04 in the background 4 of 5, GPT 2 of 5.",
+          "examples": [
+            "macos--codex-computer-use-sonnet-5-5-2026-11-09--cdb-g04-r1-background",
+            "macos--codex-computer-use-gpt-6-1-sol-2026-11-09--cdb-g02-r4-background"
+          ]
+        },
+        {
+          "head": "Neither driver can drag in the background, for different reasons.",
+          "text": "Codex's drag activates BenchLab: it raised the window in 3 of Sonnet's 5 MB-09 background trials, and GPT saw the activation and stopped in 4 of 5. cua-driver releases a background drag that starts a macOS drag-and-drop session, as reordering a list does, and both models stop: none of its 10 pass.",
+          "examples": [
+            "macos--codex-computer-use-sonnet-5-5-2026-11-09--mb-09-r4-background",
+            "macos--codex-computer-use-gpt-6-1-sol-2026-11-09--mb-09-r1-background",
+            "macos--cua-driver-sonnet-5-5-2026-11-05--mb-09-r2-background"
+          ]
+        },
+        {
+          "head": "Codex's own window sits over the user's too, but never alone.",
+          "text": "The “ChatGPT Computer Use” window was above the user's in 25 of Codex's 80 background trials, each of them one in which Codex had also raised a task app's window, so it fails no trial by itself.",
+          "examples": [
+            "macos--codex-computer-use-sonnet-5-5-2026-11-09--cdb-g02-r1-background"
+          ]
+        },
+        {
+          "head": "Codex Computer Use has no hover.",
+          "text": "MB-10's toolbar and MB-11's tooltip show only under the pointer, so all 20 of their foreground trials through Codex end with the agent reporting itself blocked. Through cua-driver Sonnet moves the pointer (`move_cursor`), reads the screenshot and passes all 10.",
+          "examples": [
+            "macos--codex-computer-use-sonnet-5-5-2026-11-09--mb-11-r1-foreground",
+            "macos--cua-driver-sonnet-5-5-2026-11-05--mb-11-r1-foreground"
+          ]
+        },
+        {
+          "head": "GPT works on cua-driver without seeing the screen.",
+          "text": "Codex CLI hands GPT cua-driver's structured results without their screenshots, and BenchLab's hover toolbar and tooltip and GnuCash's register aren't in the accessibility tree, so GPT stops in all 15 of MB-10's, MB-11's and G03's foreground trials and says why. In IR-04's background it can't check that its typing landed, so in 4 of 5 it writes the email to the user's clipboard and pastes it; Sonnet checks the screenshot and passes all 5. Codex Computer Use's results carry no structured content, so through it GPT does see the screen.",
+          "examples": [
+            "macos--cua-driver-gpt-6-1-sol-2026-11-09--mb-10-r1-foreground",
+            "macos--cua-driver-gpt-6-1-sol-2026-11-09--ir-04-r1-background",
+            "macos--cua-driver-sonnet-5-5-2026-11-05--ir-04-r1-background"
+          ]
+        },
+        {
+          "head": "cua-driver tells GPT that LibreOffice can't be edited in the background, and GPT believes it.",
+          "text": "In G02's background cua-driver answers a cell write with “LibreOffice ignores accessibility value writes and drops background pointer input, so its cells cannot be edited in the background”. GPT stops in 4 of 5 and pastes the rows through the user's clipboard in the fifth. Sonnet gets the same answer and passes one by moving and typing in Calc with keys sent to LibreOffice's process.",
+          "examples": [
+            "macos--cua-driver-gpt-6-1-sol-2026-11-09--cdb-g02-r1-background",
+            "macos--cua-driver-gpt-6-1-sol-2026-11-09--cdb-g02-r5-background",
+            "macos--cua-driver-sonnet-5-5-2026-11-05--cdb-g02-r4-background"
+          ]
+        },
+        {
+          "head": "GPT presses Apply before Codex's menu choice lands.",
+          "text": "In IR-02's foreground GPT picks the Priority item and presses Apply in one `js` call; in 4 of 5 BenchLab records the Apply with the old priority, and the field shows the new one only after. Through cua-driver, `set_value` sets the priority before GPT presses Apply, and it passes all 5.",
+          "examples": [
+            "macos--codex-computer-use-gpt-6-1-sol-2026-11-09--ir-02-r2-foreground",
+            "macos--cua-driver-gpt-6-1-sol-2026-11-09--ir-02-r2-foreground"
+          ]
+        }
+      ]
+    }
   ]
 }

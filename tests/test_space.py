@@ -227,6 +227,27 @@ def test_another_drivers_calls_read_in_the_lane_as_steps_on_elements_points_and_
         ("desktop_wait", {"ms": 800}), ("desktop_drag", {}), ("click", {}))] == ["look", "look", "wait", "act", "act"]
 
 
+def test_why_two_drivers_differ_keeps_each_points_examples_to_the_trials_the_catalog_holds(space):
+    metas = _cells("cua-driver", [("ir-01", "background", [(True, 1.0)])]) + _cells(
+        "agent-desktop", [("ir-01", "background", [(False, 0.5)])])
+    held, gone = metas[0]["uid"], "macos--cua-driver-sonnet-5-5-macos--ir-01-r9-background"
+    why = {"os": "macos", "drivers": ["cua-driver", "agent-desktop"], "title": "Why", "lead": "",
+           "points": [{"head": "A.", "text": "a", "examples": [held, gone]}, {"head": "B.", "text": "b"}]}
+
+    cat = _catalog(space, metas, {**CONFIG, "driver_why": [why]})
+
+    assert [p["examples"] for p in cat["driver_why"][0]["points"]] == [[held], []]
+    assert _catalog(space, metas)["driver_why"] == []
+
+
+def test_the_configs_account_of_two_drivers_names_drivers_and_an_os_it_has_and_says_each_point_with_examples():
+    cfg = json.loads((SPACE / "config.json").read_text())
+    for why in cfg["driver_why"]:
+        assert why["os"] in cfg["oses"] and set(why["drivers"]) <= set(cfg["drivers"]) and why["title"] and why["lead"]
+        assert all(p["head"] and p["text"] and p["examples"] for p in why["points"])
+        assert all(u.split("--")[0] == why["os"] and u.count("--") == 2 for p in why["points"] for u in p["examples"])
+
+
 def test_a_run_the_config_excludes_is_named_as_its_os_and_run(space):
     assert space("trials").run_of(Path("/d/runs/macos/cua-driver-sonnet-5-5-2026-11-05/ir-01-r1-foreground"), Path("/d")) == (
         "macos/cua-driver-sonnet-5-5-2026-11-05")

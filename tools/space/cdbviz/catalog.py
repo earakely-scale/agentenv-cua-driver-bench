@@ -116,7 +116,15 @@ def build(metas, cfg, hero, files, missing=()):
         "comparisons": comparisons(rows, oses, board_models, drivers, tasks, entries),
         "missing": list(missing),
         "caveats": cfg.get("caveats") or [],
+        "driver_why": driver_why(cfg, {m["uid"] for m in metas}),
     }
+
+
+def driver_why(cfg, uids):
+    """The config's account of why two drivers differ on an OS, as the comparison shows it under their grid, each
+    point's example trials kept to those this catalog holds, so no replay link leads nowhere."""
+    return [{**w, "points": [{**p, "examples": [u for u in p.get("examples") or [] if u in uids]} for p in w["points"]]}
+            for w in cfg.get("driver_why") or []]
 
 
 def comparisons(rows, oses, models, drivers, tasks, entries):
