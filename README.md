@@ -371,7 +371,7 @@ The Hugging Face token is huggingface_hub's login (`hf auth login`).
 
 ```bash
 python tools/fleet/plan.py evals/bench-v2-trials.txt plan 10   # 90 trials, 9 workers, each on one computer
-tools/fleet/launch.sh 10 c6i.2xlarge > instances.txt           # the workers set themselves up in a few minutes
+python tools/fleet/launch.py 10 c6i.2xlarge > instances.txt    # the workers set themselves up in a few minutes
 tar czf taskpack.tgz -C artifacts taskpack                     # the task pack, fetched once here
 export FLEET_MODEL_KEY=...
 python tools/fleet/start.py <instance> haiku-5-5-2026-11-02 anthropic/claude-haiku-5-5 plan/worker-01.txt \
@@ -379,6 +379,10 @@ python tools/fleet/start.py <instance> haiku-5-5-2026-11-02 anthropic/claude-hai
 python tools/fleet/watch.py instances.txt                      # each worker's trials, until they're done
 ```
 
+- A Windows or Omarchy run's computers boot as disks under KVM, so its workers need nested virtualization and room for
+  the disks: `python tools/fleet/launch.py 2 c8i.4xlarge --kvm --volume-gb 300`, then `start.py --os windows` or
+  `--os omarchy`. `launch.py` goes through boto3, as the AWS CLI 2.32 refuses the setting. The workers keep Docker's
+  own image store, since containerd's breaks those boots.
 - `start.py` hands the worker its trials and, encrypted to a key the VM makes for the job, the model key and the
   Hugging Face token. The worker decrypts them into its own environment and deletes them.
 - `--taskpack` ships the task pack you fetched. Ten VMs behind one address run out of GitHub's API calls fetching it
