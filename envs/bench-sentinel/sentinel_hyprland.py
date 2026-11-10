@@ -3,7 +3,8 @@
 log and taking its commands from ``sentinel.control`` beside it, in the condition of the app's settings: in the
 background the user's window at ``USER_WINDOW_FRAME``, typing; in the foreground the witness at their runner's frame for
 it; once their window rules are applied (``bench.lua``). The condition is written beside the log (``condition``), which
-the sentinel's lines don't carry. And trycua's GUI-only guard on Hyprland, which their runner runs beside it, here every
+the sentinel's lines don't carry. It and their sentinel talk to Hyprland through their ``hypr.py`` made to wait out a
+busy Hyprland (``hyprland_ipc.py``). And trycua's GUI-only guard on Hyprland, which their runner runs beside it, here every
 ``GUARD_S`` while it's armed: a terminal started since arming, outside this launch's own processes, is a violation, and
 is ended, as their runner ends it; one cua-driver's own program started is the tool's, logged as ``gui_only_helper``, as
 their Windows guard has it; a terminal's window in front ``FRONT_GRACE_SAMPLES`` looks in a row is a violation, in front
@@ -19,6 +20,7 @@ import time
 from pathlib import Path
 
 from app import LOG_FOLDER, BenchSentinel
+from hyprland_ipc import patient
 
 HERE = Path(__file__).resolve().parent
 LAB = HERE / "lab"
@@ -26,6 +28,8 @@ sys.path[:0] = [str(LAB / "hyprland"), str(LAB / "scoring")]
 import bench_v2 as v2  # noqa: E402
 import guard as G  # noqa: E402
 import hypr as H  # noqa: E402
+
+patient(H)
 
 RULES = LAB / "hyprland" / "bench.lua"
 #: trycua's runner's frame for the witness, the sentinel in the foreground: x, y, width, height.
@@ -53,7 +57,8 @@ def main(settings) -> None:
     frame = v2.USER_WINDOW_FRAME if background else WITNESS_FRAME
     apply_rules(RULES)
     with open(folder / "sentinel.stderr", "ab") as output:
-        sentinel = subprocess.Popen(["/usr/bin/python3", str(LAB / "hyprland" / "sentinel.py"), "--log", str(log),
+        sentinel = subprocess.Popen(["/usr/bin/python3", str(HERE / "hyprland_ipc.py"),
+                                     str(LAB / "hyprland" / "sentinel.py"), "--log", str(log),
                                      "--control", str(control), "--frame", ",".join(map(str, frame)),
                                      *(["--user-activity"] if background else [])],
                                     env={**os.environ, "GDK_BACKEND": "wayland", "NO_AT_BRIDGE": "0"},

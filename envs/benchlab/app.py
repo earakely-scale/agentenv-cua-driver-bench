@@ -14,6 +14,7 @@ from typing import Literal
 
 from agentenv_protocol.computer import (ComputerAppEnvironment, Download, Launch, Packages, Ready, RunScript,
                                         computer_app, install, install_step, linux, ready_check, windows)
+from hyprland_ipc import patient
 from pydantic import BaseModel
 
 HERE = Path(__file__).resolve().parent
@@ -85,4 +86,4 @@ class BenchLab(ComputerAppEnvironment):
         hypr = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(hypr)
         return any(window.get("class") == "BenchLab" and [*window.get("at", ()), *window.get("size", ())] == list(FRAME)
-                   for window in hypr.clients())
+                   for window in patient(hypr).clients())

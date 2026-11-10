@@ -113,8 +113,11 @@ def _activate_on_hyprland(pid, address):
         if time.monotonic() - sent > ACTIVATE_EVERY_S:
             os.kill(pid, signal.SIGUSR1)
             sent = time.monotonic()
-        if hypr.active_window().get("address") == address and (hypr.clients() or [{}])[-1].get("address") == address:
-            return
+        try:
+            if hypr.active_window().get("address") == address and (hypr.clients() or [{}])[-1].get("address") == address:
+                return
+        except (OSError, ValueError):
+            pass
         time.sleep(0.2)
     raise RuntimeError("the sentinel's window didn't become the active window on top")
 

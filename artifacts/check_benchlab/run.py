@@ -72,10 +72,10 @@ def run(input):
         samples = [line for line in lines if line["ev"] == "s"]
         report["user_kept_focus"] = "yes" if samples and not any(line["ev"] in LOST for line in lines) and all(
             _focused(sample) for sample in samples) else "no"
-        report["user_window_on_top"] = "yes" if samples and not any(s["above_n"] for s in samples) else "no"
+        report["user_window_on_top"] = "yes" if samples and not any(_raised(s, samples[0]) for s in samples) else "no"
         report["user_samples"] = {"samples": len(samples), "not_key": sum(not s.get("key", _focused(s)) for s in samples),
                                   "not_active": sum(not s.get("active", _focused(s)) for s in samples),
-                                  "under_another": sum(bool(s["above_n"]) for s in samples),
+                                  "under_another": sum(bool(_raised(s, samples[0])) for s in samples),
                                   "lost": sorted({line["ev"] for line in lines if line["ev"] in LOST})}
     if args.get("solve"):
         driver.call("bring_to_front", pid=lab["pid"], window_id=lab["window_id"])
@@ -167,6 +167,12 @@ def _answered(driver, lab, title, answer):
 
 
 INTERRUPTIONS = {"irmodal": _permission_prompt, "irunsaved": _unsaved_prompt, "irconsent": _consent_prompt}
+
+
+def _raised(sample, first):
+    """What draws over the user's window in ``sample`` that didn't at the first sample, as trycua's summarizer counts
+    a raise: a desktop's own bar or layers, there from the start, aren't one."""
+    return set(sample.get("above") or []) - set(first.get("above") or [])
 
 
 def _focused(sample):

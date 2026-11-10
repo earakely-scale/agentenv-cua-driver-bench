@@ -86,13 +86,13 @@ class FakeHypr:
 
 @pytest.fixture
 def lab_hyprland(monkeypatch):
-    for name in ("app", "lab_hyprland"):
+    for name in ("app", "lab_hyprland", "hyprland_ipc"):
         sys.modules.pop(name, None)
     monkeypatch.syspath_prepend(str(ROOT / "envs" / "benchlab"))
     try:
         yield importlib.import_module("lab_hyprland")
     finally:
-        for name in ("app", "lab_hyprland"):
+        for name in ("app", "lab_hyprland", "hyprland_ipc"):
             sys.modules.pop(name, None)
 
 
@@ -162,7 +162,7 @@ def test_benchlab_starts_as_trycuas_hyprland_runner_starts_it_placed_after_their
 
 @pytest.fixture
 def sentinel_hyprland(monkeypatch):
-    names = ("app", "sentinel_hyprland", "guard", "bench_v2", "hypr")
+    names = ("app", "sentinel_hyprland", "guard", "bench_v2", "hypr", "hyprland_ipc")
     for name in names:
         sys.modules.pop(name, None)
     monkeypatch.syspath_prepend(str(PACK / "scoring"))
@@ -216,8 +216,8 @@ def test_benchsentinel_starts_as_trycuas_hyprland_runner_starts_it_in_its_condit
         sentinel_hyprland.main(sys.modules["app"].BenchSentinel.Settings(condition=condition))
 
     folder = tmp_path / ".bench-sentinel"
-    assert started["argv"] == ["/usr/bin/python3", str(sentinel_hyprland.LAB / "hyprland" / "sentinel.py"),
-                               "--log", str(folder / "sentinel.jsonl"), "--control", str(folder / "sentinel.control"),
+    assert started["argv"] == ["/usr/bin/python3", str(sentinel_hyprland.HERE / "hyprland_ipc.py"),
+                               str(sentinel_hyprland.LAB / "hyprland" / "sentinel.py"), "--log", str(folder / "sentinel.jsonl"), "--control", str(folder / "sentinel.control"),
                                "--frame", frame, *extra]
     assert started["env"]["GDK_BACKEND"] == "wayland" and started["rules"] == _trycuas_rules()
     assert (folder / "condition").read_text() == f"{condition}\n" and (folder / "sentinel.control").read_bytes() == b""
@@ -293,6 +293,33 @@ def test_benchlab_or_a_layer_of_another_namespace_in_front_is_no_side_door(senti
         guard.sample()
 
     assert log.read() == []
+
+
+def test_each_app_on_omarchy_has_the_same_patient_ipc_client():
+    assert (ROOT / "envs" / "benchlab" / "hyprland_ipc.py").read_bytes() == (
+        ROOT / "envs" / "bench-sentinel" / "hyprland_ipc.py").read_bytes()
+
+
+def test_a_request_hyprland_refuses_for_a_full_queue_waits_and_is_sent_again(monkeypatch):
+    spec = importlib.util.spec_from_file_location("bench_hyprland_ipc", ROOT / "envs" / "benchlab" / "hyprland_ipc.py")
+    ipc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ipc)
+    monkeypatch.setattr(ipc.time, "sleep", lambda s: None)
+    refusals, sent = [BlockingIOError(11, "Resource temporarily unavailable")] * 3, []
+
+    def request(command, timeout=8.0):
+        sent.append(command)
+        if refusals:
+            raise refusals.pop()
+        return "ok"
+
+    hypr = ipc.patient(types.SimpleNamespace(request=request))
+
+    assert hypr.request("j/clients") == "ok" and sent == ["j/clients"] * 4
+    refusals[:] = [BlockingIOError(11, "busy")] * 10_000
+    monkeypatch.setattr(ipc, "BUSY_S", 0.0)
+    with pytest.raises(BlockingIOError):
+        hypr.request("j/clients")
 
 
 # Arming, grading and the self-checks
