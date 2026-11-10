@@ -417,15 +417,15 @@ def specs(cat):
 
 def driver_specs(cat):
     """The drivers figures: a panel per OS and model that several drivers ran, a line per driver, each panel over the
-    tasks all its drivers ran in both conditions (the catalog's comparisons), each condition over those it scores, so a
-    panel compares like with like."""
+    tasks all its drivers ran in each condition they ran (the catalog's comparisons), each condition over those it
+    scores, so a panel compares like with like; a driver that didn't run a condition has no point there."""
     conds = [c for c in cat["conditions"] if c["id"] in ("foreground", "background")]
     drivers = {d["id"]: d for d in cat["drivers"]}
     names = {m["id"]: m["name"] for m in cat["models"]}
     osn = {o["id"]: o["name"] for o in cat["oses"]}
     short = {t["id"]: catalog.short(t) for t in cat["tasks"]}
     rows = {(r["os"], r["model"], r["driver"], r["condition"]): r for r in cat["board"]}
-    runs = sorted({cell["n"] for c in cat["comparisons"] for d in c["drivers"] for k in conds
+    runs = sorted({cell["n"] for c in cat["comparisons"] for d in c["drivers"] for k in conds if k["id"] in d
                    for t, cell in rows[(c["os"], c["model"], d["id"], k["id"])]["tasks"].items() if t in c["tasks"]}
                   or {1})
     out = {}
@@ -434,11 +434,11 @@ def driver_specs(cat):
         panels, halves = [], []
         for c in cat["comparisons"]:
             per = {(d["id"], k["id"]): {t: cell[metric] for t, cell in rows[(c["os"], c["model"], d["id"], k["id"])][
-                "tasks"].items() if t in c["tasks"]} for d in c["drivers"] for k in conds}
+                "tasks"].items() if t in c["tasks"]} for d in c["drivers"] for k in conds if k["id"] in d}
             base = cat["driver"] if any(d["id"] == cat["driver"] for d in c["drivers"]) else c["drivers"][0]["id"]
             for d in c["drivers"]:
                 for k in conds:
-                    mine, theirs = per[(d["id"], k["id"])], per[(base, k["id"])]
+                    mine, theirs = per.get((d["id"], k["id"]), {}), per.get((base, k["id"]), {})
                     gaps = [mine[t] - theirs[t] for t in mine if t in theirs and None not in (mine[t], theirs[t])]
                     if d["id"] != base and len(gaps) >= 3:
                         lo, hi = boot_ci(gaps)
@@ -448,7 +448,8 @@ def driver_specs(cat):
                                    f"{catalog.ranges([short[t] for t in c['tasks']])}",
                            "series": [{"name": drivers[d["id"]].get("label") or drivers[d["id"]]["name"],
                                        "slot": drivers[d["id"]]["slot"],
-                                       "values": [d[k["id"]][metric] for k in conds]} for d in c["drivers"]]})
+                                       "values": [d[k["id"]][metric] if k["id"] in d else None for k in conds]}
+                                      for d in c["drivers"]]})
         if key == "drivers-task-score":
             sub = ("The same OS, model and tasks; only the computer-use driver changes. trycua's evaluator (weighted "
                    "checks), mean over the tasks every driver ran, each condition over those it scores.")
@@ -589,9 +590,11 @@ def pareto_spec(cat):
         slots = {d["id"]: d["slot"] for d in cat["drivers"]}
         sets.append(("drivers", f"Drivers on {osn[c['os']]}", names[c["model"]], c["os"],
                      [(d["id"], c["model"], label_of(cat, d["id"]), slots[d["id"]]) for d in c["drivers"]]))
+        ran = {d["id"]: d for d in c["drivers"]}
     panels = []
     for cond in (c for c in cat["conditions"] if c["id"] in catalog.CONDITIONS):
         for kind, label, via, os_id, entries in sets:
+            entries = [e for e in entries if kind != "drivers" or cond["id"] in ran[e[0]]]
             points = tally(cat, os_id, entries, cond["id"])
             if len(points) < 2:
                 continue

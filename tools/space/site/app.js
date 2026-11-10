@@ -1143,7 +1143,7 @@ function compareHead(c, select) {
   const models = CAT.comparisons.filter((x) => x.os === c.os).map((x) => x.model);
   const tabs = (label, ids, cur, name, patch) => h("div", { class: "tabs", role: "group", "aria-label": label },
     ids.map((id) => h("button", { "aria-pressed": String(id === cur), onclick: () => select(patch(id)) }, name(id))));
-  const n = Math.round(Math.max(...c.drivers.map((d) => d.foreground.n / c.tasks.length)));
+  const n = Math.round(Math.max(...c.drivers.map((d) => (d.foreground || d.background).n / c.tasks.length)));
   return h("div", { class: "cmp-head" },
     h("div", { class: "cmp-row" },
       h("span", { class: "cmp-k" }, h("span", { html: ICON_LOCK, "aria-hidden": "true", style: { display: "inline-flex" } }), "Held fixed"),
@@ -1169,7 +1169,7 @@ function rank(results) {
 }
 
 function compareGrid(c) {
-  const conds = CAT.conditions.filter((k) => c.drivers.every((d) => d[k.id]));
+  const conds = CAT.conditions.filter((k) => c.drivers.some((d) => d[k.id]));
   const grid = h("div", { class: "cmp-grid" });
   grid.append(h("div", { class: "ch" }, "Task"), h("div", { class: "ch" }, "Driver"),
     ...conds.map((k) => h("div", { class: "ch cond" }, h("b", {}, k.name), h("span", {}, k.short))));
@@ -1198,13 +1198,16 @@ function compareGrid(c) {
       grid.append(h("div", { class: `cd${first}`, title: driverName(d.id) }, driverDot(d.id), h("span", {}, driverLabel(d.id))));
       for (const k of conds) {
         const lost = missingOf(d.id, c.os, task.id, k.id, [c.model]);
-        grid.append(cmpCell(results[k.id][i], leads[k.id][i], lost, d.id, first, task.conditions.includes(k.id) ? null : onlyIn(task)));
+        grid.append(cmpCell(results[k.id][i], leads[k.id][i], lost, d.id, first, !d[k.id] ? ranOnly(d) : task.conditions.includes(k.id) ? null : onlyIn(task)));
       }
     });
   }
   grid.append(...totalsRows(c, conds));
   return grid;
 }
+
+/** What a comparison's driver that didn't run every condition says in the cells of the others: "Foreground only". */
+const ranOnly = (d) => `${CAT.conditions.filter((k) => d[k.id]).map((k) => k.name).join(" and ")} only`;
 
 function cmpCell(r, lead, lost, driver, first, only) {
   const style = { "--dc": `var(--s${(DRIVERS[driver]?.slot ?? 0) % 8})` };
@@ -1228,22 +1231,26 @@ function totalsRows(c, conds) {
     h("div", { class: "probe" }, "Totals"),
     h("h3", {}, c.tasks.length < c.of ? `The ${c.tasks.length} tasks every driver ran` : `All ${c.tasks.length} tasks`),
     h("p", { class: "ct-note" }, "Full pass and mean task score over the same tasks, so the rows compare like with like."))];
-  const leads = Object.fromEntries(conds.map((k) => [k.id, rank(c.drivers.map((d) => ({ k: d[k.id].passed, n: d[k.id].n, score: d[k.id].score })))]));
+  const leads = Object.fromEntries(conds.map((k) => [k.id, rank(c.drivers.map((d) => (d[k.id] ? { k: d[k.id].passed, n: d[k.id].n, score: d[k.id].score } : null)))]));
   c.drivers.forEach((d, i) => {
     const first = i === 0 ? " first" : "";
     const style = { "--dc": `var(--s${(DRIVERS[d.id]?.slot ?? 0) % 8})` };
     out.push(h("div", { class: `cd total${first}`, title: driverName(d.id) }, driverDot(d.id), h("span", {}, driverLabel(d.id))));
     for (const k of conds) {
       const v = d[k.id];
+      if (!v) {
+        out.push(h("div", { class: `cc total empty${first}`, style }, ranOnly(d)));
+        continue;
+      }
       const delta = (a, b) => {
         if (d.id === base.id || a == null || b == null) return null;
         const pts = Math.round(100 * a) - Math.round(100 * b);
         return h("span", { class: `delta ${pts > 0 ? "up" : pts < 0 ? "down" : "flat"}` }, pts > 0 ? "▲ " : pts < 0 ? "▼ " : "", `${pts > 0 ? "+" : pts < 0 ? "−" : "±"}${Math.abs(pts)} pts`);
       };
       out.push(h("div", { class: `cc total${leads[k.id][i] ? " lead" : ""}${first}`, style },
-        h("div", { class: "tl" }, h("b", { class: "big" }, pct(v.pass)), h("span", {}, "full pass"), delta(v.pass, base[k.id].pass)),
+        h("div", { class: "tl" }, h("b", { class: "big" }, pct(v.pass)), h("span", {}, "full pass"), delta(v.pass, base[k.id]?.pass)),
         h("div", { class: "tl sub" }, h("span", { class: `pc ${tone(v.passed, v.n)}` }, h("b", {}, `${v.passed}/${v.n}`), h("span", {}, "trials")),
-          h("span", {}, `${pct(v.score)} task score`), delta(v.score, base[k.id].score)),
+          h("span", {}, `${pct(v.score)} task score`), delta(v.score, base[k.id]?.score)),
         leads[k.id][i] ? h("span", { class: "lead-tag" }, "Best") : null));
     }
   });
