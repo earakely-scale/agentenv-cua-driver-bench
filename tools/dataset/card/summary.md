@@ -74,6 +74,24 @@ and `cua-driver-haiku-5-5-2026-11-09`):
   host Haiku ran on, they opened during each multi-app trial, and the guard counted them as leaving the GUI. None of
   those 30 trials had passed its task.
 
+**GPT-6.1 Sol, GPT-6.1 Terra and GPT-6 Luna ran the same 90 Windows trials in Codex CLI** (runs
+`cua-driver-gpt-6.1-sol-2026-11-10`, `cua-driver-gpt-6.1-terra-2026-11-10` and `cua-driver-gpt-6-luna-2026-11-10`:
+Codex CLI 0.147.0 at medium effort with its own tools off, through cua-driver on its own tools, on agentenv-framework
+0.9.1494):
+
+| Model | Foreground | Background | Multi-app (fg) | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| GPT-6.1 Sol | 34 of 50 | 10 of 40 | 5 of 15 | 10 of 15 | 19 of 20 | 1 | $0.18 |
+| GPT-6.1 Terra | 32 of 50 | 11 of 40 | 2 of 15 | 10 of 15 | 20 of 20 | 5 | $0.10 |
+| GPT-6 Luna | 28 of 50 | 11 of 40 | 0 of 15 | 10 of 15 | 18 of 20 | 3 | $0.02 |
+
+- **MB-11 fails all five times for each of them**, as it does for every GPT model on Linux and macOS, while every Claude
+  model passes all five on each OS: the agent never brings up the target icon's tooltip, so it never submits a code.
+- **Sol finishes its multi-app trials within their turns.** It ends 1 of its 30 on the 45-turn limit, against Terra's 24
+  and Luna's 22, and passes 5 of the 15 in the foreground.
+- **Every trial that leaves the GUI does it through cua-driver's `launch_app`,** handing a file to an app on the command
+  line.
+
 **On Windows, agent-desktop and cua-driver part in the background** (run `agent-desktop-sonnet-5-5-2026-11-10`: Claude
 Sonnet 5.5 on the same 90 trials through Vercel Labs' agent-desktop 1.2.0, its own tools alone, headed in the
 foreground, on agentenv-framework 0.9.1494):
@@ -92,6 +110,10 @@ foreground, on agentenv-framework 0.9.1494):
 - **In the foreground it passes 37 of 50:** all 20 interruption trials, 14 of the 15 precision trials (MB-10's first
   fails) and 3 of the 15 multi-app ones. 23 of its 30 multi-app trials end on the 45-turn limit, as 23 of cua-driver's
   do, and a trial costs about half as much.
+- **With Haiku 5.5 the pattern holds** (run `agent-desktop-haiku-5-5-2026-11-10`): agent-desktop passes 35 of 50 in the
+  foreground and 0 of 40 in the background, all 20 background interruption tasks done but the user's keyboard taken each
+  time, and MB-09 failed headless with the user undisturbed. Through cua-driver Haiku passes 35 of 50 and 8 of 40. A
+  trial costs $0.04, against cua-driver's $0.09.
 
 **On Windows, Codex Computer Use ties cua-driver in the foreground** (runs `codex-computer-use-sonnet-5-5-2026-11-10`
 and `codex-computer-use-gpt-6-1-sol-2026-11-10`: the 50 foreground trials of Bench v2 through OpenAI's Codex Computer

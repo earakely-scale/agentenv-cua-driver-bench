@@ -144,8 +144,6 @@
   "exclude_runs": ["macos/sonnet-5-5-2026-11-05",
     "macos/sonnet-5-5-2026-11-05-multiapp", "macos/haiku-5-5-2026-11-05", "linux/sonnet-5-5-2026-11-03",
     "linux/haiku-5-5-2026-11-02", "linux/sonnet-4-5-2026-11-02", "windows/sonnet-5-5-2026-11-09",
-    "windows/agent-desktop-haiku-5-5-2026-11-10", "windows/cua-driver-gpt-6-luna-2026-11-10",
-    "windows/cua-driver-gpt-6.1-sol-2026-11-10", "windows/cua-driver-gpt-6.1-terra-2026-11-10",
     "omarchy/cua-driver-opus-5-5-2026-11-10", "omarchy/cua-driver-haiku-5-5-2026-11-10"],
   "drivers": {
     "cua-driver": {
