@@ -8,9 +8,9 @@ busy Hyprland (``hyprland_ipc.py``). And trycua's GUI-only guard on Hyprland, wh
 ``GUARD_S`` while it's armed: a terminal started since arming, outside this launch's own processes, is a violation, and
 is ended, as their runner ends it; one cua-driver's own program started is the tool's, logged as ``gui_only_helper``, as
 their Windows guard has it; a terminal's window in front ``FRONT_GRACE_SAMPLES`` looks in a row is a violation, in front
-for less a ``gui_only_transient``; and Omarchy's launchers, its shell's menu and its Apps panel, are side doors in front
-the same way, as the X11 port counts xfce4-appfinder; each logged once into the same log. Staying while
-BenchSentinel runs."""
+for less a ``gui_only_transient``; and Omarchy's launchers in front, its shell's menu and its Apps panel, a
+``gui_only_transient`` however long they stay, as they run only their own rows, never a typed command, and any shell
+they open is a terminal's window, which fails; each logged once into the same log. Staying while BenchSentinel runs."""
 import json
 import os
 import signal
@@ -37,8 +37,8 @@ WITNESS_FRAME = (1000, 640, 600, 320)
 #: The driver's own programs: a terminal one of them starts for itself is the tool's, as trycua's Windows runner's
 #: ``--tool-exe``.
 TOOL_PROGRAMS = ("cua-driver",)
-#: Omarchy's launchers, its shell's menu (Super+Space) and its Apps panel (Super+Alt+Space), side doors in front by
-#: their layer surfaces' namespaces.
+#: Omarchy's launchers, its shell's menu (Super+Space) and its Apps panel (Super+Alt+Space), by their layer surfaces'
+#: namespaces: transients in front, never violations.
 LAUNCHERS = {"omarchy-menu": "omarchy-menu", "omarchy-dock-apps": "omarchy-apps"}
 #: Hyprland's layers drawn over windows: top and overlay.
 OVER_WINDOWS = ("2", "3")
@@ -105,7 +105,6 @@ class Guard:
         self.baseline = {pid for pid, _, _ in rows}
         self.own = G.descendants(rows, self.runner)
         self.front = G.FrontWatch()
-        self.launcher_run = 0
         self._logged: set[tuple[str, str]] = set()
 
     def sample(self) -> None:
@@ -126,10 +125,7 @@ class Guard:
             self._log("gui_only_violation", "front", f"front:{hit}", window_class=window)
         elif label := terminal_class(window):
             self._log("gui_only_transient", "front", f"front:{label}", window_class=window)
-        self.launcher_run = self.launcher_run + 1 if launcher else 0
-        if launcher and self.launcher_run >= G.FRONT_GRACE_SAMPLES:
-            self._log("gui_only_violation", "front", f"front:{launcher}", window_class=window)
-        elif launcher:
+        if launcher:
             self._log("gui_only_transient", "front", f"front:{launcher}", window_class=window)
 
     def _log(self, ev: str, kind: str, detail: str, **evidence: object) -> None:

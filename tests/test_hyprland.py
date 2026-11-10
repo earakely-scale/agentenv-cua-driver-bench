@@ -2,9 +2,8 @@
 the sentinel install trycua's Hyprland port at the lock's commit and start as their Hyprland runner starts them, after
 their window rules, sent as their runner sends them, at their runner's frames; their GUI-only guard beside the sentinel,
 which once armed logs a terminal started since then as a violation, once, and ends it, one cua-driver's own program
-started as that tool's helper, a terminal's window or one of Omarchy's launchers in front three looks in a row as a
-violation
-and for less as a transient. The arming script activates the sentinel until its window is the active window on top,
+started as that tool's helper, a terminal's window in front three looks in a row as a violation and for less as a
+transient, and one of Omarchy's launchers in front as a transient alone. The arming script activates the sentinel until its window is the active window on top,
 then arms it; the grade takes a Hyprland log's armed part by its place and the sentinel in front by its armed sample;
 and the sentinel's self-check asks for disturbances trycua's oracle causes and criteria trycua's A22 scores."""
 import ast
@@ -266,9 +265,7 @@ def test_a_terminal_the_drivers_own_program_starts_is_its_helper(sentinel_hyprla
 @pytest.mark.parametrize("front, layers, detail", [
     ({"class": "Alacritty"}, {}, "front:Alacritty"),
     ({"class": "org.omarchy.btop"}, {}, "front:Omarchy TUI"),
-    ({"class": "BenchLab"}, {"DP-1": {"levels": {"2": [{"namespace": "omarchy-menu"}]}}}, "front:omarchy-menu"),
-    ({"class": "BenchLab"}, {"DP-1": {"levels": {"3": [{"namespace": "omarchy-dock-apps"}]}}}, "front:omarchy-apps"),
-], ids=["a terminal", "an Omarchy TUI", "Omarchy's menu", "Omarchy's Apps panel"])
+], ids=["a terminal", "an Omarchy TUI"])
 def test_a_side_door_in_front_three_looks_in_a_row_is_a_violation_and_for_less_a_transient(sentinel_hyprland, tmp_path,
                                                                                          monkeypatch, front, layers,
                                                                                          detail):
@@ -282,6 +279,21 @@ def test_a_side_door_in_front_three_looks_in_a_row_is_a_violation_and_for_less_a
 
     assert [(line["ev"], line["detail"]) for line in transient] == [("gui_only_transient", detail)]
     assert [(line["ev"], line["detail"]) for line in log.read()] == [("gui_only_violation", detail)]
+
+
+@pytest.mark.parametrize("layers, detail", [
+    ({"DP-1": {"levels": {"2": [{"namespace": "omarchy-menu"}]}}}, "front:omarchy-menu"),
+    ({"DP-1": {"levels": {"3": [{"namespace": "omarchy-dock-apps"}]}}}, "front:omarchy-apps"),
+], ids=["Omarchy's menu", "Omarchy's Apps panel"])
+def test_omarchys_launcher_in_front_is_a_transient_however_long_it_stays(sentinel_hyprland, tmp_path, monkeypatch,
+                                                                         layers, detail):
+    guard, hypr, log, _ = _guard(sentinel_hyprland, tmp_path, monkeypatch, BASE)
+    hypr.active, hypr.layers = {"class": "BenchLab"}, layers
+
+    for _ in range(10):
+        guard.sample()
+
+    assert [(line["ev"], line["detail"]) for line in log.read()] == [("gui_only_transient", detail)]
 
 
 def test_benchlab_or_a_layer_of_another_namespace_in_front_is_no_side_door(sentinel_hyprland, tmp_path, monkeypatch):

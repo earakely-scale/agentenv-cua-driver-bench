@@ -2,8 +2,9 @@
 into ``~/bench``: the sentinel's window is its condition's, with its title and frame as Hyprland places it; trycua's own
 summarizer and A22 criteria, from the task pack, find each disturbance their Hyprland oracle causes on purpose
 (``oracle.py --disturb``) in its own criterion, and a quiet window and a background action in none, with every criterion
-measured; their GUI-only guard on Hyprland, beside the sentinel, logs a terminal opened (foot, Omarchy's own), and
-Omarchy's launcher in front, its shell's menu, and nothing else; and the sentinel's data plane returns its log, which a reset starts afresh. Their oracle moves
+measured; their GUI-only guard on Hyprland, beside the sentinel, logs a terminal opened (foot, Omarchy's own) as a
+violation, Omarchy's launcher in front, its shell's menu, as a transient alone, though A22 finds it took the user's
+keyboard and drew over their window, and nothing else; and the sentinel's data plane returns its log, which a reset starts afresh. Their oracle moves
 the pointer and types through /dev/uinput; where the session user can't open it, their same ``disturb`` runs here with
 the pointer moved through Hyprland's IPC, as their runner parks it, and each scenario says which it took (``via``).
 ``args``: ``condition``, the sentinel's."""
@@ -64,15 +65,16 @@ def run(input):
 
 
 def _scenarios(uinput):
-    """Each disturbance trycua's oracle causes, with the criteria it must trip; a terminal opened and Omarchy's
-    launcher shown, with the guard violations each must log; and a quiet window and a background action, which must do
-    neither."""
+    """Each disturbance trycua's oracle causes, with the criteria it must trip; a terminal opened, with the guard
+    violation it must log; Omarchy's launcher shown, with the criteria it must trip and the transient, never a
+    violation, the guard must log; and a quiet window and a background action, which must do neither."""
     lab = _window(lambda client: client.get("class") == "BenchLab")
     scenarios = [("quiet", set(), set(), lambda: None)]
     scenarios += [(f"oracle: {kind}", must, set(), (lambda kind=kind: _disturb(kind, uinput))) for kind, must in
                   DISTURBANCES]
     scenarios.append(("a terminal opened", set(), {"process:foot"}, _terminal))
-    scenarios.append(("Omarchy's launcher shown", set(), {"front:omarchy-menu"}, _launcher))
+    scenarios.append(("Omarchy's launcher shown", {"key_focus", "window_raised"}, set(), _launcher,
+                      {"front:omarchy-menu"}))
     scenarios.append(("BACKGROUND another app's window moved beneath", set(), set(), lambda: _move(lab, 1300, 650)))
     return scenarios
 
@@ -82,9 +84,9 @@ def _move(window, x, y):
     hypr.dispatch(f"hl.dsp.window.move({{ x = {x}, y = {y}, {hypr.window_ref(window['address'])} }})")
 
 
-def _scenario(log, user, name, must, guard_must, act):
+def _scenario(log, user, name, must, guard_must, act, transient_must=frozenset()):
     """Put the user back in front, arm the sentinel, act, disarm it, and score the armed window as trycua does, with
-    the guard's violations in it."""
+    the guard's violations and transients in it."""
     log.activate(user["address"])
     time.sleep(1)
     armed = log.signal(signal.SIGUSR2, "armed")
@@ -101,10 +103,13 @@ def _scenario(log, user, name, must, guard_must, act):
     disturbed = sorted(key for key, held in criteria.items() if held is False)
     unmeasured = sorted(key for key, held in criteria.items() if held is None)
     guarded = sorted({line["detail"] for line in lines if line["ev"] == "gui_only_violation"})
+    transient = sorted({line["detail"] for line in lines if line["ev"] == "gui_only_transient"})
     ok = (summary["available"] and must <= set(disturbed) and (must or guard_must or not disturbed)
-          and guard_must <= set(guarded) and (guard_must or not guarded) and not unmeasured)
+          and guard_must <= set(guarded) and (guard_must or not guarded) and transient_must <= set(transient)
+          and not unmeasured)
     return {"scenario": name, "ok": bool(ok), "must": sorted(must), "disturbed": disturbed, "unmeasured": unmeasured,
-            "guard_must": sorted(guard_must), "guarded": guarded, **({"via": via} if via else {}),
+            "guard_must": sorted(guard_must), "guarded": guarded, "transient_must": sorted(transient_must),
+            "transient": transient, **({"via": via} if via else {}),
             "typed": (summary.get("user_activity") or {}).get("typed")}
 
 
