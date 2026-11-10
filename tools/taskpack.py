@@ -35,10 +35,10 @@ LOCK = ROOT / "taskpack.lock.toml"
 TARGET = ROOT / "artifacts" / "taskpack"
 ENVS = ROOT / "envs"
 GRADER = ROOT / "artifacts" / "gui_only" / "verify.py"
-#: trycua's scan of an agent's tool calls, which the trajectory's GUI-only check fetches, and their Windows guard, whose
-#: scan adds Windows' shells and script hosts, which it fetches for a Windows trial.
-SCAN = "scoring/bench_v2.py"
-WINDOWS_SCAN = "windows/guard.py"
+#: trycua's scan of an agent's tool calls, which the trajectory's GUI-only check fetches, and their Windows and Hyprland
+#: guards, whose scans add Windows' shells and script hosts, and Hyprland's and Omarchy's launchers and terminals, which it
+#: fetches for a Windows or an Omarchy trial; by their path in the task pack, as two are named guard.py.
+SCANS = ("scoring/bench_v2.py", "windows/guard.py", "hyprland/guard.py")
 _TABLE = re.compile(r"(?ms)^TRYCUA = \{.*?^\}$")
 #: The bench tasks with an app of their own, each in envs/<task>/, and where their folders are in the task pack.
 TASKS = ("cdb-s02", "cdb-s03", "cdb-s04")
@@ -47,12 +47,17 @@ TASK_DIR = "taskpack/tasks/shared"
 SWIFT = ("swift/BenchLab.swift", "swift/BenchLabInterrupts.swift", "swift/BenchLabModes.swift",
          "swift/BenchSentinel.swift", "swift/build.sh")
 #: The bench's apps of trycua's own windows, each in envs/<app>/, and the task pack's files each installs on each OS,
-#: by the list its files.json keeps them in: ``files``, a Linux computer's, else the OS type's.
+#: by the list its files.json keeps them in: ``files``, an X11 Linux computer's, ``omarchy``, an Omarchy computer's, with
+#: trycua's Hyprland port, else the OS type's.
 LABS = {"benchlab": {"files": ("linux/benchlab.py", "probes/_common/benchlab_common.py"), "macos": SWIFT,
-                     "windows": ("windows/benchlab.py", "probes/_common/benchlab_common.py")},
+                     "windows": ("windows/benchlab.py", "probes/_common/benchlab_common.py"),
+                     "omarchy": ("linux/benchlab.py", "probes/_common/benchlab_common.py", "hyprland/hypr.py",
+                                 "hyprland/bench.lua")},
         "bench-sentinel": {"macos": SWIFT,
                            "windows": ("windows/sentinel.py", "windows/winenv.py", "windows/guard.py",
-                                       "scoring/bench_v2.py")}}
+                                       "scoring/bench_v2.py"),
+                           "omarchy": ("hyprland/sentinel.py", "hyprland/hypr.py", "hyprland/guard.py",
+                                       "hyprland/bench.lua", "scoring/bench_v2.py")}}
 MANIFEST = "MANIFEST.sha256"
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
@@ -144,12 +149,12 @@ def apps(lock: Lock, target: Path = TARGET, envs: Path = ENVS, tasks: tuple[str,
 
 
 def grader(lock: Lock, target: Path = TARGET, verifier: Path = GRADER) -> Path:
-    """Write the ``TRYCUA`` of the trajectory's GUI-only verifier: trycua's scan and their Windows guard, each by its
-    URL at the lock's commit and its sha256 as the verified task pack's manifest has it."""
+    """Write the ``TRYCUA`` of the trajectory's GUI-only verifier: trycua's scan and their Windows and Hyprland guards,
+    each by its path in the task pack, with its URL at the lock's commit and its sha256 as the verified task pack's
+    manifest has it."""
     verify(lock, target)
     hashes = {name: sha for sha, name in (line.split("  ", 1) for line in (target / MANIFEST).read_text().splitlines())}
-    table = {"commit": lock.commit, **{PurePosixPath(name).name: {"url": _url(lock, name), "sha256": hashes[name]}
-                                       for name in (SCAN, WINDOWS_SCAN)}}
+    table = {"commit": lock.commit, **{name: {"url": _url(lock, name), "sha256": hashes[name]} for name in SCANS}}
     text = verifier.read_text(encoding="utf-8")
     if not _TABLE.search(text):
         raise SystemExit(f"{verifier} has no TRYCUA = {{...}} to write")

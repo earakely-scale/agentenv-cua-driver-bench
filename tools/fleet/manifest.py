@@ -77,14 +77,17 @@ def installed_drivers() -> Path | None:
 #: What a driver pins of what its agents get, first found first: its MCP server's tool list on another OS than Linux,
 #: on every OS, or the skill its one tool is taught by.
 PINNED = ("mcp-{os}.json", "mcp.json", "skill.md")
+#: The desktop a run's OS names a driver's tool list by, where it isn't the OS: Omarchy's is Hyprland's.
+DESKTOPS = {"omarchy": "hyprland"}
 
 
 def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux") -> dict:
     """The env's computer, driver, display and apps, and the sha256 of what its driver pins of its agents' tools on
-    ``os_type``: cua-driver's ``mcp.json`` on Linux and ``mcp-<os>.json`` on another OS, agent-desktop's and
+    ``os_type``: cua-driver's ``mcp.json`` on Linux and ``mcp-<os>.json`` on another OS (on Omarchy
+    ``mcp-hyprland.json``), agent-desktop's and
     codex-computer-use's ``mcp.json``, macos-harness's ``skill.md``."""
     spec = tomllib.loads((bench / "envs" / env / "env.toml").read_text())
-    names = [name.format(os=os_type) for name in PINNED if os_type != "linux" or "{os}" not in name]
+    names = [name.format(os=DESKTOPS.get(os_type, os_type)) for name in PINNED if os_type != "linux" or "{os}" not in name]
     tools = next((drivers / spec["driver"] / name for name in names if (drivers / spec["driver"] / name).is_file()),
                  None) if drivers else None
     return {"computer": spec.get("computer"), "driver": spec.get("driver"), "display": spec.get("display"),

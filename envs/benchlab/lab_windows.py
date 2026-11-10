@@ -9,12 +9,10 @@ import sys
 import sysconfig
 from pathlib import Path
 
-from app import DATA, BenchLab
+from app import DATA, FRAME, BenchLab
 
 HERE = Path(__file__).resolve().parent
 LAB = Path(sys.base_prefix) / "BenchLab.exe"
-#: trycua's frame for BenchLab on Linux and Windows: x, y, width, height.
-FRAME = (40, 40, 760, 540)
 
 
 def main(settings) -> None:

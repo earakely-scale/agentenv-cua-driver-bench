@@ -1,13 +1,14 @@
 """Inside BenchLab's computer, run as its session user once the task pack is loaded into ``~/bench``: BenchLab shows its
 window in the app's mode, titled ``BenchLab — <mode>`` (on macOS, trycua's app itself, ``BenchLab``), its outer frame at
-the place trycua's macOS BenchLab takes, having written its state and its ``app_start`` for that mode and seed, which
+the place trycua's macOS BenchLab takes (on Omarchy their Hyprland runner's frame for it), having written its state and its ``app_start`` for that mode and seed, which
 its data plane returns; and with ``solve``, it does the task as an agent does, through the computer's driver over its
 MCP endpoint, element by element, with the values trycua's files derive from the seed, the pointer only where the task
 needs one, for the grade to score with their evaluator; and with ``background``, its interruption brought up and
 answered by background actions alone, as an agent would in trycua's background condition, and what the user's window
 went through, reported: under this computer's xfwm4 the modal dialog takes the keyboard and comes to the front, so
 ``user_kept_focus`` and ``user_window_on_top`` are "no" (openbox, trycua's Linux window manager, leaves the keyboard but
-still stacks it on top). ``args``: ``mode``, ``seed``, ``solve`` and ``background``."""
+still stacks it on top); on Hyprland, whose sentinel's samples carry no focus flags, the user's window kept the focus
+when it stayed the front window. ``args``: ``mode``, ``seed``, ``solve`` and ``background``."""
 import base64
 import json
 import re
@@ -24,9 +25,13 @@ DATA = Path.home() / ".benchlab"
 SENTINEL_LOG = Path.home() / ".bench-sentinel" / "sentinel.jsonl"
 LOST = {"didResignKey", "didResignActive"}
 DATA_OBJECTS = "urn:agentenv:data-objects/v1"
-FRAME_AT = (60, 80)
 WAIT_S = 30.0
 MACOS = sys.platform == "darwin"
+#: An Omarchy computer, whose BenchLab app alone installs trycua's Hyprland files.
+HYPRLAND = not MACOS and Path("/opt/agentenv/apps/benchlab/lab/hyprland").is_dir()
+FRAME_AT = (40, 40) if HYPRLAND else (60, 80)
+#: The identity trycua's sentinel on Hyprland gives its own window in its samples.
+SENTINEL_BID = "ai.cua.benchsentinel"
 #: What trycua's macOS BenchLab calls the fields their Linux BenchLab names otherwise, by mode.
 MAC_NAMES = {"irmodal": {"Name": "Full name", "Email": "Work email"}, "irconsent": {"Reject optional": "Reject non-essential"}}
 #: Where trycua's macOS BenchLab draws what its accessibility tree leaves out, or what takes input only as a person
@@ -55,6 +60,7 @@ def run(input):
     bounds = lab["bounds"]
     report = {"title_ok": lab["title"] == title and lab["app_name"] == "BenchLab",
               "placed_ok": 0 <= bounds["x"] - FRAME_AT[0] <= 12 and 0 <= bounds["y"] - FRAME_AT[1] <= 48,
+              "bounds": bounds,
               "state_ok": (state["mode"], state["seed"]) == (args["mode"], args["seed"]),
               "started_ok": events[0]["type"] == "app_start" and events[0]["details"] == {
                   "mode": args["mode"], "seed": args["seed"]},
@@ -65,11 +71,11 @@ def run(input):
         lines = [json.loads(line) for line in SENTINEL_LOG.read_text().splitlines()[mark:] if line.strip()]
         samples = [line for line in lines if line["ev"] == "s"]
         report["user_kept_focus"] = "yes" if samples and not any(line["ev"] in LOST for line in lines) and all(
-            sample["key"] and sample["active"] for sample in samples) else "no"
-        report["user_window_on_top"] = "yes" if samples and not any(s["above_n"] for s in samples) else "no"
-        report["user_samples"] = {"samples": len(samples), "not_key": sum(not s["key"] for s in samples),
-                                  "not_active": sum(not s["active"] for s in samples),
-                                  "under_another": sum(bool(s["above_n"]) for s in samples),
+            _focused(sample) for sample in samples) else "no"
+        report["user_window_on_top"] = "yes" if samples and not any(_raised(s, samples[0]) for s in samples) else "no"
+        report["user_samples"] = {"samples": len(samples), "not_key": sum(not s.get("key", _focused(s)) for s in samples),
+                                  "not_active": sum(not s.get("active", _focused(s)) for s in samples),
+                                  "under_another": sum(bool(_raised(s, samples[0])) for s in samples),
                                   "lost": sorted({line["ev"] for line in lines if line["ev"] in LOST})}
     if args.get("solve"):
         driver.call("bring_to_front", pid=lab["pid"], window_id=lab["window_id"])
@@ -163,11 +169,25 @@ def _answered(driver, lab, title, answer):
 INTERRUPTIONS = {"irmodal": _permission_prompt, "irunsaved": _unsaved_prompt, "irconsent": _consent_prompt}
 
 
+def _raised(sample, first):
+    """What draws over the user's window in ``sample`` that didn't at the first sample, as trycua's summarizer counts
+    a raise: a desktop's own bar or layers, there from the start, aren't one."""
+    return set(sample.get("above") or []) - set(first.get("above") or [])
+
+
+def _focused(sample):
+    """Whether a sample says the user's window was active with the focus: its own flags, or on Hyprland its front
+    window, the sentinel's."""
+    if "key" not in sample:
+        return (sample.get("front") or {}).get("bid") == SENTINEL_BID
+    return bool(sample["key"] and sample["active"])
+
+
 def _rest(driver, window, x, y, done):
-    """The pointer at ``x``, ``y`` of the window, nudged, and left there until ``done``: on macOS the real pointer moved
-    through the driver, which has no xdotool."""
+    """The pointer at ``x``, ``y`` of the window, nudged, and left there until ``done``: on macOS and Hyprland moved
+    through the driver, as neither has xdotool."""
     point = (window["bounds"]["x"] + x, window["bounds"]["y"] + y)
-    if MACOS:
+    if MACOS or HYPRLAND:
         for dx, dy in ((0, 0), (2, 1)):
             driver.call("move_cursor", x=point[0] + dx, y=point[1] + dy, scope="desktop")
     else:

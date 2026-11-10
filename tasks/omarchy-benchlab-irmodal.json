@@ -1,0 +1,5 @@
+[
+  {"id": "env", "type": "deploy_env", "env_id": "desktop-benchlab-omarchy", "env_params": {"app_settings": {"benchlab": {"mode": "irmodal", "seed": 517139, "condition": "foreground"}, "bench-sentinel": {"condition": "foreground"}}}},
+  {"id": "load", "type": "load_artifact", "env_id": "desktop-benchlab-omarchy", "artifact_id": "taskpack", "destination_path": "bench", "depends_on": ["env"]},
+  {"id": "check", "type": "run_code", "env_id": "desktop-benchlab-omarchy", "script_artifact_id": "check_benchlab", "args": {"mode": "irmodal", "seed": 517139}, "depends_on": ["load"]}
+]
