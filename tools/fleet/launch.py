@@ -1,48 +1,53 @@
-"""launch.py N TYPE [--nested]: launch.sh's N worker VMs of instance type TYPE, set up by user-data.sh, through boto3;
-prints their instance ids. Its settings are launch.sh's, from the environment, else tools/fleet/fleet.env, and
-``FLEET_DISK_GB``, the root volume's size (150 GB; a Windows run's four computers want 250). ``--nested``
-turns on nested virtualization, which a Windows run's VMs need for the KVM its computers boot under (on c8i, m8i or
-r8i), and which AWS CLI 2.32 can't ask for."""
+"""launch.py N TYPE [--kvm] [--volume-gb GB]: N worker VMs of instance type TYPE, set up by user-data.sh; prints their
+instance ids. ``--kvm`` turns on nested virtualization, which a Windows or an Omarchy run's computers need, booted as
+disks under KVM (a c8i, say). The AWS CLI 2.32 refuses that setting, so this goes through boto3, which takes it from
+botocore 1.43. Its settings come from the environment, else tools/fleet/fleet.env (see fleet.env.example)."""
 import argparse
-import os
+import re
 
 import boto3
 
 from common import HERE, setting
 
 AMI = "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
-
-
-def tags():
-    """FLEET_NAME and FLEET_TAGS, launch.sh's ``{Key=k,Value=v},...``, as the API takes them."""
-    found = [{"Key": "Name", "Value": setting("FLEET_NAME", "cua-driver-bench-fleet")}]
-    for tag in filter(None, os.environ.get("FLEET_TAGS", "").replace("},{", "}\n{").splitlines()):
-        fields = dict(field.split("=", 1) for field in tag.strip("{}").split(","))
-        found.append({"Key": fields["Key"], "Value": fields["Value"]})
-    return found
+#: The framework the workers install unless FLEET_FRAMEWORK names another: the first the bench's Omarchy row ran on.
+FRAMEWORK = "agentenv-framework==0.9.1500"
+BENCH_REPO = "https://github.com/earakely-scale/agentenv-cua-driver-bench"
+#: FLEET_TAGS' form, the AWS CLI's: {Key=k,Value=v},{Key=k2,Value=v2}.
+TAG = re.compile(r"\{Key=([^,}]+),Value=([^}]*)\}")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("count", type=int)
     parser.add_argument("type")
-    parser.add_argument("--nested", action="store_true")
+    parser.add_argument("--kvm", action="store_true", help="nested virtualization, for Windows and Omarchy computers")
+    parser.add_argument("--volume-gb", type=int, default=150)
     args = parser.parse_args()
-    data = ((HERE / "user-data.sh").read_text()
-            .replace("@FRAMEWORK@", setting("FLEET_FRAMEWORK", "agentenv-framework==0.9.1412"))
-            .replace("@BENCH_REPO@", setting("FLEET_BENCH_REPO", "https://github.com/earakely-scale/agentenv-cua-driver-bench"))
-            .replace("@MAX_MINUTES@", str(int(setting("FLEET_MAX_HOURS", "12")) * 60)))
     session = boto3.Session(region_name=setting("FLEET_REGION"))
     ami = session.client("ssm").get_parameter(Name=AMI)["Parameter"]["Value"]
-    started = session.client("ec2").run_instances(
-        ImageId=ami, InstanceType=args.type, MinCount=args.count, MaxCount=args.count,
-        SubnetId=setting("FLEET_SUBNET"), SecurityGroupIds=setting("FLEET_SECURITY_GROUPS").split(),
-        IamInstanceProfile={"Name": setting("FLEET_INSTANCE_PROFILE")}, InstanceInitiatedShutdownBehavior="terminate",
-        UserData=data, BlockDeviceMappings=[{"DeviceName": "/dev/sda1",
-                              "Ebs": {"VolumeSize": int(setting("FLEET_DISK_GB", "150")), "VolumeType": "gp3"}}],
-        TagSpecifications=[{"ResourceType": "instance", "Tags": tags()}],
-        **({"CpuOptions": {"NestedVirtualization": "enabled"}} if args.nested else {}))
-    print(" ".join(instance["InstanceId"] for instance in started["Instances"]))
+    reply = session.client("ec2").run_instances(**request(args.count, args.type, ami, args.kvm, args.volume_gb))
+    print(" ".join(instance["InstanceId"] for instance in reply["Instances"]))
+
+
+def request(count, instance_type, ami, kvm=False, volume_gb=150):
+    """run_instances' arguments for ``count`` workers of ``instance_type`` from ``ami``: set up by user-data.sh with
+    the framework, the bench and the hours before each shuts itself down, and so terminates; with ``kvm``, nested
+    virtualization."""
+    data = (HERE / "user-data.sh").read_text()
+    for key, value in (("@FRAMEWORK@", setting("FLEET_FRAMEWORK", FRAMEWORK)),
+                       ("@BENCH_REPO@", setting("FLEET_BENCH_REPO", BENCH_REPO)),
+                       ("@MAX_MINUTES@", str(int(setting("FLEET_MAX_HOURS", "12")) * 60))):
+        data = data.replace(key, value)
+    tags = [{"Key": "Name", "Value": setting("FLEET_NAME", "cua-driver-bench-fleet")}]
+    tags += [{"Key": key, "Value": value} for key, value in TAG.findall(setting("FLEET_TAGS", ""))]
+    return {"ImageId": ami, "InstanceType": instance_type, "MinCount": count, "MaxCount": count,
+            "SubnetId": setting("FLEET_SUBNET"), "SecurityGroupIds": setting("FLEET_SECURITY_GROUPS").split(),
+            "IamInstanceProfile": {"Name": setting("FLEET_INSTANCE_PROFILE")},
+            "InstanceInitiatedShutdownBehavior": "terminate",
+            "BlockDeviceMappings": [{"DeviceName": "/dev/sda1", "Ebs": {"VolumeSize": volume_gb, "VolumeType": "gp3"}}],
+            "UserData": data, "TagSpecifications": [{"ResourceType": "instance", "Tags": tags}],
+            **({"CpuOptions": {"NestedVirtualization": "enabled"}} if kvm else {})}
 
 
 if __name__ == "__main__":

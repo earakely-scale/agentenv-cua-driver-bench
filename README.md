@@ -127,7 +127,7 @@ workspace they hold stops the app, copies the workspace and starts the app again
 You need:
 
 - a Linux amd64 machine with KVM (`/dev/kvm`) that the user who runs agent-env can read and write (the `kvm`
-  group); on EC2 a c8i, m8i or r8i with nested virtualization on (`tools/fleet/launch.py --nested`);
+  group); on EC2 a c8i, m8i or r8i with nested virtualization on (`tools/fleet/launch.py --kvm`);
 - Docker, with a registry on `localhost:5000`;
 - a model endpoint.
 
@@ -158,7 +158,7 @@ at sign-in would take the agent's typing.
 
 **Codex Computer Use on Windows.** `tasks/windows-codex-computer-use-*.json` run the foreground trials on
 `envs/desktop-*-windows-codex-computer-use/`, the same computers with OpenAI's Codex Computer Use as the driver: the
-ChatGPT app's plugin, unpacked from its MSIX and never run, the agent writing JavaScript against its `cua` API through
+Codex app's plugin, unpacked from its MSIX and never run, the agent writing JavaScript against its `cua` API through
 `js` and `js_reset` with the `computer_*` tools hidden. OpenAI runs it on Windows only on the active desktop, so the arm
 has no background trials. `evals/windows-codex-computer-use-bench-v2-trials.txt` lists the 50, and
 `tasks/codex-windows-codex-computer-use-*.json` are their Codex CLI twins, for GPT. They need agentenv-framework 0.9.1500
@@ -171,6 +171,9 @@ or later. What differs from macOS:
 - Codex names an app's approval by the program it runs from, which is Python for BenchLab and the sentinel alike, so
   `allowed_apps` names each task's apps as Codex shows them.
 - The Windows guard counts a shell that `codex-computer-use.exe` starts as that tool's, as it does `cua-driver.exe`'s.
+- Before it acts on a browser window, Codex Computer Use asks OpenAI whether the page's site is allowed, which takes a
+  ChatGPT sign-in. With none, it stops the turn on the first browser window, so G04, which reads a page in Chromium,
+  can't pass. The arm runs Codex as it ships, unsigned.
 
 **GPT on Windows.** `tasks/codex-windows-*.json` are the Windows trials' Codex CLI twins, as `tasks/codex-*.json` are
 Linux's: the agent `codex`, with its own tools off and at medium effort, on the same computers through cua-driver.
@@ -388,8 +391,7 @@ The Hugging Face token is huggingface_hub's login (`hf auth login`).
 
 ```bash
 python tools/fleet/plan.py evals/bench-v2-trials.txt plan 10   # 90 trials, 9 workers, each on one computer
-tools/fleet/launch.sh 10 c6i.2xlarge > instances.txt           # the workers set themselves up in a few minutes
-FLEET_DISK_GB=250 python tools/fleet/launch.py 2 c8i.4xlarge --nested   # a Windows run's: nested KVM
+python tools/fleet/launch.py 10 c6i.2xlarge > instances.txt    # the workers set themselves up in a few minutes
 tar czf taskpack.tgz -C artifacts taskpack                     # the task pack, fetched once here
 export FLEET_MODEL_KEY=...
 python tools/fleet/start.py <instance> haiku-5-5-2026-11-02 anthropic/claude-haiku-5-5 plan/worker-01.txt \
@@ -397,6 +399,10 @@ python tools/fleet/start.py <instance> haiku-5-5-2026-11-02 anthropic/claude-hai
 python tools/fleet/watch.py instances.txt                      # each worker's trials, until they're done
 ```
 
+- A Windows or Omarchy run's computers boot as disks under KVM, so its workers need nested virtualization and room for
+  the disks: `python tools/fleet/launch.py 2 c8i.4xlarge --kvm --volume-gb 300`, then `start.py --os windows` or
+  `--os omarchy`. `launch.py` goes through boto3, as the AWS CLI 2.32 refuses the setting. The workers keep Docker's
+  own image store, since containerd's breaks those boots.
 - `start.py` hands the worker its trials and, encrypted to a key the VM makes for the job, the model key and the
   Hugging Face token. The worker decrypts them into its own environment and deletes them.
 - `--taskpack` ships the task pack you fetched. Ten VMs behind one address run out of GitHub's API calls fetching it

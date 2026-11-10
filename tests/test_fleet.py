@@ -477,3 +477,44 @@ def test_an_idle_host_moves_to_its_framework_pin_before_its_next_worker(board, t
     assert any("git checkout -q -f e1afb200" in script for _, script in board.common.scripts)
     assert host.framework == pinned and len(calls) == 1
     assert "b4 pinned to e1afb200aaaa" in (tmp_path / "b.log").read_text()
+
+
+@pytest.fixture
+def launch(monkeypatch):
+    """launch.py with stand-ins for boto3 and common, whose settings come from ``launch.settings``."""
+    settings = {"FLEET_SUBNET": "subnet-1", "FLEET_SECURITY_GROUPS": "sg-1 sg-2", "FLEET_INSTANCE_PROFILE": "ssm-role",
+                "FLEET_TAGS": "{Key=owner,Value=me},{Key=purpose,Value=bench}"}
+    common = types.ModuleType("common")
+    common.HERE = ROOT / "tools" / "fleet"
+
+    def setting(name, default=None):
+        value = settings.get(name, default)
+        if value is None:
+            raise SystemExit(f"{name} isn't set")
+        return value
+
+    common.setting = setting
+    monkeypatch.setitem(sys.modules, "common", common)
+    monkeypatch.setitem(sys.modules, "boto3", types.ModuleType("boto3"))
+    loaded = _module(ROOT / "tools" / "fleet" / "launch.py")
+    loaded.settings = settings
+    return loaded
+
+
+@pytest.mark.parametrize("kvm", [False, True], ids=["a Linux run", "a Windows or Omarchy run"])
+def test_launch_sets_workers_up_with_the_bench_and_nested_virtualization_only_for_kvm(launch, kvm):
+    request = launch.request(2, "c8i.4xlarge", "ami-1", kvm=kvm, volume_gb=300)
+
+    assert (request["MinCount"], request["MaxCount"], request["InstanceType"], request["ImageId"]) == (
+        2, 2, "c8i.4xlarge", "ami-1")
+    assert request["SecurityGroupIds"] == ["sg-1", "sg-2"] and request["InstanceInitiatedShutdownBehavior"] == "terminate"
+    assert request["BlockDeviceMappings"][0]["Ebs"]["VolumeSize"] == 300
+    assert request["TagSpecifications"][0]["Tags"] == [{"Key": "Name", "Value": "cua-driver-bench-fleet"},
+                                                       {"Key": "owner", "Value": "me"},
+                                                       {"Key": "purpose", "Value": "bench"}]
+    assert ("CpuOptions" in request) is kvm and request.get("CpuOptions", {}).get("NestedVirtualization") in (
+        None, "enabled")
+    data = request["UserData"]
+    assert "@" not in "".join(line for line in data.splitlines() if not line.startswith("#"))
+    assert f"'{launch.FRAMEWORK}'" in data and "shutdown -h +720" in data and launch.BENCH_REPO in data
+    assert '"containerd-snapshotter":false' in data and "usermod -aG docker,kvm ubuntu" in data
