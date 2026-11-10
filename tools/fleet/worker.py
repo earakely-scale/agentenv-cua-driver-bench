@@ -13,6 +13,7 @@ Progress goes to ~/fleet/progress.jsonl, which a restart resumes from. A file ~/
 next trial, the one running left to finish."""
 import json
 import os
+import random
 import re
 import sqlite3
 import subprocess
@@ -146,7 +147,7 @@ def _upload_manifest(api, run, done=()):
     built = manifest.build(BENCH, run, OS, os.environ.get("RUN_MODEL"), (FLEET / "run-specs.txt").read_text().split(),
                            {"setup_steps": list(SETUP_STEPS), "reruns": LIMITS}, manifest.installed_drivers(),
                            state=DB.parents[2], harness={**_harness(), "versions": versions}, settings=_settings())
-    built = _merged(built, _uploaded(run))
+    built = _merged(built, _retried(lambda: _uploaded(run)))
     (OUT / "manifest.json").write_text(json.dumps(built, indent=1))
     _retried(lambda: api.upload_file(path_or_fileobj=str(OUT / "manifest.json"),
                                      path_in_repo=f"runs/{OS}/{run}/manifest.json", repo_id=REPO, repo_type="dataset",
@@ -154,15 +155,16 @@ def _upload_manifest(api, run, done=()):
 
 
 def _retried(call, attempts=12):
-    """``call``'s result, tried again with a growing wait, up to five minutes, while it fails: a dataset takes at most
-    320 commits an hour, which a fleet's workers can reach together."""
+    """``call``'s result, tried again with a growing wait, up to five minutes and spread so a fleet's workers don't
+    retry together, while it fails: a dataset takes at most 320 commits an hour, and the Hub limits its reads, which a
+    fleet's workers can reach together."""
     for attempt in range(attempts):
         try:
             return call()
         except Exception:
             if attempt == attempts - 1:
                 raise
-            time.sleep(min(300, 30 * (attempt + 1)))
+            time.sleep(min(300, 30 * (attempt + 1)) * random.uniform(0.5, 1.5))
 
 
 def _harness():

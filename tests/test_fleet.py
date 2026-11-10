@@ -230,8 +230,9 @@ def test_a_workers_manifest_pins_the_whole_run_and_keeps_what_other_workers_uplo
 
 
 def test_an_upload_the_hub_refuses_is_tried_again_after_a_growing_wait_and_gives_up_in_the_end(worker, monkeypatch):
-    waits, calls = [], []
+    waits, calls, spreads = [], [], []
     monkeypatch.setattr(worker.time, "sleep", waits.append)
+    monkeypatch.setattr(worker.random, "uniform", lambda low, high: spreads.append((low, high)) or 1.0)
 
     def refused_twice():
         calls.append(1)
@@ -242,7 +243,22 @@ def test_an_upload_the_hub_refuses_is_tried_again_after_a_growing_wait_and_gives
     assert worker._retried(refused_twice) == "committed" and waits == [30, 60]
     with pytest.raises(RuntimeError):
         worker._retried(lambda: (_ for _ in ()).throw(RuntimeError("429")), attempts=3)
-    assert waits[2:] == [30, 60]
+    assert waits[2:] == [30, 60] and set(spreads) == {(0.5, 1.5)}
+
+
+def test_a_workers_read_of_its_runs_manifest_is_tried_again_when_the_hub_refuses_it(worker, monkeypatch):
+    calls = []
+    monkeypatch.setattr(worker.time, "sleep", lambda s: None)
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
+
+    def refused_once(*args, **kwargs):
+        calls.append(1)
+        if len(calls) < 2:
+            raise ValueError("Force download failed due to the above error.")
+        raise worker.EntryNotFoundError("no manifest yet")
+    monkeypatch.setattr(worker, "hf_hub_download", refused_once)
+
+    assert worker._retried(lambda: worker._uploaded("r")) is None and len(calls) == 2
 
 
 def test_a_trial_whose_re_runs_are_spent_is_missing_and_its_record_reaches_the_dataset(worker, tmp_path, monkeypatch):
