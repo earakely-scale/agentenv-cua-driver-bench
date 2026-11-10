@@ -173,8 +173,11 @@ trycua's `hyprland/guard.py`. Once it's armed:
 
 - a terminal started since then is a violation and is ended, unless cua-driver's own program started it, which makes it
   that tool's helper, as their Windows guard has it;
-- a terminal's window, or one of Omarchy's launchers in front, is a violation after three samples in a row. The launchers
-  are its shell's menu (Super+Space) and its Apps panel.
+- a terminal's window in front is a violation after three samples in a row;
+- one of Omarchy's launchers in front, its shell's menu (Super+Space) or its Apps panel, is logged as a transient, never
+  a violation. They run only their own rows, apps and Omarchy's actions, never a typed command, and a row that opens a
+  shell opens a terminal's window, which fails. trycua's Hyprland guard has no rule for them at all. A launcher still
+  takes the user's keyboard and draws over their window, which A22 counts in the background.
 
 The trajectory's GUI-only check scans an Omarchy trial with their Hyprland guard's patterns too. The sentinel and the
 launches talk to Hyprland through their `hypr.py`, made to wait out a busy Hyprland (`hyprland_ipc.py`). At boot,
