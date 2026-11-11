@@ -7,6 +7,7 @@ import hashlib
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -32,6 +33,9 @@ def _load(path):
 
 _load(HERE / "fleet.env")
 SSM = boto3.Session(region_name=os.environ.get("FLEET_REGION") or None).client("ssm")
+#: Each other region's SSM client, made on first use, for the instances FLEET_REGIONS places there.
+_CLIENTS: dict[str, object] = {}
+_CLIENTS_LOCK = threading.Lock()
 
 
 def setting(name, default=None):
@@ -41,8 +45,21 @@ def setting(name, default=None):
     return value
 
 
+def client(instance):
+    """The SSM client of ``instance``'s region: the one FLEET_REGIONS (``instance=region,...``) names for it, else
+    FLEET_REGION's, so one board reaches Macs in several regions."""
+    regions = dict(pair.split("=", 1) for pair in os.environ.get("FLEET_REGIONS", "").split(",") if "=" in pair)
+    if (region := regions.get(instance)) is None:
+        return SSM
+    with _CLIENTS_LOCK:
+        if region not in _CLIENTS:
+            _CLIENTS[region] = boto3.Session(region_name=region).client("ssm")
+        return _CLIENTS[region]
+
+
 def ssm(instance, script, timeout=300, os_type="linux"):
     """``script`` run on ``instance`` as its worker user; its output, or exit with its error."""
+    SSM = client(instance)
     command = SSM.send_command(
         InstanceIds=[instance], DocumentName="AWS-RunShellScript", TimeoutSeconds=60,
         Parameters={"commands": [f"sudo -iu {HOSTS[os_type][0]} bash <<'__FLEET__'\n{script}\n__FLEET__"],

@@ -409,6 +409,28 @@ def test_a_board_starts_its_hosts_workers_at_once_rather_than_one_host_after_ano
     assert {record["host"] for record in runner.state.values()} == {"b1", "b2"}
 
 
+def test_a_host_fleet_regions_places_elsewhere_is_reached_through_its_regions_client(monkeypatch):
+    made = []
+
+    class Session:
+        def __init__(self, region_name=None):
+            self.region = region_name
+
+        def client(self, name):
+            made.append(self.region)
+            return types.SimpleNamespace(region=self.region)
+
+    monkeypatch.setitem(sys.modules, "boto3", types.SimpleNamespace(Session=Session))
+    monkeypatch.setenv("FLEET_REGION", "ca-central-1")
+    monkeypatch.setenv("FLEET_REGIONS", "i-eu=eu-central-1,i-ap=ap-southeast-2")
+    common = _module(ROOT / "tools" / "fleet" / "common.py")
+
+    regions = [common.client(i).region for i in ("i-home", "i-eu", "i-ap", "i-eu")]
+
+    assert regions == ["ca-central-1", "eu-central-1", "ap-southeast-2", "eu-central-1"]
+    assert made == ["ca-central-1", "eu-central-1", "ap-southeast-2"]
+
+
 def _peek(running, digest="", ended=0, framework=None, failed=0):
     return (f"running={int(running)}\ndigest={digest}\nended={ended}\nfailed={failed}\n"
             + (f"framework={framework}\n" if framework else "") + "log=last line\n")

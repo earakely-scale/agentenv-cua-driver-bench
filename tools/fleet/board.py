@@ -78,6 +78,8 @@ def main():
     board = tomllib.loads(args.board.read_text())
     if any(h.get("framework") for h in board["host"]) and not {"framework_checkout", "venv"} <= board.keys():
         raise SystemExit("a host pins a framework, so the board names its checkout and venv (framework_checkout, venv)")
+    regions = [f"{h['instance']}={h['region']}" for h in board["host"] if h.get("region")]
+    os.environ["FLEET_REGIONS"] = ",".join(filter(None, [os.environ.get("FLEET_REGIONS", ""), *regions]))
     workers, run_specs = planned(board)
     hosts = assign(workers, [Host(h["name"], h["instance"], h.get("framework"), h.get("state"))
                              for h in board["host"]])
