@@ -10,7 +10,9 @@ on a fresh deploy. Past that the trial is missing: its record goes to the datase
 with a missing trial is incomplete. A graded trial's folder carries attempts.json, the harness errors it was re-run
 for. Everything else (timeout, max turns, a wrong end state, a GUI-only violation) is a failed trial and counts.
 Progress goes to ~/fleet/progress.jsonl, which a restart resumes from. A file ~/fleet/stop stops the worker before its
-next trial, the one running left to finish."""
+next trial, the one running left to finish. With a file ~/fleet/defer-upload, each trial is exported and held, and the
+worker uploads them all in one commit once its trials end or it stops, with the run's manifest after them, so a fleet
+makes a commit or two a worker rather than one a trial: the Hub limits how many commits an account makes an hour."""
 import json
 import os
 import random
@@ -44,6 +46,8 @@ SERVER = ("overloaded", "api error: 5", "internal server error", "service unavai
           "stream disconnected", "error sending request", "stalled")
 LIMITS = {"rate": 6, "server": 3, "setup": 2}
 TRIAL_S, STOP_S = 3600, 120
+#: The file that has a worker hold its trials and upload them together at its end.
+DEFER = FLEET / "defer-upload"
 
 
 def main():
@@ -53,15 +57,53 @@ def main():
     done = {json.loads(line)["name"] for line in _progress().read_text().splitlines() if line.strip()} \
         if _progress().exists() else set()
     lines = specs.read_text().split()
-    _upload_manifest(api, run)
+    if not DEFER.exists():
+        _upload_manifest(api, run)
+    names = [line.split("|")[1] for line in lines]
     for line in lines:
         stem, name, index, *finished = line.split("|")
         if name in done:
             continue
         if (FLEET / "stop").exists():
+            if DEFER.exists():
+                _upload_held(api, run, names)
             return
         _trial(api, run, stem, name, int(index), finished[0] if finished else None)
-    _upload_manifest(api, run, [line.split("|")[1] for line in lines])
+    if DEFER.exists():
+        _upload_held(api, run, names)
+    _upload_manifest(api, run, names)
+
+
+def _upload_held(api, run, names):
+    """The trials of ``names`` this worker exported or found missing and held back, uploaded in one commit, each
+    replacing its folder; their records then say they were uploaded."""
+    last = {}
+    for line in _progress().read_text().splitlines():
+        if line.strip():
+            record = json.loads(line)
+            last[record["name"]] = record
+    held = [n for n in names if (last.get(n) or {}).get("held") and (OUT / n).is_dir()]
+    if not held:
+        return
+    patterns = [f"{n}/*" for n in held]
+    try:
+        _retried(lambda: api.upload_folder(repo_id=REPO, repo_type="dataset", folder_path=str(OUT),
+                                           path_in_repo=f"runs/{OS}/{run}", allow_patterns=patterns,
+                                           delete_patterns=patterns, commit_message=f"{run}: {len(held)} trials"))
+    except Exception as error:
+        failed = str(error)[:500]
+    else:
+        failed = None
+    with open(_progress(), "a") as progress:
+        for n in held:
+            record = {k: v for k, v in last[n].items() if k != "held"}
+            if failed and record["status"] != "exported":
+                continue
+            if failed:
+                record.update(status="upload_failed", error=failed)
+            elif record["status"] == "exported":
+                record["status"] = "uploaded"
+            progress.write(json.dumps({**record, "at": datetime.now(timezone.utc).isoformat()}) + "\n")
 
 
 def _trial(api, run, stem, name, index, finished):
@@ -91,6 +133,8 @@ def _trial(api, run, stem, name, index, finished):
     if summary["leaked"]:
         return _record(name, stem, index, instance, "withheld", leaked=summary["leaked"], tries=tries)
     (OUT / name / "attempts.json").write_text(json.dumps({"harness_errors": tries}))
+    if DEFER.exists():
+        return _record(name, stem, index, instance, "exported", summary=summary, tries=tries, held=True)
     if error := _upload(api, run, name):
         return _record(name, stem, index, instance, "upload_failed", error=error, tries=tries)
     _record(name, stem, index, instance, "uploaded", summary=summary, tries=tries)
@@ -122,6 +166,8 @@ def _missing(api, run, name, stem, index, instance, kind, tries, code):
     record = {"name": name, "task_file": stem, "run_index": index, "os": OS, "status": "missing", "kind": kind,
               "harness_errors": tries, "instance": instance and instance["instance_id"], "exit": code}
     (folder / "missing.json").write_text(json.dumps(record, indent=1))
+    if DEFER.exists():
+        return _record(name, stem, index, instance, "missing", kind=kind, tries=tries, exit=code, held=True)
     error = _upload(api, run, name)
     _record(name, stem, index, instance, "missing", kind=kind, tries=tries, exit=code, upload_error=error)
 

@@ -246,6 +246,62 @@ def test_an_upload_the_hub_refuses_is_tried_again_after_a_growing_wait_and_gives
     assert waits[2:] == [30, 60] and set(spreads) == {(0.5, 1.5)}
 
 
+def _held(worker, tmp_path, monkeypatch):
+    monkeypatch.setattr(worker, "FLEET", tmp_path)
+    monkeypatch.setattr(worker, "OUT", tmp_path / "out")
+    monkeypatch.setattr(worker, "OS", "macos")
+    monkeypatch.setattr(worker, "_retried", lambda call, attempts=12: call())
+    lines = [{"name": "ir-01-r1-foreground", "stem": "macos-ir-01-r1-foreground", "run_index": 1, "status": "exported",
+              "instance": "@local/x/ir-01", "held": True, "tries": {"rate": 0}},
+             {"name": "ir-02-r1-foreground", "stem": "macos-ir-02-r1-foreground", "run_index": 1, "status": "missing",
+              "instance": None, "held": True, "kind": "setup"},
+             {"name": "ir-03-r1-foreground", "stem": "macos-ir-03-r1-foreground", "run_index": 1, "status": "uploaded",
+              "instance": "@local/x/ir-03"}]
+    (tmp_path / "progress.jsonl").write_text("".join(json.dumps(line) + "\n" for line in lines))
+    for line in lines:
+        (tmp_path / "out" / line["name"]).mkdir(parents=True)
+    return [line["name"] for line in lines]
+
+
+def _last(tmp_path):
+    last = {}
+    for line in (tmp_path / "progress.jsonl").read_text().splitlines():
+        record = json.loads(line)
+        last[record["name"]] = record
+    return last
+
+
+def test_a_deferred_worker_uploads_the_trials_it_held_in_one_commit_and_records_them_uploaded(worker, tmp_path,
+                                                                                               monkeypatch):
+    names = _held(worker, tmp_path, monkeypatch)
+    commits = []
+    api = types.SimpleNamespace(upload_folder=lambda **kw: commits.append(kw))
+    worker._upload_held(api, "run-1", names)
+    assert len(commits) == 1
+    assert commits[0]["allow_patterns"] == commits[0]["delete_patterns"] == ["ir-01-r1-foreground/*",
+                                                                             "ir-02-r1-foreground/*"]
+    assert commits[0]["path_in_repo"] == "runs/macos/run-1" and commits[0]["commit_message"] == "run-1: 2 trials"
+    last = _last(tmp_path)
+    assert last["ir-01-r1-foreground"]["status"] == "uploaded" and "held" not in last["ir-01-r1-foreground"]
+    assert last["ir-02-r1-foreground"]["status"] == "missing" and "held" not in last["ir-02-r1-foreground"]
+    worker._upload_held(api, "run-1", names)
+    assert len(commits) == 1
+
+
+def test_a_deferred_upload_the_hub_refuses_leaves_its_trials_for_the_board_to_export_again(worker, tmp_path,
+                                                                                           monkeypatch):
+    names = _held(worker, tmp_path, monkeypatch)
+
+    def refused(**kw):
+        raise RuntimeError("429 Too Many Requests")
+
+    worker._upload_held(types.SimpleNamespace(upload_folder=refused), "run-1", names)
+    failed = _last(tmp_path)["ir-01-r1-foreground"]
+    assert failed["status"] == "upload_failed" and failed["instance"] == "@local/x/ir-01"
+    assert failed["stem"] == "macos-ir-01-r1-foreground" and "429" in failed["error"]
+    assert _last(tmp_path)["ir-02-r1-foreground"]["held"]
+
+
 def test_a_workers_read_of_its_runs_manifest_is_tried_again_when_the_hub_refuses_it(worker, monkeypatch):
     calls = []
     monkeypatch.setattr(worker.time, "sleep", lambda s: None)
@@ -604,3 +660,23 @@ def test_launch_sets_workers_up_with_the_bench_and_nested_virtualization_only_fo
     assert "@" not in "".join(line for line in data.splitlines() if not line.startswith("#"))
     assert f"'{launch.FRAMEWORK}'" in data and "shutdown -h +720" in data and launch.BENCH_REPO in data
     assert '"containerd-snapshotter":false' in data and "usermod -aG docker,kvm ubuntu" in data
+
+
+def test_a_manifest_reads_each_drivers_upstream_version_from_its_pins_on_each_os(manifest):
+    files = {
+        "cua-driver": {"requirements.txt": "agentenv-framework-protocol[computer]>=0.1\ncua-driver==0.38.0\n",
+                       "env.toml": '[install.macos]\ndownloads = [{ url = "https://github.com/trycua/cua/releases/download/'
+                                   'cua-driver-rs-v0.47.10/cua-driver-rs-0.47.10-darwin-arm64.tar.gz" }]\n'
+                                   '[install."linux/omarchy"]\ndownloads = [{ url = "https://github.com/trycua/cua/releases/'
+                                   'download/cua-driver-rs-v0.47.4/cua-driver-rs-0.47.4-linux-x86_64-binary.tar.gz" }]\n'},
+        "aside": {"driver.py": 'VERSION = "1.26.1111.1046"\nCLI_VERSION = "1.26.1111.1046"\n'},
+        "codex-computer-use": {"driver.py": 'OSES = {\n    "macos": _OS(\n        "MacOSDriver", "26.930.51102", HERE),\n'
+                                            '    "windows": _OS(\n        "WindowsDriver", "26.1103.7773.0", HERE),\n}\n'},
+        "agent-desktop": {"env.toml": '[install.macos]\ndownloads = [{ url = "https://github.com/vercel-labs/agent-desktop/'
+                                      'releases/download/v1.2.0/agent-desktop-v1.2.0-aarch64-apple-darwin.tar.gz" }]\n'},
+    }
+    version = lambda driver, os: manifest.driver_version(driver, os, files[driver].get)
+    assert [version("cua-driver", os) for os in ("linux", "macos", "omarchy", "windows")] == ["0.38.0", "0.47.10", "0.47.4", None]
+    assert version("aside", "macos") == "1.26.1111.1046"
+    assert [version("codex-computer-use", os) for os in ("macos", "windows")] == ["26.930.51102", "26.1103.7773.0"]
+    assert version("agent-desktop", "macos") == "1.2.0"

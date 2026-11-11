@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 from importlib import metadata, util
 from pathlib import Path
 
+from typing import Callable, Optional
+
+
 CONDITION = re.compile(r"-(foreground|background)$")
 #: The oldest agentenv-framework whose verifiers are handed the graded prompt's trajectory, which gui_only reads.
 FRAMEWORK_FLOOR = (0, 9, 1412)
@@ -81,6 +84,48 @@ PINNED = ("mcp-{os}.json", "mcp.json", "skill.md")
 DESKTOPS = {"omarchy": "hyprland"}
 
 
+#: The version of the upstream driver an AgentEnv computer driver runs on an OS, as the framework pins it in the
+#: driver's folder: cua-driver's `cua-driver==` requirement on Linux's X11 desktop and its release tarball or zip on
+#: macOS, Windows and Omarchy, and the `VERSION` the other drivers' `driver.py` declares (codex-computer-use's per OS).
+#: cua-driver's install table in env.toml, by the OS a run's folder names.
+CUA_INSTALL = {"macos": "macos", "windows": "windows", "omarchy": "linux/omarchy"}
+RELEASE = re.compile(r"cua-driver-rs-v(\d+(?:\.\d+)+)/")
+CUA_PINNED = re.compile(r"^cua-driver==(\d+(?:\.\d+)+)\s*$", re.M)
+DRIVER_VERSION = re.compile(r'^VERSION\s*=\s*"([^"]+)"', re.M)
+#: A release's version in its download's URL, as `/download/v1.2.0/` or `-26.930.51102.zip`, for a driver whose
+#: driver.py declared none.
+DOWNLOAD = re.compile(r"/download/v(\d+(?:\.\d+)+)/|-(\d+(?:\.\d+){2,})\.(?:zip|tar\.gz|tgz|dmg|msix)$")
+#: codex-computer-use's app on each OS, declared in its driver.py as `"<os>": _OS("<Driver>", "<version>", ...)`.
+CODEX_APP = re.compile(r'"(macos|windows)":\s*_OS\(\s*"[^"]*",\s*"([^"]+)"')
+
+
+def driver_version(driver: str, os: str, read: Callable[[str], Optional[str]]) -> Optional[str]:
+    """``driver``'s upstream version on ``os`` (a run's folder: linux, macos, windows or omarchy), from its folder's
+    files as ``read`` returns them by name, None for a file that isn't there; None when nothing pins one."""
+    if driver == "cua-driver":
+        if os in CUA_INSTALL and (env := read("env.toml")):
+            table = tomllib.loads(env).get("install", {})
+            for download in (table.get(CUA_INSTALL[os]) or {}).get("downloads", []):
+                if found := RELEASE.search(download.get("url", "")):
+                    return found[1]
+        names = {"linux": ("requirements.txt",), "omarchy": ("requirements-omarchy.txt", "requirements.txt"),
+                 "macos": ("requirements-macos.txt",), "windows": ("requirements-windows.txt",)}.get(os, ())
+        for name in names:
+            if (text := read(name)) and (found := CUA_PINNED.search(text)):
+                return found[1]
+        return None
+    text = read("driver.py") or ""
+    if driver == "codex-computer-use" and (app := dict(CODEX_APP.findall(text)).get(os)):
+        return app
+    if found := DRIVER_VERSION.search(text):
+        return found[1]
+    if env := read("env.toml"):
+        for download in (tomllib.loads(env).get("install", {}).get(os) or {}).get("downloads", []):
+            if found := DOWNLOAD.search(download.get("url", "")):
+                return found[1] or found[2]
+    return None
+
+
 def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux") -> dict:
     """The env's computer, driver, display and apps, and the sha256 of what its driver pins of its agents' tools on
     ``os_type``: cua-driver's ``mcp.json`` on Linux and ``mcp-<os>.json`` on another OS (on Omarchy
@@ -90,8 +135,11 @@ def _computer(bench: Path, env: str, drivers: Path | None, os_type: str = "linux
     names = [name.format(os=DESKTOPS.get(os_type, os_type)) for name in PINNED if os_type != "linux" or "{os}" not in name]
     tools = next((drivers / spec["driver"] / name for name in names if (drivers / spec["driver"] / name).is_file()),
                  None) if drivers else None
-    return {"computer": spec.get("computer"), "driver": spec.get("driver"), "display": spec.get("display"),
-            "apps": spec.get("apps", []), "tool_list": tools.name if tools else None,
+    folder = drivers / spec["driver"] if drivers and spec.get("driver") else None
+    version = driver_version(spec["driver"], os_type, lambda name: (folder / name).read_text()
+                                      if (folder / name).is_file() else None) if folder else None
+    return {"computer": spec.get("computer"), "driver": spec.get("driver"), "driver_version": version,
+            "display": spec.get("display"), "apps": spec.get("apps", []), "tool_list": tools.name if tools else None,
             "tool_list_sha256": hashlib.sha256(tools.read_bytes()).hexdigest() if tools else None}
 
 
