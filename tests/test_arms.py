@@ -190,7 +190,7 @@ def test_cua_drivers_trial_on_its_own_tools_is_its_twin_with_the_computer_tools_
 
 
 #: The macOS arms OpenAI's Codex CLI also runs, GPT through each driver as it ships, and the Windows one.
-CODEX_ARMS = ("codex-computer-use", "cua-driver")
+CODEX_ARMS = ("codex-computer-use", "cua-driver", "aside")
 CODEX_STEMS = [stem for arm in CODEX_ARMS
                for stem in dict.fromkeys((ROOT / "evals" / f"macos-{arm}-bench-v2-trials.txt").read_text().split())] + list(
     dict.fromkeys((ROOT / "evals" / "windows-codex-computer-use-bench-v2-trials.txt").read_text().split()))

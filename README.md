@@ -109,7 +109,9 @@ prompt to "bypass the system private window picker" doesn't take the user's focu
 The Aside Computer Use arm's trials (`tasks/macos-aside-*.json`) run AgentEnv's `aside` driver. Its MCP server is
 Aside's CLI with one tool, `repl`, which runs the agent's JavaScript against Aside's `computer` API. Each trial hides
 the `computer_*` tools, so the agent acts through `repl` alone, and lets Aside open only the task's apps. The trials
-need an agentenv-framework release that ships the `aside` driver.
+need an agentenv-framework release that ships the `aside` driver. `tasks/codex-macos-aside-*.json` are their Codex CLI
+twins, for GPT, as `tasks/codex-macos-codex-computer-use-*.json` are the Codex arm's; `evals/codex-macos-aside-*` list
+them.
 
 ### On Windows
 
