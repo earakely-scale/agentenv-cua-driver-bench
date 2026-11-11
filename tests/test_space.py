@@ -2,8 +2,10 @@
 none; a missing trial's from its task file; the board, the replay keys and the trial order per driver; each OS and
 model that several drivers ran compared over the tasks all of them ran in both conditions; the card's tables with
 their drivers; the results figures of cua-driver's rows alone, and a drivers figure's panel per comparison; the
-other drivers' calls as the replay's lane says them; and a gallery clip's moment, span and callouts."""
+other drivers' calls as the replay's lane says them; a gallery clip's moment, span and callouts; and the card's
+findings as the Space opens with them."""
 import importlib
+import importlib.util
 import json
 import types
 from pathlib import Path
@@ -521,6 +523,19 @@ def test_the_comparison_figures_are_written_with_their_notes_and_one_without_dat
     assert written["story_figures"] == ["decides"]
     assert all((tmp_path / f"decides{variant}.svg").exists() for variant in ("", "-dark", "-phone", "-phone-dark"))
     assert "Claude Haiku 5.5 (50% at $0.10), is the whole frontier" in written["compare_notes"]["pareto"][1]
+
+
+def test_the_space_opens_with_the_cards_findings_without_their_heading_or_its_figure(space, tmp_path):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    spec = importlib.util.spec_from_file_location("space_build", SPACE / "build.py")
+    build = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(build)
+    story = tmp_path / "story.md"
+    story.write_text("### What we found\n\n- **One.** The first, in `code`,\n  over two lines.\n- **Two.** The second.\n\n"
+                     "{{FIGURE}}\n")
+
+    assert build.story(story) == "- **One.** The first, in `code`,\n  over two lines.\n- **Two.** The second."
 
 
 def _calls(*rows):
