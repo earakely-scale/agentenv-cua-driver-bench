@@ -46,22 +46,26 @@ viewer: true
 
 {{HERO}}
 
-An agent shares a desktop with a person. In the **background** condition someone is typing in their own window,
+**Can an AI agent use your computer while you're using it?** Here an agent shares a desktop with a person. In the
+**background** condition someone is typing in their own window,
 "User activity", the whole time, and the agent has to do its task in the other windows without
 taking their focus, raising a window over theirs, moving their pointer, touching their clipboard or losing one of
 their keystrokes. In the **foreground** condition the desktop is the agent's alone. Either way it may use only the
 GUI: no terminal, no scripts, no way round the apps.
 
+{{STORY}}
+
 The tasks, prompts and scoring are [trycua](https://github.com/trycua/cua)'s Cua Driver Bench, all ten tasks of
-its Bench v2 (multi-app workflows, precision interactions, interruptions), run on Linux and macOS computers on the [AgentEnv Framework](https://www.agentenvframework.com) by
+its Bench v2 (multi-app workflows, precision interactions, interruptions), run on Linux, macOS, Windows and Omarchy computers on the [AgentEnv Framework](https://www.agentenvframework.com) by
 [earakely-scale/agentenv-cua-driver-bench](https://github.com/earakely-scale/agentenv-cua-driver-bench). Each trial
 is graded by trycua's own evaluator, its A22 criteria for an undisturbed user and its GUI-only scan, run outside the
 computer. This dataset holds every trial: the screen recording, the agent's full trajectory, the user's log, the
 grade and the apps' final files. The [replay Space](https://huggingface.co/spaces/earakely-scale/CuaDriverBench-AgentEnv)
 plays each trial with the agent's tool calls and the user's typing beside it.
 
-It covers Linux (Ubuntu 24.04) and macOS 26: Claude Haiku, Sonnet and Opus 5.5 in Claude Code, and on Linux Claude
-Fable 5.2 in Claude Code and GPT-6 Astra, GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI. Each run, one model through one computer-use driver on one
+It covers Linux (Ubuntu 24.04), macOS 26, Windows 11 and Omarchy: Claude Haiku, Sonnet and Opus 5.5 and Claude Fable
+5.2 in Claude Code, and GPT-6 Astra, GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI, through trycua's
+cua-driver, Vercel Labs' agent-desktop, browser-use's macOS harness and OpenAI's Codex Computer Use. Each run, one model through one computer-use driver on one
 operating system at one commit of the bench, is a folder of its own under `runs/`, so other operating systems, models
 and drivers are added beside it.
 

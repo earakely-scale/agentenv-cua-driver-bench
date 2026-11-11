@@ -34,6 +34,11 @@ FAILURE_FIGURES = {
     "disturbances": "Heat grid of the share of each setup's background trials that broke each of trycua's eight A22 "
                     "criteria for an undisturbed user",
 }
+STORY_FIGURES = {
+    "decides": "Dot strips of full passes per model, a row per operating system and driver, the foreground beside the "
+               "background: with the desktop to itself the models spread out along each row, and with the user typing "
+               "they bunch together at a level that changes from row to row",
+}
 COMPARE_FIGURES = {
     "models-tasks": "Grid of how many of each task's five runs passed, a row per task in its family and a column per "
                     "model, a block for the foreground and one for the background, each cell shaded by its passes",
@@ -62,6 +67,7 @@ def main():
     text = text.replace("{{SIZE}}", _size(len(trials)))
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{PAIRS}}", _pairs(catalog, trials))
+    text = text.replace("{{STORY}}", _story(catalog))
     text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
     models = json.loads((HERE.parent / "space" / "config.json").read_text())["models"]
     names = {**{k: v["name"] for k, v in models.items()}, **{m["id"]: m["name"] for m in catalog["models"]}}
@@ -79,6 +85,13 @@ def main():
     text = text.replace("{{PARTIAL}}\n\n", f"{partial}\n\n" if partial else "")
     text = text.replace("{{BODY}}", (HERE / "card" / "body.md").read_text().strip())
     (dataset / "README.md").write_text(text)
+
+
+def _story(catalog):
+    """The card's opening findings (card/story.md), with the figure of whether the model or the setup decides."""
+    text = (HERE / "card" / "story.md").read_text().strip()
+    shown = "decides" in (catalog.get("story_figures") or [])
+    return text.replace("{{FIGURE}}", _picture("decides", STORY_FIGURES["decides"]) if shown else "").strip()
 
 
 def _pairs(catalog, trials):
