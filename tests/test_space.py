@@ -504,6 +504,26 @@ def test_each_other_os_where_two_models_ran_gets_a_passes_grid_of_its_own(space)
     assert specs["models-tasks-macos"]["subtitle"].startswith("macOS")
 
 
+def test_the_decides_figure_has_a_row_per_os_and_driver_that_ran_the_whole_bench_and_none_for_one_that_ran_part(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    entry = lambda os_, model, cond, passed, n: {"os": os_, "driver": "cua-driver", "model": model, "condition": cond,
+                                                 "passed": passed, "n_trials": n}
+    cat = {"conditions": [{"id": "foreground", "name": "Foreground"}, {"id": "background", "name": "Background"}],
+           "oses": [{"id": "linux", "name": "Linux"}, {"id": "macos", "name": "macOS"}, {"id": "omarchy", "name": "Omarchy"}],
+           "drivers": [{"id": "cua-driver", "name": "cua-driver"}],
+           "models": [{"id": "anthropic/a", "name": "A"}, {"id": "openai/b", "name": "B"}],
+           "board": [entry(os_, m, c, 3, n) for os_ in ("linux", "macos") for m in ("anthropic/a", "openai/b")
+                     for c, n in (("foreground", 50), ("background", 40))]
+                    + [entry("omarchy", m, c, 3, n) for m in ("anthropic/a", "openai/b")
+                       for c, n in (("foreground", 35), ("background", 25))]}
+
+    spec = space("figures").decides_spec(cat)
+
+    assert [r["label"] for r in spec["panels"]] == ["Linux · cua-driver", "macOS · cua-driver"]
+    assert spec["full"] == {"foreground": 50, "background": 40}
+
+
 def test_the_comparison_figures_are_written_with_their_notes_and_one_without_data_is_left_out(space, tmp_path):
     for package in ("fontTools", "PIL", "brotli"):
         pytest.importorskip(package)

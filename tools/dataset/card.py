@@ -204,14 +204,13 @@ def _board(catalog, trials):
     head = "| Model | " + " | ".join(f"{o['name']}<br>{label(d)}" for o, d in setups) + " |"
     rule = "|---|" + "---:|" * len(setups)
     rows = [f"| {m['name']} | " + " | ".join(cell(m, o, d) for o, d in setups) + " |" for m in models]
-    partial = [o["name"] for o in oses if full.get((o["id"], "foreground")) != max(n for (_, c), n in full.items()
-                                                                                  if c == "foreground")]
+    per = {c: usual([n for (_, cond), n in full.items() if cond == c]) for c in conds}
+    partial = [o["name"] for o in oses if full.get((o["id"], "foreground")) != per["foreground"]]
     board = trials[trials.on_board & trials.passed]
     speed = board.groupby(["os", "driver"]).agg(seconds=("duration_s", "median"), calls=("model_calls", "median"))
     speed_rows = [f"| {o['name']} · {label(d)} | {speed.loc[(o['id'], d['id']), 'seconds']:.0f} | "
                   f"{speed.loc[(o['id'], d['id']), 'calls']:.0f} |" for o, d in setups if (o["id"], d["id"]) in speed.index]
     note = (f" {join_names(partial)} {'runs' if len(partial) == 1 else 'run'} the seven BenchLab tasks alone." if partial else "")
-    per = {c: max(n for (_, cond), n in full.items() if cond == c) for c in conds}
     return f"""Each cell is a model's full pass through one driver on one operating system, as a share of its {per["foreground"]}
 foreground trials, then of its {per["background"]} background ones: the task done through the GUI only and, in the
 background, the user left undisturbed. The best foreground of each column is in bold.{note}
@@ -233,7 +232,12 @@ def complete_counts(board):
     counts = {}
     for b in board:
         counts.setdefault((b["os"], b["condition"]), []).append(b["n_trials"])
-    return {key: max(ns, key=lambda v: (ns.count(v), v)) for key, ns in counts.items()}
+    return {key: usual(ns) for key, ns in counts.items()}
+
+
+def usual(values):
+    """The most common of ``values``, the larger on a tie."""
+    return max(values, key=lambda v: (values.count(v), v))
 
 
 def join_names(names):

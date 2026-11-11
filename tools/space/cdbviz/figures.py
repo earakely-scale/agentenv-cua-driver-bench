@@ -707,7 +707,8 @@ def story_specs(cat):
 def decides_spec(cat):
     """Full pass per model, a dot each, for each OS and driver over the whole bench in each condition: the models that
     ran every trial of a condition, a row per OS and driver with two of them or more, so a row's spread is the model's
-    part and the rows' gap is the setup's."""
+    part and the rows' gap is the setup's. An OS whose complete count isn't the bench's, one that runs part of it or
+    merges two runs of a model, has no row."""
     conds = [c for c in cat["conditions"] if c["id"] in catalog.CONDITIONS]
     whole = complete_counts(cat["board"])
     full = {c["id"]: usual([n for (_, cond), n in whole.items() if cond == c["id"]]) for c in conds}
@@ -718,7 +719,7 @@ def decides_spec(cat):
             cells = {}
             for c in conds:
                 got = [b for b in cat["board"] if (b["os"], b["driver"], b["condition"]) == (o["id"], d["id"], c["id"])
-                       and b["n_trials"] == whole.get((o["id"], c["id"])) and b["model"] in names]
+                       and b["n_trials"] == whole.get((o["id"], c["id"])) == full[c["id"]] and b["model"] in names]
                 cells[c["id"]] = [{"model": b["model"], "name": names[b["model"]], "passed": b["passed"],
                                    "n": b["n_trials"], "lab": lab_of(b["model"])} for b in got]
             if max(len(v) for v in cells.values()) >= 2:

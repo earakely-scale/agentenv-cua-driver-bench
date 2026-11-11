@@ -330,7 +330,8 @@ const commonest = (ns) => {
 /** The card's opening figure, figures.decides_spec, from the board by the same rules, so the two can't disagree: a row
  * per OS and driver where two models or more ran every trial of a condition, a model's dot its full passes. A model
  * ran every trial when it ran as many as most of its OS's entries for the condition, the larger of a tie, so runs still
- * landing on one OS can't drop another's rows; a condition's "trials a dot" is the most common of those counts. */
+ * landing on one OS can't drop another's rows; a condition's "trials a dot" is the most common of those counts, and an
+ * OS whose count isn't, one that runs part of the bench or merges two runs of a model, has no row. */
 function decidesData() {
   const conds = CAT.conditions.filter((c) => c.id === "foreground" || c.id === "background");
   const ran = (o, c) => CAT.board.filter((b) => b.os === o.id && b.condition === c.id);
@@ -340,7 +341,7 @@ function decidesData() {
   for (const o of CAT.oses) {
     for (const d of CAT.drivers) {
       const cells = Object.fromEntries(conds.map((c) => [c.id, ran(o, c)
-        .filter((b) => b.driver === d.id && b.n_trials === full[o.id][c.id] && MODELS[b.model])
+        .filter((b) => b.driver === d.id && b.n_trials === full[o.id][c.id] && full[o.id][c.id] === each[c.id] && MODELS[b.model])
         .map((b) => ({ model: b.model, passed: b.passed, n: b.n_trials }))]));
       if (Math.max(...Object.values(cells).map((v) => v.length)) >= 2) rows.push({ os: o, driver: d, cells });
     }
