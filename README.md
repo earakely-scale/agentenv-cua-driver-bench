@@ -178,6 +178,9 @@ or later. What differs from macOS:
 **GPT on Windows.** `tasks/codex-windows-*.json` are the Windows trials' Codex CLI twins, as `tasks/codex-*.json` are
 Linux's: the agent `codex`, with its own tools off and at medium effort, on the same computers through cua-driver.
 `evals/codex-windows-bench-v2-trials.txt` lists the 90 trials.
+`tasks/codex-agent-desktop-*.json` and `tasks/codex-windows-agent-desktop-*.json` are the agent-desktop arms' Codex
+CLI twins on Linux and Windows, the same way, listed in `evals/codex-agent-desktop-bench-v2-trials.txt` and
+`evals/codex-windows-agent-desktop-bench-v2-trials.txt`.
 
 ### On Omarchy
 
