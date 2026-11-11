@@ -124,6 +124,9 @@
     "anthropic/claude-opus-5-5": {
       "name": "Claude Opus 5.5"
     },
+    "anthropic/claude-fable-5-2": {
+      "name": "Claude Fable 5.2"
+    },
     "openai/gpt-6-luna": {
       "name": "GPT-6 Luna"
     },

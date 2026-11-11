@@ -60,8 +60,8 @@ computer. This dataset holds every trial: the screen recording, the agent's full
 grade and the apps' final files. The [replay Space](https://huggingface.co/spaces/earakely-scale/CuaDriverBench-AgentEnv)
 plays each trial with the agent's tool calls and the user's typing beside it.
 
-It covers Linux (Ubuntu 24.04) and macOS 26: Claude Haiku, Sonnet and Opus 5.5 in Claude Code, and on Linux GPT-6
-Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI. Each run, one model through one computer-use driver on one
+It covers Linux (Ubuntu 24.04) and macOS 26: Claude Haiku, Sonnet and Opus 5.5 in Claude Code, and on Linux Claude
+Fable 5.2 in Claude Code and GPT-6 Astra, GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI. Each run, one model through one computer-use driver on one
 operating system at one commit of the bench, is a folder of its own under `runs/`, so other operating systems, models
 and drivers are added beside it.
 

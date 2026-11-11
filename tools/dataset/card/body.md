@@ -50,10 +50,11 @@ minutes and at most 45 turns." The trials run in trycua's schedule (`evals/bench
    `--set envs/<computer>.tools=driver`, since the Linux task files keep the default, which adds AgentEnv's
    `computer_*` tools), AgentEnv's `peer_agents` server, which no task uses, trycua's system prompt (for "a Linux
    desktop" on Linux, as written on macOS), at most 45 turns and 360 seconds:
-   - **Claude Code** for Claude Haiku, Sonnet and Opus 5.5, its built-in tools limited to `Skill` and `Read`, at its
-     default effort for these models, medium (no `--effort` is passed).
-   - **OpenAI's Codex CLI 0.147.0** for GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol, as AgentEnv's `codex` agent runs it
-     (`tasks/codex-*.json`, each its Linux twin but for the agent, and on macOS GPT-6.1 Sol through cua-driver and
+   - **Claude Code** for Claude Haiku, Sonnet and Opus 5.5 and, on Linux, Claude Fable 5.2, its built-in tools limited
+     to `Skill` and `Read`, at its default effort (no `--effort` is passed), medium for the 5.5 models.
+   - **OpenAI's Codex CLI 0.147.0** for GPT-6 Luna, GPT-6.1 Terra, GPT-6.1 Sol and GPT-6 Astra, as AgentEnv's `codex`
+     agent runs it (`tasks/codex-*.json`, each its Linux twin but for the agent, `tasks/codex-agent-desktop-*.json` the
+     same for agent-desktop's Linux trials, and on macOS GPT-6.1 Sol through cua-driver and
      Codex Computer Use, `tasks/codex-macos-cua-driver-*.json` and `tasks/codex-macos-codex-computer-use-*.json`,
      each its Claude Code twin's), every tool of its own off
      (shell, patch, web search, image viewing, plan, sub-agents), which leaves the driver's tools, `peer_agents` and
