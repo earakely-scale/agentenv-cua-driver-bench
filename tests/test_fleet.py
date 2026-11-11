@@ -431,6 +431,18 @@ def test_a_host_fleet_regions_places_elsewhere_is_reached_through_its_regions_cl
     assert made == ["ca-central-1", "eu-central-1", "ap-southeast-2"]
 
 
+def test_a_board_starts_nothing_on_a_host_until_its_ready_file_is_there(board, tmp_path, monkeypatch):
+    host = board.Host("b7", "i-7", ready_file="~/fd5358/ready", workers=[_worker(board, "r", "lab", 1)])
+    runner, calls = _runner(board, tmp_path, monkeypatch, [host])
+    board.common.replies["i-7"] = _peek(False) + "ready=0\n"
+    runner.poll(host)
+    waited = len(calls)
+    board.common.replies["i-7"] = _peek(False) + "ready=1\n"
+    runner.poll(host)
+
+    assert waited == 0 and len(calls) == 1 and "test -f ~/fd5358/ready" in board.common.scripts[-1][1]
+
+
 def _peek(running, digest="", ended=0, framework=None, failed=0):
     return (f"running={int(running)}\ndigest={digest}\nended={ended}\nfailed={failed}\n"
             + (f"framework={framework}\n" if framework else "") + "log=last line\n")

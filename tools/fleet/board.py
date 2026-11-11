@@ -63,6 +63,8 @@ class Host:
     instance: str
     framework: str | None = None
     state: str | None = None
+    #: A file on the host whose presence says it's set up, before which the board starts nothing there.
+    ready_file: str | None = None
     workers: list[Worker] = field(default_factory=list)
 
     @property
@@ -81,7 +83,7 @@ def main():
     regions = [f"{h['instance']}={h['region']}" for h in board["host"] if h.get("region")]
     os.environ["FLEET_REGIONS"] = ",".join(filter(None, [os.environ.get("FLEET_REGIONS", ""), *regions]))
     workers, run_specs = planned(board)
-    hosts = assign(workers, [Host(h["name"], h["instance"], h.get("framework"), h.get("state"))
+    hosts = assign(workers, [Host(h["name"], h["instance"], h.get("framework"), h.get("state"), h.get("ready_file"))
                              for h in board["host"]])
     if args.plan:
         for host in hosts:
@@ -214,6 +216,8 @@ class Runner:
                          None)
         if following is None:
             return
+        if not seen["ready"]:
+            return
         if host.framework and seen.get("framework") != host.framework:
             return self.pin(host)
         self.start(host, following, fresh=True)
@@ -221,9 +225,10 @@ class Runner:
     def peek(self, host: Host) -> dict | None:
         framework = (f'echo "framework=$(git -C {self.board["framework_checkout"]} rev-parse HEAD 2>/dev/null)"\n'
                      if host.framework else "")
+        ready = f"test -f {host.ready_file} && echo ready=1 || echo ready=0\n" if host.ready_file else ""
         try:
             with self._unlocked():
-                out = ssm(host.instance, PEEK.format(framework=framework), timeout=90, os_type=self.os)
+                out = ssm(host.instance, PEEK.format(framework=framework) + ready, timeout=90, os_type=self.os)
         except (Exception, SystemExit) as error:
             self.say(f"{host.name} couldn't be asked: {error}"[:300])
             return None
@@ -232,7 +237,7 @@ class Runner:
             return None
         return {"running": seen["running"] == "1", "digest": seen.get("digest", ""),
                 "ended": int(seen.get("ended") or 0), "failed": int(seen.get("failed") or 0),
-                "framework": seen.get("framework") or None,
+                "framework": seen.get("framework") or None, "ready": seen.get("ready", "1") == "1",
                 "log": seen.get("log", "")}
 
     def pin(self, host: Host) -> None:

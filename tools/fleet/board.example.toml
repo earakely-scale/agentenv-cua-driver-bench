@@ -37,3 +37,5 @@ name = "mac-2"
 instance = "i-0fedcba9876543210"
 # Optional: the host's region, where it isn't FLEET_REGION's, so one board reaches hosts in several regions.
 region = "eu-central-1"
+# Optional: a file whose presence on the host says it's set up; the board starts nothing there before it exists.
+ready_file = "~/fd5358/ready"
