@@ -26,32 +26,37 @@ same 60 BenchLab trials:
 - **No trial leaves the GUI.** Omarchy's own launchers, its menu and Apps panel, are logged but don't fail a trial: they
   run only their own rows, and a terminal they open is caught.
 
-**Six models ran the same 60 trials on Omarchy through cua-driver** (runs `cua-driver-*-2026-11-11`: Claude Sonnet, Opus
-and Haiku 5.5 in Claude Code 2.1.280, and GPT-6.1 Sol, GPT-6.1 Terra and GPT-6 Luna in Codex CLI 0.147.0 at medium
-effort, through the trials' Codex CLI twins, `tasks/codex-omarchy-*.json`):
+**Eight models ran the same 60 trials on Omarchy through cua-driver** (runs `cua-driver-*-2026-11-11`: Claude Fable 5.2
+and Claude Sonnet, Opus and Haiku 5.5 in Claude Code 2.1.280, and GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Luna and GPT-6 Astra
+in Codex CLI 0.147.0 at medium effort, through the trials' Codex CLI twins, `tasks/codex-omarchy-*.json`):
 
 | Model | Foreground | Background | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
 |---|---:|---:|---:|---:|---:|---:|
+| Claude Fable 5.2 | 33 of 35 | 16 of 25 | 15 of 15 | 18 of 20 | 0 | $0.48 |
 | Claude Sonnet 5.5 | 34 of 35 | 18 of 25 | 15 of 15 | 19 of 20 | 0 | $0.28 |
 | Claude Opus 5.5 | 22 of 35 | 13 of 25 | 10 of 15 | 12 of 20 | 0 | $0.45 |
 | Claude Haiku 5.5 | 26 of 35 | 9 of 25 | 12 of 15 | 14 of 20 | 0 | $0.03 |
 | GPT-6.1 Sol | 17 of 35 | 16 of 25 | 0 of 15 | 17 of 20 | 0 | $0.16 |
 | GPT-6.1 Terra | 22 of 35 | 15 of 25 | 5 of 15 | 17 of 20 | 0 | $0.08 |
 | GPT-6 Luna | 19 of 35 | 8 of 25 | 8 of 15 | 11 of 20 | 0 | $0.02 |
+| GPT-6 Astra | 19 of 35 | 15 of 25 | 0 of 15 | 19 of 20 | 0 | $1.06 |
 
-- **No background trial fails for the computer.** In 7 of the 150 background trials the user is disturbed, each time by
+- **No background trial fails for the computer.** In 7 of the 200 background trials the user is disturbed, each time by
   an agent that drives cua-driver's desktop-scope input, the real pointer: after a background drag that didn't drop
   (MB-09) or a dialog it couldn't reach. Every other background failure is the task's.
 - **Typed text in the background goes through accessibility.** cua-driver refuses to type at a point of a background
   window, saying the target has no focus-free input backend; fields filled with `set_value` pass.
-- **IR-04's sign-up never goes through in the background for Opus, Terra and Luna.** Its cookie dialog comes up at the
-  first Sign up, and none of their 15 trials submits the form; Luna doesn't refuse the cookies in 3 of its 5.
+- **IR-04's sign-up rarely goes through in the background.** Its cookie dialog comes up at the first Sign up, and the
+  form isn't then submitted just once with its values: IR-04 passes 9 of its 40 background trials across the eight
+  models, none of Opus's, Terra's, Luna's or Astra's, and Luna doesn't refuse the cookies in 3 of its 5.
+- **Fable passes 33 of 35 in the foreground and 16 of 25 in the background**, all 15 of IR-01's to IR-03's background
+  trials, at $0.48 a trial against Sonnet's $0.28.
 - **Opus passes 22 of 35 in the foreground, against Sonnet's 34.** It passes none of MB-10's five hover trials. In 3 of
   its 4 IR-01 misses it presses Submit, finds BenchLab's window unchanged and reports no confirmation, leaving the
   permission dialog beside it unanswered.
 - **The GPT models work from cua-driver's text alone**, as on the other OSes: Codex CLI sends them no screenshots, so
-  MB-11's tooltip passes for none of them. In the background Sol and Terra pass IR-01, IR-02 and IR-03 in 29 of 30
-  trials.
+  MB-11's tooltip passes for none of them. In the background Sol, Terra and Astra pass IR-01, IR-02 and IR-03 in 44 of
+  45 trials, Astra at $1.06 a trial, the most of any model here.
 
 cua-driver's first Omarchy runs stay in the dataset but not on the board (`cua-driver-*-2026-11-10`: Sonnet's 60 trials
 and the other models' first ones). They ran cua-driver 0.44.0 with Omarchy's own build of the Hyprland plugin, which
