@@ -67,6 +67,54 @@ def test_a_trial_names_its_driver_and_one_that_names_none_ran_on_cua_driver(spac
     assert len({m["uid"] for m in loaded.values()}) == 2
 
 
+def test_a_trial_takes_its_driver_version_from_its_runs_manifest_else_the_known_versions(space, tmp_path, monkeypatch):
+    trials = space("trials")
+    monkeypatch.setattr(trials, "known_versions", lambda: {"macos/cua-driver-sonnet-5-5-2026-11-05": "0.38.0"})
+    for run in ("cua-driver-sonnet-5-5-2026-11-05", "cua-driver-0-47-10-sonnet-5-5-2026-11-11"):
+        folder = tmp_path / "runs" / "macos" / run / "ir-01-r2-foreground"
+        folder.mkdir(parents=True)
+        (folder / "trial.json").write_text(json.dumps({"trial_id": folder.name, "task": "ir-01", "condition": "foreground",
+                                                       "os": "macos", "model": SONNET, "run_index": 2,
+                                                       "started_at": "2026-11-05T01:00:00Z"}))
+        (folder / "timeline.json").write_text("{}")
+    (tmp_path / "runs" / "macos" / "cua-driver-0-47-10-sonnet-5-5-2026-11-11" / "manifest.json").write_text(json.dumps(
+        {"computers": {"desktop-benchlab-macos": {"driver": "cua-driver", "driver_version": "0.47.10"}}}))
+
+    loaded = {t["meta"]["run"]: t["meta"] for t in (trials.load(f, CONFIG, tmp_path) for f in trials.discover(tmp_path))}
+
+    assert {run: m["driver_version"] for run, m in loaded.items()} == {
+        "cua-driver-sonnet-5-5-2026-11-05": "0.38.0", "cua-driver-0-47-10-sonnet-5-5-2026-11-11": "0.47.10"}
+
+
+def test_the_board_counts_a_setup_at_its_newest_driver_version_and_compares_the_older_beside_it(space):
+    def run(version, passed):
+        metas = _cells("cua-driver", [("ir-01", "foreground", [(passed, 1.0 if passed else 0.0)] * 5),
+                                      ("ir-01", "background", [(passed, 1.0 if passed else 0.0)] * 5)])
+        for m in metas:
+            m["run"] = f"cua-driver-{version}-sonnet"
+            m["uid"] = f"macos--{m['run']}--{m['id']}"
+            m["driver_version"] = version
+        return metas
+    old, new = run("0.38.0", False), run("0.47.10", True)
+    linux = _cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)] * 5)], os="linux")
+    for m in linux:
+        m["driver_version"] = "0.38.0"
+
+    cat = _catalog(space, old + new + linux)
+
+    rows = {(r["os"], r["condition"]): r for r in cat["board"]}
+    assert rows[("macos", "foreground")]["n_trials"] == 5 and rows[("macos", "foreground")]["passed"] == 5
+    assert rows[("macos", "foreground")]["driver_version"] == "0.47.10"
+    assert cat["driver_versions"] == {"linux/cua-driver": "0.38.0", "macos/cua-driver": "0.47.10"}
+    assert len(cat["trials"]) == 25 and sum(t["superseded"] for t in cat["trials"]) == 10
+    [compare] = cat["version_compare"]
+    assert (compare["os"], compare["driver"], compare["versions"]) == ("macos", "cua-driver", ["0.38.0", "0.47.10"])
+    assert compare["models"] == [{"model": SONNET, "cells": {
+        "0.38.0": {"foreground": {"passed": 0, "n": 5}, "background": {"passed": 0, "n": 5}},
+        "0.47.10": {"foreground": {"passed": 5, "n": 5}, "background": {"passed": 5, "n": 5}}}}]
+    assert space("catalog").version_key("0.47.10") > space("catalog").version_key("0.47.4") > space("catalog").version_key(None)
+
+
 def test_a_missing_trial_takes_its_driver_and_task_from_its_task_file(space, tmp_path):
     for run, stem in (("agent-desktop-haiku-5-5-2026-11-05", "macos-agent-desktop-ir-04-r5-background"),
                       ("haiku-5-5-2026-11-05", "macos-ir-04-r5-background"), ("haiku-5-5-2026-11-02", "cdb-g02-foreground")):

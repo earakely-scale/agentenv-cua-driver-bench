@@ -52,6 +52,8 @@ let CAT = null;
 let PLAYER = null;
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 let TASKS = {}, CONDS = {}, MODELS = {}, OSES = {}, DRIVERS = {}, CRIT = [];
+/** Every trial, those of a driver version the board no longer counts too; CAT.trials holds the current ones. */
+let ALL_TRIALS = [];
 // The board's state for this visit: the results' metric, the comparison's pivot and what each pivot holds fixed, the
 // trials' driver and filters, and where the board was left.
 const VIEW = { board: false, ready: false, metric: "pass", pivot: "driver", compare: null, byOs: null, byModel: null,
@@ -72,6 +74,8 @@ async function boot() {
   }
   TASKS = byId(CAT.tasks); CONDS = byId(CAT.conditions); MODELS = byId(CAT.models); OSES = byId(CAT.oses);
   DRIVERS = byId(CAT.drivers);
+  ALL_TRIALS = CAT.trials;
+  CAT.trials = ALL_TRIALS.filter((t) => !t.superseded);
   CRIT = CAT.criteria;
   VIEW.driver = CAT.driver;
   const L = CAT.links || {};
@@ -106,7 +110,7 @@ function best(sel) {
   const keys = ["os", "task", "condition", "model", "driver"];
   const pool = CAT.trials.slice().sort((a, b) => (MODELS[b.model]?.board ? 1 : 0) - (MODELS[a.model]?.board ? 1 : 0));
   if (sel.key) {
-    const hit = pool.find((t) => sameCell(t, sel) && t.key === sel.key) || pool.find((t) => t.uid === sel.key);
+    const hit = pool.find((t) => sameCell(t, sel) && t.key === sel.key) || ALL_TRIALS.find((t) => t.uid === sel.key);
     if (hit) return hit;
   }
   for (let n = keys.length; n >= 0; n--) {
@@ -210,6 +214,9 @@ function osPhrase() {
 const osesOf = (driver) => CAT.oses.filter((o) => CAT.trials.some((t) => t.driver === driver && t.os === o.id));
 const driverName = (id) => DRIVERS[id]?.name || id;
 const driverLabel = (id) => DRIVERS[id]?.label || driverName(id);
+/** The newest upstream version of a driver its models ran on an OS, which the board counts that setup at. */
+const versionOf = (os, driver) => (CAT.driver_versions || {})[`${os}/${driver}`];
+const setupLabel = (os, driver) => [driverLabel(driver), versionOf(os, driver)].filter(Boolean).join(" ");
 const driverDot = (id) => h("span", { class: "dot", style: { background: `var(--s${(DRIVERS[id]?.slot ?? 0) % 8})` } });
 
 function boardView() {
@@ -278,7 +285,7 @@ function reelFigure() {
     bg: CAT.trials.find((t) => t.uid === s.background) })).filter((s) => s.fg && s.bg);
   if (!scenes.length) return null;
   const first = scenes[0].bg, task = TASKS[first.task] || {};
-  const setup = (s) => `${OSES[s.os]?.name || s.os} · ${driverLabel(s.driver)}`;
+  const setup = (s) => `${OSES[s.os]?.name || s.os} · ${setupLabel(s.os, s.driver)}`;
   const video = h("video", { src: CAT.reel.video, autoplay: true, muted: true, loop: true, playsinline: true, preload: "metadata",
     "aria-label": `${first.model_name} on ${task.probe || first.task} ${task.title || ""}, run ${first.run_index}, through ${scenes.map(setup).join(", ")}: each setup's foreground trial beside its background one, then each setup's passes over the whole bench` });
   video.muted = true;
@@ -529,7 +536,7 @@ function decidesTip(dot, pin) {
 function decidesSvg({ conds, each, rows }, W) {
   const narrow = W < 600;
   const r = narrow ? 6.5 : 7, rowH = narrow ? 58 : 40, headH = 46, axisH = 24, apart = 28;
-  const parts = (row) => [`${row.os.name} · `, driverLabel(row.driver.id)];
+  const parts = (row) => [`${row.os.name} · `, setupLabel(row.os.id, row.driver.id)];
   const labelW = narrow ? 0 : Math.max(...rows.map((row) => textWidth(parts(row)[0], 700, 13.5) + textWidth(parts(row)[1], 500, 13.5))) + 26;
   const gap = narrow ? 0 : 34;
   const pw = narrow ? W : (W - labelW - gap * (conds.length - 1)) / conds.length;
@@ -581,7 +588,7 @@ function decidesSvg({ conds, each, rows }, W) {
         const models = CAT.models.map((m) => m.id).filter((m) => cell.some((p) => p.model === m && p.passed === passed));
         const slots = [...new Set(models.map((m) => labOf(m).slot))].sort((a, b) => a - b);
         const cx = X(passed / n);
-        const where = `${row.os.name} · ${driverLabel(row.driver.id)} · ${c.name.toLowerCase()}`;
+        const where = `${row.os.name} · ${setupLabel(row.os.id, row.driver.id)} · ${c.name.toLowerCase()}`;
         const href = routeOf("trials", row.driver.id, row.os.id, c.id, ...models);
         const shape = slots.length === 1
           ? sv("circle", { class: "dzc", cx: fx(cx), cy: fx(cy), r, style: `fill: var(--s${slots[0]})` })
@@ -988,6 +995,24 @@ function costTable(panels, sort, onsort) {
       h("td", {}, q.frontier ? h("span", { class: "fyes", "aria-label": "on the frontier" }, "✓") : "")))));
 }
 
+/** Each OS and driver its models ran at more than one upstream version: every model's full passes at each version,
+ * older first, the board counting the newest alone. */
+function versionsSection() {
+  const all = CAT.version_compare || [];
+  if (!all.length) return [];
+  const conds = CAT.conditions.map((c) => c.id);
+  const name = (v) => `${OSES[v.os]?.name || v.os} · ${driverLabel(v.driver)}`;
+  return [h("div", { class: "subhead" }, h("h3", {}, "Driver versions"), h("p", {}, "The board counts each OS and driver at the newest version its models ran. An older version's trials stay here to replay, its full passes beside the newest's.")),
+    ...all.map((v) => h("div", { class: "ptable-wrap" }, h("table", { class: "ptable vtable", "aria-label": `${name(v)}, full passes by version` },
+      h("thead", {}, h("tr", {}, h("th", { class: "l" }, name(v)),
+        ...conds.flatMap((c) => v.versions.map((ver) => h("th", {}, `${CONDS[c]?.name || c} · ${ver}`))))),
+      h("tbody", {}, v.models.map((m) => h("tr", {}, h("td", { class: "l" }, MODELS[m.model]?.name || m.model),
+        ...conds.flatMap((c) => v.versions.map((ver) => {
+          const x = m.cells[ver]?.[c];
+          return h("td", {}, x ? `${x.passed}/${x.n}` : "–");
+        }))))))))];
+}
+
 /** How trycua's task score, its partial credit, differs from a full pass: three levels of one grade, the one shown
  * above marked. */
 function levels(score) {
@@ -1123,7 +1148,7 @@ function driverPivot() {
     const depth = Math.max(...runs.map((t) => t.of));
     const cards = tips(h("div", { class: "xcards" }, c.drivers.map((d) => {
       const dv = DRIVERS[d.id] || { name: d.id };
-      return setupCard(dv.name, dv.detail?.split(";")[0], dv.detail, dv.slot ?? 0, runs.filter((t) => t.driver === d.id), c.tasks, depth);
+      return setupCard(setupLabel(c.os, d.id), dv.detail?.split(";")[0], dv.detail, dv.slot ?? 0, runs.filter((t) => t.driver === d.id), c.tasks, depth);
     })));
     const extra = (CAT.failure_figures || []).filter((f) => f === "disturbances");
     const n = Math.round(Math.max(...c.drivers.map((d) => (d.foreground || d.background).n / c.tasks.length)));
@@ -1137,6 +1162,7 @@ function driverPivot() {
       h("div", { class: "subhead" }, h("h3", {}, "Every comparison at once"), h("p", {}, "Each OS and model that two drivers or more ran, over the tasks all of them ran.")),
       figures(CAT.driver_figures.filter((f) => !f.endsWith("task-score")), () => "Full pass by driver"),
       extra.length ? h("div", { class: "solo" }, figures(extra, () => "Which of the user's eight criteria each driver broke in the background")) : null,
+      ...versionsSection(),
       h("p", { class: "dnote" }, "Every driver also serves AgentEnv's ", h("code", {}, "computer_*"),
         " tools, which the grader and the recordings use; no driver's agents here see them. cua-driver's first runs on ",
         "macOS and Linux, which offered seven of them too, are in the dataset but not here."),
@@ -1848,7 +1874,8 @@ function gradeSection(t) {
     h("h3", {}, "Run"),
     h("dl", { class: "kv" },
       h("dt", {}, "Model"), h("dd", {}, t.model_name),
-      h("dt", {}, "Driver"), h("dd", {}, driverName(t.driver)),
+      h("dt", {}, "Driver"), h("dd", {}, [driverName(t.driver), t.driver_version].filter(Boolean).join(" "),
+        t.superseded ? h("small", {}, ` · an older version than the board's ${versionOf(t.os, t.driver)}`) : null),
       h("dt", {}, "Harness"), h("dd", {}, `${t.harness || "–"} ${t.harness_version || ""}`),
       h("dt", {}, "Effort"), h("dd", {}, t.effort || (t.harness === "claude-code" ? "medium (Claude Code's default)" : "–")),
       h("dt", {}, "Computer"), h("dd", {}, t.computer || "–"),
@@ -2204,7 +2231,7 @@ function createPlayer(root, trial, tl) {
       h("div", { class: "halves" }, halves.map(([name, ok, sub, val]) => h("div", { class: "half" },
         h("span", { class: `ic ${ok == null ? "na" : ok ? "ok" : "no"}` }, ok == null ? "–" : ok ? "✓" : "✗"),
         h("div", {}, h("b", {}, name), h("span", {}, sub)), h("em", {}, val)))),
-      h("div", { class: "facts" }, [trial.model_name, driverName(trial.driver), `${trial.harness || ""} ${trial.harness_version || ""}`.trim(), trial.turns != null && `${trial.turns} turns`, trial.tool_calls != null && `${trial.tool_calls} tool calls`, mins(trial.duration), trial.cost != null && `$${trial.cost.toFixed(2)}`, trial.ending].filter(Boolean).join(" · ")),
+      h("div", { class: "facts" }, [trial.model_name, [driverName(trial.driver), trial.driver_version].filter(Boolean).join(" "), `${trial.harness || ""} ${trial.harness_version || ""}`.trim(), trial.turns != null && `${trial.turns} turns`, trial.tool_calls != null && `${trial.tool_calls} tool calls`, mins(trial.duration), trial.cost != null && `$${trial.cost.toFixed(2)}`, trial.ending].filter(Boolean).join(" · ")),
       h("div", { class: "row" },
         h("button", { class: "btn primary", onclick: () => { endDismissed = false; seek(Math.max(0, (armed[0] || 0) - 0.5), true); } }, "↺ Replay"),
         h("button", { class: "btn", onclick: () => $("#grade")?.scrollIntoView({ behavior: "smooth" }) }, "Full grade ↓"),

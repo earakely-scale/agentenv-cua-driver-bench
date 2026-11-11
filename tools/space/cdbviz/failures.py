@@ -50,7 +50,7 @@ def build(loaded, cat):
     """The catalog's ``failures``: the modes, each board trial's, and up to three trials of each failure mode, those that
     show it soonest, SHOWN_FIRST's and a spread of setups and tasks first."""
     board = {m["id"] for m in cat["models"] if m["board"]}
-    trials = [t for t in loaded if t["meta"]["model"] in board]
+    trials = [t for t in loaded if t["meta"]["model"] in board and not t["meta"].get("superseded")]
     by_trial = {t["meta"]["uid"]: outcome(t["meta"], t["web"]["calls"], cat) for t in trials}
     return {"modes": MODES, "by_trial": by_trial, "examples": examples(trials, by_trial)}
 

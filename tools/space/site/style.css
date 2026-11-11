@@ -792,6 +792,8 @@ a.pc:hover { box-shadow: 0 0 0 1.5px currentColor; }
 .sarr { display: inline-block; width: 1em; margin-left: 3px; font-size: 9px; }
 .ptable td { padding: 7px 12px; text-align: right; border-top: 1px solid var(--line); white-space: nowrap; }
 .ptable .l { text-align: left; }
+.vtable th { padding: 9px 12px; }
+.ptable-wrap + .ptable-wrap { margin-top: 12px; }
 .ptable tbody tr { transition: background .12s; }
 .ptable tbody tr.hl { background: var(--sunken); }
 .psetup { display: inline-flex; align-items: center; gap: 9px; }

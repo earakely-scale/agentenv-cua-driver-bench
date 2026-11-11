@@ -73,6 +73,8 @@ def main():
     oses = _oses(catalog)
     text = text.replace("{{OSES}}\n\n", f"{oses}\n\n" if oses else "")
     text = text.replace("{{BOARD}}", _board(catalog, trials))
+    versions = _versions(catalog)
+    text = text.replace("{{VERSIONS}}\n\n", f"{versions}\n\n" if versions else "")
     text = text.replace("{{NOTES}}", _notes(catalog))
     models = json.loads((HERE.parent / "space" / "config.json").read_text())["models"]
     names = {**{k: v["name"] for k, v in models.items()}, **{m["id"]: m["name"] for m in catalog["models"]}}
@@ -201,7 +203,8 @@ def _board(catalog, trials):
     oses = [o for o in catalog["oses"] if any(k[0] == o["id"] for k in cells)]
     setups = [(o, d) for o in oses for d in catalog["drivers"] if any(k[:2] == (o["id"], d["id"]) for k in cells)]
     models = [m for m in catalog["models"] if any(k[2] == m["id"] for k in cells)]
-    label = lambda d: d.get("label") or d["name"]
+    current = catalog.get("driver_versions") or {}
+    label = lambda d, o=None: " ".join(filter(None, (d.get("label") or d["name"], o and current.get(f"{o['id']}/{d['id']}"))))
     best = {(o["id"], d["id"]): max((b["passed"] / b["n_trials"] for k, b in cells.items()
                                      if k[:2] == (o["id"], d["id"]) and k[3] == "foreground"), default=None)
             for o, d in setups}
@@ -214,19 +217,20 @@ def _board(catalog, trials):
         top = got[0] and got[0]["passed"] / got[0]["n_trials"] == best[o["id"], d["id"]]
         return f"**{fg}** · {bg}" if top else f"{fg} · {bg}"
 
-    head = "| Model | " + " | ".join(f"{o['name']}<br>{label(d)}" for o, d in setups) + " |"
+    head = "| Model | " + " | ".join(f"{o['name']}<br>{label(d, o)}" for o, d in setups) + " |"
     rule = "|---|" + "---:|" * len(setups)
     rows = [f"| {m['name']} | " + " | ".join(cell(m, o, d) for o, d in setups) + " |" for m in models]
     per = {c: usual([n for (_, cond), n in full.items() if cond == c]) for c in conds}
     partial = [o["name"] for o in oses if full.get((o["id"], "foreground")) != per["foreground"]]
     board = trials[trials.on_board & trials.passed]
     speed = board.groupby(["os", "driver"]).agg(seconds=("duration_s", "median"), calls=("model_calls", "median"))
-    speed_rows = [f"| {o['name']} · {label(d)} | {speed.loc[(o['id'], d['id']), 'seconds']:.0f} | "
+    speed_rows = [f"| {o['name']} · {label(d, o)} | {speed.loc[(o['id'], d['id']), 'seconds']:.0f} | "
                   f"{speed.loc[(o['id'], d['id']), 'calls']:.0f} |" for o, d in setups if (o["id"], d["id"]) in speed.index]
     note = (f" {join_names(partial)} {'runs' if len(partial) == 1 else 'run'} the seven BenchLab tasks alone." if partial else "")
     return f"""Each cell is a model's full pass through one driver on one operating system, as a share of its {per["foreground"]}
 foreground trials, then of its {per["background"]} background ones: the task done through the GUI only and, in the
-background, the user left undisturbed. The best foreground of each column is in bold.{note}
+background, the user left undisturbed. Each column is its driver at the newest version its models ran there, as its
+header names it. The best foreground of each column is in bold.{note}
 
 {head}
 {rule}
@@ -237,6 +241,36 @@ background, the user left undisturbed. The best foreground of each column is in 
 | OS · driver | Seconds | Model calls |
 |---|---:|---:|
 {chr(10).join(speed_rows)}"""
+
+
+def _versions(catalog):
+    """Each OS and driver that ran at more than one upstream version: per model, its full passes at each version in the
+    foreground and the background, older versions first; the board counts the newest alone. Empty when none did."""
+    blocks = []
+    names = {m["id"]: m["name"] for m in catalog["models"]}
+    order = {m["id"]: n for n, m in enumerate(catalog["models"])}
+    oses = {o["id"]: o["name"] for o in catalog["oses"]}
+    drivers = {d["id"]: d.get("label") or d["name"] for d in catalog["drivers"]}
+    conds = ("foreground", "background")
+    for v in catalog.get("version_compare") or []:
+        versions = v["versions"]
+        head = "| Model | " + " | ".join(f"{c.capitalize()}<br>{ver}" for c in conds for ver in versions) + " |"
+        rule = "|---|" + "---:|" * (len(conds) * len(versions))
+
+        def cell(cells, ver, c):
+            got = (cells.get(ver) or {}).get(c)
+            return f"{got['passed']} of {got['n']}" if got else ""
+        rows = [f"| {names.get(m['model'], m['model'])} | " + " | ".join(cell(m["cells"], ver, c) for c in conds
+                                                                        for ver in versions) + " |"
+                for m in sorted(v["models"], key=lambda m: order.get(m["model"], len(order)))]
+        blocks.append(f"**{oses.get(v['os'], v['os'])} · {drivers.get(v['driver'], v['driver'])}**, "
+                      f"{', '.join(versions[:-1])} and {versions[-1]}:\n\n{head}\n{rule}\n" + "\n".join(rows))
+    if not blocks:
+        return ""
+    return ("### Driver versions\n\nThe board counts each operating system and driver at the newest upstream version its "
+            "models ran. Where an older version ran too, its trials stay in the dataset (`driver_version` in "
+            "`results/trials.parquet`) and in the replay Space, and here each model's full passes at every version sit "
+            "side by side, out of the trials that version ran.\n\n" + "\n\n".join(blocks))
 
 
 def complete_counts(board):

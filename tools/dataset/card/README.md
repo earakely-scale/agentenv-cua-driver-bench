@@ -75,6 +75,8 @@ calls and the user's typing beside it.
 
 {{BOARD}}
 
+{{VERSIONS}}
+
 {{RESULTS}}
 
 {{NOTES}}

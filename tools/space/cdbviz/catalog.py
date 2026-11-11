@@ -27,12 +27,61 @@ def run_order(m):
     return (m["run_index"] if m.get("run_index") is not None else 10**6, m.get("started_at") or "", m["uid"])
 
 
+def version_key(version):
+    """``version`` as numbers to order by, 0.47.10 after 0.47.4; an unknown one before every known."""
+    return tuple(int(n) for n in re.findall(r"\d+", version)) if version else ()
+
+
+def current_versions(metas, cfg):
+    """{(os, driver): the newest upstream version of the driver its board models ran there}, for each setup whose
+    versions are known."""
+    out = {}
+    for m in metas:
+        key, version = (m["os"], m["driver"]), m.get("driver_version")
+        if version and on_board(m["model"], cfg) and version_key(version) > version_key(out.get(key)):
+            out[key] = version
+    return out
+
+
+def mark_superseded(metas, cfg):
+    """Each trial ``superseded`` when its setup has a newer driver version on the board than the one it ran: the board,
+    the comparisons and the figures count each OS and driver at its newest version alone, so two versions' runs of one
+    model never pool, and the older stay in the catalog to replay and in ``version_compare``."""
+    newest = current_versions(metas, cfg)
+    for m in metas:
+        current = newest.get((m["os"], m["driver"]))
+        m["superseded"] = bool(current) and m.get("driver_version") != current
+    return newest
+
+
+def version_compare(metas, cfg):
+    """Each OS and driver that board models ran at more than one driver version: per version, model and condition, the
+    trials passed and run, older versions first."""
+    by = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {"passed": 0, "n": 0})))
+    for m in metas:
+        if m.get("driver_version") and on_board(m["model"], cfg):
+            cell = by[(m["os"], m["driver"])][m["model"]][(m["driver_version"], m["condition"])]
+            cell["passed"] += bool(m["passed"])
+            cell["n"] += 1
+    out = []
+    for (os_, driver), models in by.items():
+        versions = sorted({v for cells in models.values() for v, _ in cells}, key=version_key)
+        if len(versions) < 2:
+            continue
+        out.append({"os": os_, "driver": driver, "versions": versions,
+                    "models": [{"model": model, "cells": {v: {c: dict(cells[(v, c)]) for c in CONDITIONS
+                                                              if (v, c) in cells} for v in versions}}
+                               for model, cells in models.items()]})
+    return out
+
+
 def board(metas, cfg, missing=()):
-    """A row per OS, driver, model and condition, of the trials it scores; ``missing`` counts toward the row whose runs
-    they're of, a run being one model's on one driver, and a row with any is incomplete."""
+    """A row per OS, driver, model and condition, of the trials it scores, at the setup's newest driver version alone;
+    ``missing`` counts toward the row whose runs they're of, a run being one model's on one driver, and a row with any
+    is incomplete."""
     cells = defaultdict(list)
     for m in metas:
-        if on_board(m["model"], cfg):
+        if on_board(m["model"], cfg) and not m.get("superseded"):
             cells[(m["os"], m["driver"], m["model"], m["condition"])].append(m)
     rows = []
     for (os_, driver, model, cond), ms in cells.items():
@@ -46,7 +95,8 @@ def board(metas, cfg, missing=()):
                          "pass": mean([1.0 if m["passed"] else 0.0 for m in tms]),
                          "passed": sum(m["passed"] for m in tms), "n": len(tms), "trials": [m["uid"] for m in tms]}
         runs = {m["run"] for m in ms}
-        rows.append({"os": os_, "driver": driver, "model": model, "condition": cond, "n_tasks": len(per),
+        rows.append({"os": os_, "driver": driver, "driver_version": ms[0].get("driver_version"), "model": model,
+                     "condition": cond, "n_tasks": len(per),
                      "n_trials": len(ms),
                      "missing": sum(x["os"] == os_ and x["condition"] == cond and x["run"] in runs for x in missing),
                      "passed": sum(m["passed"] for m in ms),
@@ -67,20 +117,24 @@ def task_entry(k, metas, cfg):
 
 
 def keys(metas):
+    """Each trial's key in its cell's routes, ``r<run>`` where its cell's runs are unique; a superseded version's trials
+    are keyed by their uid, so the current version's keep ``r1`` to ``r5``."""
     cells = defaultdict(list)
     for m in metas:
-        cells[(m["driver"], m["os"], m["task"], m["condition"], m["model"])].append(m)
+        cells[(m["driver"], m["os"], m["task"], m["condition"], m["model"], m.get("superseded", False),
+               m.get("driver_version"))].append(m)
     out = {}
-    for ms in cells.values():
+    for (*_, superseded, _version), ms in cells.items():
         ms.sort(key=run_order)
         idx = [m.get("run_index") for m in ms]
-        unique = None not in idx and len(set(idx)) == len(idx)
+        unique = not superseded and None not in idx and len(set(idx)) == len(idx)
         for n, m in enumerate(ms, 1):
             out[m["uid"]] = (f"r{m['run_index']}" if unique else m["uid"], n, len(ms))
     return out
 
 
 def build(metas, cfg, hero, files, missing=()):
+    newest = mark_superseded(metas, cfg)
     oses = ordered({m["os"] for m in metas}, list(cfg.get("oses") or {}))
     tasks = ordered({m["task"] for m in metas}, list(cfg.get("tasks") or {}))
     fams = list(cfg.get("families") or {})
@@ -113,6 +167,8 @@ def build(metas, cfg, hero, files, missing=()):
         "trials": [{**m, "key": ks[m["uid"]][0], "nth": ks[m["uid"]][1], "of": ks[m["uid"]][2], **files[m["uid"]]}
                    for m in trials],
         "board": rows,
+        "driver_versions": {f"{os_}/{driver}": version for (os_, driver), version in sorted(newest.items())},
+        "version_compare": version_compare(metas, cfg),
         "comparisons": comparisons(rows, oses, board_models, drivers, tasks, entries),
         "missing": list(missing),
         "caveats": cfg.get("caveats") or [],

@@ -952,7 +952,7 @@ def tally(cat, os_, entries, cond=None):
     counts the same ones."""
     by = defaultdict(list)
     for t in cat["trials"]:
-        if t["os"] == os_:
+        if t["os"] == os_ and not t.get("superseded"):
             by[(t["driver"], t["model"], t["task"], t["condition"])].append(t)
     cells = [(t["id"], c) for t in cat["tasks"] for c in t["conditions"]
              if c == (cond or c) and all(by[(d, m, t["id"], c)] for d, m, *_ in entries)]

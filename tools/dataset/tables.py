@@ -1,8 +1,9 @@
 """tables.py BENCH DATASET: the dataset's tables from its runs/ folders and the bench's committed trial tasks.
 
-tasks/tasks.parquet (one row per trial task), results/trials.parquet (one row per graded trial, with the harness errors
-it was re-run for and whether the board counts it, as the Space's config.json says), results/board.parquet (the trials
-the board counts, in the few columns the dataset viewer opens on, each with its replay in the Space),
+tasks/tasks.parquet (one row per trial task), results/trials.parquet (one row per graded trial, with the upstream driver
+version its run ran, the harness errors it was re-run for and whether the board counts it, as the Space's config.json
+says and at each OS and driver's newest version alone), results/board.parquet (the trials the board counts, in the few
+columns the dataset viewer opens on, each with its replay in the Space),
 results/calls.parquet (one row per tool call, keyed by os, run and trial_id as trials are), and
 results/missing.parquet (one row per trial
 whose re-runs were spent, so the run it belongs to is incomplete)."""
@@ -21,6 +22,8 @@ STEM = re.compile(r"^(?:(?P<os>macos)-)?(?:(?P<driver>agent-desktop|macos-harnes
 #: The driver of a trial that names none, the bench's first arm.
 DRIVER = "cua-driver"
 SPACE = f"https://huggingface.co/spaces/{os.environ.get('HF_REPO') or 'earakely-scale/CuaDriverBench-AgentEnv'}"
+#: Each run's upstream driver version where its manifest doesn't record one (tools/dataset/driver_versions.py).
+KNOWN_VERSIONS = Path(__file__).with_name("driver_versions.json")
 
 
 def main():
@@ -32,11 +35,20 @@ def main():
     (dataset / "tasks").mkdir(exist_ok=True)
     (dataset / "results").mkdir(exist_ok=True)
     pd.DataFrame(tasks).to_parquet(dataset / "tasks" / "tasks.parquet", index=False)
+    known = json.loads(KNOWN_VERSIONS.read_text()) if KNOWN_VERSIONS.exists() else {}
     rows, calls = [], []
     for folder in trials:
-        row, trial_calls = trial_row(dataset, folder, titles, cfg)
+        row, trial_calls = trial_row(dataset, folder, titles, cfg, known)
         rows.append(row)
         calls.extend(trial_calls)
+    newest = {}
+    for row in rows:
+        key = (row["os"], row["driver"])
+        if row["on_board"] and row["driver_version"] and version_key(row["driver_version"]) > version_key(newest.get(key)):
+            newest[key] = row["driver_version"]
+    for row in rows:
+        current = newest.get((row["os"], row["driver"]))
+        row["on_board"] = row["on_board"] and (not current or row["driver_version"] == current)
     missing = [missing_row(folder) for folder in sorted(p.parent for p in dataset.glob("runs/*/*/*/missing.json"))]
     pd.DataFrame(rows).to_parquet(dataset / "results" / "trials.parquet", index=False)
     board = sorted((board_row(row, cfg) for row in rows if row["on_board"]),
@@ -76,7 +88,20 @@ def task_row(bench, path):
     }
 
 
-def trial_row(dataset, folder, titles, cfg):
+def version_key(version):
+    """``version`` as numbers to order by, 0.47.10 after 0.47.4; an unknown one before every known."""
+    return tuple(int(n) for n in re.findall(r"\d+", version)) if version else ()
+
+
+def driver_version(folder, os_name, driver, known):
+    """The upstream version of ``driver`` the run of the trial in ``folder`` ran: its run manifest's, else ``known``'s."""
+    manifest = folder.parent / "manifest.json"
+    computers = (json.loads(manifest.read_text()).get("computers") or {}) if manifest.exists() else {}
+    return next((c["driver_version"] for c in computers.values() if c.get("driver") == driver and c.get("driver_version")),
+                known.get(f"{os_name}/{folder.parent.name}"))
+
+
+def trial_row(dataset, folder, titles, cfg, known=None):
     facts = json.loads((folder / "trial.json").read_text())
     timeline = json.loads((folder / "timeline.json").read_text())
     grade = facts.get("grade") or {}
@@ -88,6 +113,7 @@ def trial_row(dataset, folder, titles, cfg):
         "run": folder.parent.name,
         "os": facts["os"],
         "driver": facts.get("driver", DRIVER),
+        "driver_version": driver_version(folder, facts["os"], facts.get("driver", DRIVER), known or {}),
         "task": facts["task"],
         "probe": facts["probe"],
         "title": titles.get(facts["task"]),
@@ -145,6 +171,7 @@ def board_row(row, cfg):
     return {
         "os": (cfg["oses"].get(row["os"]) or {}).get("name", row["os"]),
         "driver": driver.get("label") or driver.get("name") or row["driver"],
+        "driver_version": row["driver_version"],
         "model": ((cfg.get("models") or {}).get(row["model"]) or {}).get("name", row["model"]),
         "task": row["probe"],
         "title": row["title"],

@@ -229,6 +229,33 @@ def test_the_cards_board_has_a_cell_per_model_and_setup_its_best_foreground_bold
     assert "| Linux · cua-driver | 55 | 18 |" in board and "| Omarchy · cua-driver | 26 | 12 |" in board
 
 
+def test_the_cards_board_names_each_columns_driver_version_and_compares_an_older_one_beside_it(tables):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+    cell = lambda cond, passed, n: {"os": "macos", "driver": "cua-driver", "model": "a/one", "condition": cond,
+                                    "passed": passed, "n_trials": n}
+    catalog = {"oses": [{"id": "macos", "name": "macOS"}], "drivers": [{"id": "cua-driver", "name": "cua-driver"}],
+               "models": [{"id": "a/one", "name": "One"}, {"id": "a/two", "name": "Two"}],
+               "board": [cell("foreground", 50, 50), cell("background", 37, 40)],
+               "driver_versions": {"macos/cua-driver": "0.47.10"},
+               "version_compare": [{"os": "macos", "driver": "cua-driver", "versions": ["0.38.0", "0.47.10"], "models": [
+                   {"model": "a/two", "cells": {"0.38.0": {"foreground": {"passed": 38, "n": 50}}}},
+                   {"model": "a/one", "cells": {"0.38.0": {"foreground": {"passed": 39, "n": 50},
+                                                           "background": {"passed": 23, "n": 40}},
+                                                "0.47.10": {"foreground": {"passed": 50, "n": 50},
+                                                            "background": {"passed": 37, "n": 40}}}}]}]}
+    trials = tables.pd.DataFrame([{"os": "macos", "driver": "cua-driver", "on_board": True, "passed": True,
+                                   "duration_s": 20.0, "model_calls": 7}])
+
+    assert "| Model | macOS<br>cua-driver 0.47.10 |" in card._board(catalog, trials)
+    assert "| macOS · cua-driver 0.47.10 | 20 | 7 |" in card._board(catalog, trials)
+    versions = card._versions(catalog)
+    assert versions.startswith("### Driver versions") and "**macOS · cua-driver**, 0.38.0 and 0.47.10:" in versions
+    assert "| Model | Foreground<br>0.38.0 | Foreground<br>0.47.10 | Background<br>0.38.0 | Background<br>0.47.10 |" in versions
+    assert "| One | 39 of 50 | 50 of 50 | 23 of 40 | 37 of 40 |" in versions
+    assert "| Two | 38 of 50 |  |  |  |" in versions
+    assert card._versions({**catalog, "version_compare": []}) == ""
+
+
 def test_a_trial_re_run_for_harness_errors_says_so_and_one_whose_re_runs_were_spent_is_a_missing_row(tables, tmp_path):
     run = tmp_path / "runs" / "macos" / "sonnet-5-5-2026-11-09"
     graded, missing = run / "ir-02-r1-background", run / "ir-02-r2-background"

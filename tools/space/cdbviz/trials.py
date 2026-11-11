@@ -1,3 +1,4 @@
+import functools
 import json
 import math
 import re
@@ -72,6 +73,25 @@ def discover_missing(root):
 
 def epoch(stamp):
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+
+
+#: Each run's upstream driver version where its manifest doesn't record one, from the framework's history.
+KNOWN_VERSIONS = Path(__file__).resolve().parents[2] / "dataset" / "driver_versions.json"
+
+
+@functools.lru_cache(maxsize=None)
+def known_versions():
+    return read_json(KNOWN_VERSIONS, {}) or {}
+
+
+def driver_version(run_folder, os_, run, driver):
+    """The upstream version of ``driver`` that the run in ``run_folder`` ran: its manifest's (tools/fleet/manifest.py
+    records it), else tools/dataset/driver_versions.json's; None when neither knows it."""
+    manifest = read_json(Path(run_folder) / "manifest.json", {}) or {}
+    for computer in (manifest.get("computers") or {}).values():
+        if computer.get("driver") == driver and computer.get("driver_version"):
+            return computer["driver_version"]
+    return known_versions().get(f"{os_}/{run}")
 
 
 def read_json(path, default=None):
@@ -852,7 +872,9 @@ def load(folder, cfg, data_dir=None):
     run_index = trial.get("run_index", int(m_run[1]) if m_run else None)
     meta = {
         "id": trial["trial_id"], "uid": uid, "rel": rel.as_posix(), "run_index": run_index, "seed": trial.get("seed"),
-        "os": trial.get("os") or "linux", "driver": trial.get("driver") or DRIVER, "task": task,
+        "os": trial.get("os") or "linux", "driver": trial.get("driver") or DRIVER,
+        "driver_version": driver_version(folder.parent, trial.get("os") or "linux", run, trial.get("driver") or DRIVER),
+        "task": task,
         "probe": trial.get("probe"), "condition": condition, "model": trial.get("model"),
         "model_name": model_name(trial.get("model") or "?", cfg),
         "harness": trial.get("harness"), "harness_version": trial.get("harness_version"), "effort": trial.get("effort"),
