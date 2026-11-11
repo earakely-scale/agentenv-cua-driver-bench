@@ -1708,8 +1708,8 @@ function compareWhy(c) {
     h("p", { class: "why-lead" }, w.lead),
     h("ul", {}, w.points.map((p) => h("li", {}, h("b", {}, p.head), " ", codeText(p.text),
       p.examples.length ? h("span", { class: "why-ex" }, " Replay ", p.examples.map((uid, i) => {
-        const t = CAT.trials.find((x) => x.uid === uid);
-        return t ? [i ? " · " : "", h("a", { href: hashOf(t) }, `${probeOf(t.task)} ${t.condition} r${t.run_index ?? t.nth}, ${driverLabel(t.driver)}, ${t.model_name}`)] : null;
+        const t = ALL_TRIALS.find((x) => x.uid === uid);
+        return t ? [i ? " · " : "", h("a", { href: hashOf(t) }, `${probeOf(t.task)} ${t.condition} r${t.run_index ?? t.nth}, ${[driverLabel(t.driver), t.driver_version].filter(Boolean).join(" ")}, ${t.model_name}`)] : null;
       }), ".") : null)))));
 }
 

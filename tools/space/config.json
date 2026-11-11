@@ -613,7 +613,7 @@
         "codex-computer-use"
       ],
       "title": "Why cua-driver beats Codex Computer Use on macOS",
-      "lead": "Claude Sonnet 5.5 and GPT-6.1 Sol each ran every trial through both drivers, 360 trials in all. In the background cua-driver passes 23 and 16 of 40, Codex Computer Use 11 and 8; in the foreground cua-driver passes 39 and 30 of 50, Codex Computer Use 26 and 28. Each reason below is read from the trials' tool calls, the drivers' own replies and the sentinel's record of the user's screen.",
+      "lead": "Claude Sonnet 5.5 and GPT-6.1 Sol each ran every trial through both drivers, and through cua-driver at two versions. In the background cua-driver 0.47.10, the grid's, passes 23 and 17 of 40, and 0.38.0 passed 23 and 16, against Codex Computer Use's 11 and 8; in the foreground 0.47.10 passes 43 and 28 of 50, and 0.38.0 passed 39 and 30, against Codex Computer Use's 26 and 28. Each reason below is read from the 0.38.0 trials' tool calls, the drivers' own replies and the sentinel's record of the user's screen, and its counts are theirs.",
       "points": [
         {
           "head": "cua-driver acts on an app without bringing it forward.",

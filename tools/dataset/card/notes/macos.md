@@ -2,13 +2,23 @@
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
 90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06;
-`codex-computer-use-*`, Sonnet on 2026-11-09 and Opus and Haiku on 2026-11-11; and `aside-*-2026-11-11`, seven models;
-macOS 26 on EC2 Macs). Through the five, Sonnet passes 39, 35, 32, 26 and 50 of 50 trials in the foreground, and 23,
-8, 1, 11 and 37 of 40 in the background.
+`codex-computer-use-*`, Sonnet on 2026-11-09 and Opus and Haiku on 2026-11-11; `aside-*-2026-11-11`, seven models;
+and `cua-driver-0-47-10-*-2026-11-11`, the same seven on cua-driver 0.47.10; macOS 26 on EC2 Macs). Through the five,
+Sonnet passes 43, 35, 32, 26 and 50 of 50 trials in the foreground, and 23, 8, 1, 11 and 37 of 40 in the background.
 
-- **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 38 of 50 and 18 of 40.** Of 80 background trials it takes the user's keyboard in 1 and raises a window over theirs in 7.
-  Its background misses are the tasks: MB-09's drag moves the user's pointer (§), and it passes 1 of the 10 G02 and
-  G03 trials, five of the others ending on the 45-turn limit.
+- **cua-driver (trycua) 0.47.10: Sonnet 43 of 50 in the foreground and 23 of 40 in the background, Haiku 41 of 50 and
+  22 of 40, Opus 44 of 50 and 18 of 40** (runs `cua-driver-0-47-10-*-2026-11-11`, the board's). Against 0.38.0 (runs
+  `cua-driver-sonnet-5-5-2026-11-05`, `cua-driver-haiku-5-5-2026-11-05` and `-2026-11-06-multiapp`, and
+  `cua-driver-opus-5-5-2026-11-06`), the foreground gains in the multi-app tasks: Sonnet passes 8 of their 15 against
+  4 and Haiku 6 against 3, the two end 21 of their 180 trials on the 45-turn limit against 40, and a trial costs $0.47
+  and $0.07 against $0.65 and $0.08. In the background Sonnet passes 23 again, Haiku 22 against 18 and Opus 18 against
+  23: Opus raises a window over the user's in 8 of its 40 trials against 4, 6 of them in IR-01 and IR-02. Of Sonnet's
+  and Haiku's 80 background trials it takes the user's keyboard in 1 and raises a window over theirs in 9. The other
+  background misses are the tasks: none of the seven models passes MB-09's background drag (§), and Sonnet and Haiku
+  pass 2 of their 20 G02 and G03 trials. The GPT models in Codex CLI pass 28 to 33 of 50 and 14 to 22 of 40 (GPT-6.1
+  Sol 28 and 17, against 30 and 16 on 0.38.0). Codex still hands them cua-driver's results without the screenshots,
+  and all 40 of their MB-10 and MB-11 trials say so, so they pass 4 to 7 of the 15 precision trials and none of
+  MB-11's.
 - **agent-desktop (Vercel Labs): Sonnet 35 of 50 and 8 of 40, Haiku 32 of 50 and 10 of 40.** With Sonnet it passes
   every BenchLab trial in the foreground and none of the 15 multi-app ones, running out of its 45 turns in all of
   them: it makes about 75 tool calls a trial, against cua-driver's 52 and browser-use's 43, and loses turns to
@@ -38,8 +48,8 @@ macOS 26 on EC2 Macs). Through the five, Sonnet passes 39, 35, 32, 26 and 50 of 
   the background Codex still raises a window over the user's in 24 of 40. One trial leaves the GUI: in G04's
   background GPT imports Node's `fs` through `js` and reads the task's files, and the trajectory check fails it. None
   ends on the turn limit.
-- **cua-driver with the same model: GPT-6.1 Sol in Codex CLI passes 30 of 50 in the foreground and 16 of 40 in the
-  background** (run `cua-driver-gpt-6-1-sol-2026-11-09`, Codex CLI 0.147.0 at medium effort), against 28 and 8
+- **cua-driver 0.38.0 with the same model: GPT-6.1 Sol in Codex CLI passes 30 of 50 in the foreground and 16 of 40 in
+  the background** (run `cua-driver-gpt-6-1-sol-2026-11-09`, Codex CLI 0.147.0 at medium effort), against 28 and 8
   through Codex Computer Use, at $0.18 a trial against $0.10. In the background it does the task in 25 of 40 trials
   and disturbs the user in 10, against Codex Computer Use's 18 and 24: it writes the user's clipboard in 4 of IR-04's
   5, and raises a window or takes the keyboard in 3 of G04's. In the foreground it passes all 20 interruption trials,
@@ -50,8 +60,9 @@ macOS 26 on EC2 Macs). Through the five, Sonnet passes 39, 35, 32, 26 and 50 of 
 - **Codex Computer Use with Opus 5.5 and Haiku 5.5: Opus 34 of 50 in the foreground and 10 of 40 in the background,
   Haiku 27 of 50 and 19 of 40** (runs `codex-computer-use-opus-5-5-2026-11-11` and
   `codex-computer-use-haiku-5-5-2026-11-11`, on GPT's agentenv-framework 0.9.1482 and bench e7024f8), against 44 and
-  23, and 38 and 18, through cua-driver. In the background Codex does Opus's task in 35 of 40 trials and disturbs the
-  user in 30, and Haiku's in 28 and 21, so Haiku, doing less, passes one more there than through cua-driver. In the
+  23, and 38 and 18, through cua-driver 0.38.0, and 44 and 18, and 41 and 22, through 0.47.10. In the background Codex
+  does Opus's task in 35 of 40 trials and disturbs the user in 30, and Haiku's in 28 and 21, so Haiku, doing less,
+  passes one more there than through cua-driver 0.38.0. In the
   foreground both pass G04 and all 20 interruption trials every time, and neither MB-10 nor MB-11, which need the
   hover Codex hasn't; Opus passes G02 4 of 5 and Haiku no other multi-app trial. Opus ends one trial on the 45-turn
   limit and Haiku 16; none leaves the GUI. A trial costs $0.45 for Opus and $0.04 for Haiku at list price.
@@ -71,5 +82,3 @@ macOS 26 on EC2 Macs). Through the five, Sonnet passes 39, 35, 32, 26 and 50 of 
   10 trials, and Luna runs out of its 45 turns in 14, 9 of them G03's. Across the seven models, background trials
   raise a window over the user's in 36 of 280, 22 of them in G03 and IR-02, and Sol and Haiku each take the user's
   keyboard in 4 of G04's 5.
-
-**Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.

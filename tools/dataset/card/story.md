@@ -1,9 +1,9 @@
 ### What we found
 
 - **With someone typing, the setup decides, not the model.** Through cua-driver on Linux all eight models pass the same
-  5 of 40 background trials, and through agent-desktop on Windows all six pass none; through cua-driver on macOS,
-  Claude Opus and Sonnet 5.5 pass 23, and through Aside Computer Use on macOS 38 and 37, with every model there
-  passing at least 27. On Linux and Windows three of the tasks open a dialog that takes the user's keyboard almost
+  5 of 40 background trials, and through agent-desktop on Windows all six pass none; through cua-driver on macOS
+  seven models pass 14 to 23, and through Aside Computer Use on macOS the same seven 27 to 38, Claude Opus 5.5 the
+  most. On Linux and Windows three of the tasks open a dialog that takes the user's keyboard almost
   whatever the agent does, and no multi-app trial passes.
 - **With the desktop to itself the model matters, and so can the driver.** Through Aside Computer Use on macOS, Claude
   Opus and Sonnet 5.5 pass all 50, the only setups that do, against Opus's 44 through cua-driver there and GPT-6 Luna's
