@@ -118,6 +118,7 @@ button, select { font: inherit; color: inherit; }
 .finds b { color: var(--ink); font-weight: 700; }
 .finds p { margin: 0 0 12px; color: var(--ink-2); }
 .finds code { font-family: var(--mono); font-size: .86em; }
+.showcase .story { margin-top: 0; }
 .decides { margin: 0; min-width: 0; padding: 18px 20px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
 .dzhead h3 { margin: 0; font-size: 17px; font-weight: 750; letter-spacing: -.015em; line-height: 1.3; }
 .dzhead p { margin: 3px 0 0; color: var(--ink-3); font-size: 13px; line-height: 1.45; }

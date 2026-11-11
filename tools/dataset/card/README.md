@@ -69,6 +69,8 @@ screen recording, the agent's full trajectory, the user's log, the grade and the
 [replay Space](https://huggingface.co/spaces/earakely-scale/CuaDriverBench-AgentEnv) plays each one with the agent's tool
 calls and the user's typing beside it.
 
+{{OSES}}
+
 ## Results
 
 {{BOARD}}

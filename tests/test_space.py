@@ -490,6 +490,33 @@ def test_an_os_gap_holds_the_model_and_the_bench_driver_over_the_tasks_every_os_
         "linux": (1.0, 0.0), "macos": (1.0, 1.0)}
 
 
+def test_the_os_showcase_holds_the_driver_and_the_models_every_os_ran_over_the_tasks_every_one_of_them_ran(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    both = lambda task, fg, bg: [(task, "foreground", fg), (task, "background", bg)]
+    metas = (_cells("cua-driver", both("ir-01", [(True, 1.0)] * 2, [(False, 0.5)] * 2)
+                    + both("mb-09", [(True, 1.0)] * 2, [(False, 0.5)] * 2), os="linux")
+             + _cells("cua-driver", both("ir-01", [(True, 1.0)] * 2, [(False, 0.5)] * 2), os="linux", model=HAIKU)
+             + _cells("cua-driver", both("ir-01", [(True, 1.0), (False, 0.5)], [(True, 1.0)] * 2), os="macos")
+             + _cells("agent-desktop", both("ir-01", [(False, 0.0)], [(False, 0.0)]), os="macos"))
+
+    spec = space("figures").os_spec(_catalog(space, metas))
+
+    assert spec["models"] == [SONNET] and spec["tasks"] == {"foreground": ["ir-01"], "background": ["ir-01"]}
+    assert [(r["os_id"], r["driver_id"]) for r in spec["panels"]] == [("linux", "cua-driver"), ("macos", "cua-driver")]
+    assert {r["os_id"]: {c: [(p["passed"], p["n"]) for p in ps] for c, ps in r["cells"].items()} for r in spec["panels"]} == {
+        "linux": {"foreground": [(2, 2)], "background": [(0, 2)]}, "macos": {"foreground": [(1, 2)], "background": [(2, 2)]}}
+    assert spec["full"] == {"foreground": 2, "background": 2}
+
+
+def test_one_os_alone_has_no_os_showcase(space):
+    for package in ("fontTools", "PIL", "brotli"):
+        pytest.importorskip(package)
+    metas = _cells("cua-driver", [("ir-01", "foreground", [(True, 1.0)]), ("ir-01", "background", [(True, 1.0)])], os="linux")
+
+    assert space("figures").os_spec(_catalog(space, metas))["panels"] == []
+
+
 def test_each_other_os_where_two_models_ran_gets_a_passes_grid_of_its_own(space):
     for package in ("fontTools", "PIL", "brotli"):
         pytest.importorskip(package)

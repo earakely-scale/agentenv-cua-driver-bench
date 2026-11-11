@@ -38,6 +38,8 @@ STORY_FIGURES = {
     "decides": "Dot strips of full passes per model, a row per operating system and driver, the foreground beside the "
                "background: with the desktop to itself the models spread out along each row, and with the user typing "
                "they bunch together at a level that changes from row to row",
+    "by-os": "Dot strips of full passes per model, a row per operating system with the driver and the models held fixed, "
+             "the foreground beside the background: where the rows part, the operating system decides",
 }
 COMPARE_FIGURES = {
     "models-tasks": "Grid of how many of each task's five runs passed, a row per task in its family and a column per "
@@ -68,6 +70,8 @@ def main():
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{PAIRS}}", _pairs(catalog, trials))
     text = text.replace("{{STORY}}", _story(catalog))
+    oses = _oses(catalog)
+    text = text.replace("{{OSES}}\n\n", f"{oses}\n\n" if oses else "")
     text = text.replace("{{BOARD}}", _board(catalog, trials))
     text = text.replace("{{NOTES}}", _notes(catalog))
     models = json.loads((HERE.parent / "space" / "config.json").read_text())["models"]
@@ -93,6 +97,15 @@ def _story(catalog):
     text = (HERE / "card" / "story.md").read_text().strip()
     shown = "decides" in (catalog.get("story_figures") or [])
     return text.replace("{{FIGURE}}", _picture("decides", STORY_FIGURES["decides"]) if shown else "").strip()
+
+
+def _oses(catalog):
+    """The card's showcase of the operating systems (card/os.md), with its figure of the same models and driver on each,
+    or nothing until the board holds a driver and its models on two OSes or more."""
+    if "by-os" not in (catalog.get("story_figures") or []):
+        return ""
+    text = (HERE / "card" / "os.md").read_text().strip()
+    return text.replace("{{FIGURE}}", _picture("by-os", STORY_FIGURES["by-os"])).strip()
 
 
 def _pairs(catalog, trials):
