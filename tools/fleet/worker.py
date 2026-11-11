@@ -49,7 +49,7 @@ TRIAL_S, STOP_S = 3600, 120
 def main():
     run, specs = sys.argv[1], Path(sys.argv[2])
     api = HfApi(token=os.environ["HF_TOKEN"])
-    api.create_repo(REPO, repo_type="dataset", exist_ok=True)
+    _retried(lambda: api.create_repo(REPO, repo_type="dataset", exist_ok=True))
     done = {json.loads(line)["name"] for line in _progress().read_text().splitlines() if line.strip()} \
         if _progress().exists() else set()
     lines = specs.read_text().split()
