@@ -142,38 +142,42 @@ models in Codex CLI 0.147.0 at medium effort through agent-desktop's Codex CLI t
 - No trial leaves the GUI; these four models' cua-driver runs leave it 11 times through `launch_app`. Two trials, Sol's
   G02 and Opus's G03, were run again after the task's app wasn't ready within 210 seconds in each of three deploys.
 
-**On Windows, Codex Computer Use ties cua-driver in the foreground** (runs `codex-computer-use-sonnet-5-5-2026-11-10`
-and `codex-computer-use-gpt-6-1-sol-2026-11-10`: the 50 foreground trials of Bench v2 through OpenAI's Codex Computer
-Use, the Codex app 26.1103.7773.0's plugin with no ChatGPT sign-in, driven by Claude Sonnet 5.5 in Claude Code and by
-GPT-6.1 Sol in Codex CLI 0.147.0 at medium effort, on agentenv-framework 0.9.1500). On Windows, Codex acts only on the
-app in front, so these runs have no background trials. Each column counts foreground trials alone:
+**On Windows, Codex Computer Use passes within four trials of cua-driver in the foreground for every model** (runs
+`codex-computer-use-*-2026-11-10` and `codex-computer-use-*-2026-11-11`: the 50 foreground trials of Bench v2 through
+OpenAI's Codex Computer Use, the Codex app 26.1103.7773.0's plugin with no ChatGPT sign-in, driven by Claude Opus,
+Sonnet and Haiku 5.5 in Claude Code and by GPT-6.1 Sol, GPT-6.1 Terra and GPT-6 Luna in Codex CLI 0.147.0 at medium
+effort, on agentenv-framework 0.9.1500). On Windows, Codex acts only on the app in front, so these runs have no
+background trials. Foreground trials passed of 50 through each driver, then Codex's own:
 
-| Driver | Model | Foreground | Multi-app | Precision | Interruption | Left the GUI | Cost per trial |
-|---|---|---:|---:|---:|---:|---:|---:|
-| cua-driver | Sonnet 5.5 | 35 of 50 | 2 of 15 | 15 of 15 | 18 of 20 | 0 | $0.63 |
-| agent-desktop | Sonnet 5.5 | 37 of 50 | 3 of 15 | 14 of 15 | 20 of 20 | 0 | $0.34 |
-| Codex Computer Use | Sonnet 5.5 | 35 of 50 | 2 of 15 | 13 of 15 | 20 of 20 | 0 | $0.32 |
-| Codex Computer Use | GPT-6.1 Sol | 35 of 50 | 2 of 15 | 13 of 15 | 20 of 20 | 0 | $0.13 |
+| Model | cua-driver | agent-desktop | Codex Computer Use | Multi-app (Codex) | Precision (Codex) | Interruption (Codex) | Turn limit (Codex) | Cost per trial (Codex) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Opus 5.5 | 37 | 45 | 33 | 2 of 15 | 11 of 15 | 20 of 20 | 8 | $0.57 |
+| Sonnet 5.5 | 35 | 37 | 35 | 2 of 15 | 13 of 15 | 20 of 20 | 9 | $0.32 |
+| Haiku 5.5 | 35 | 35 | 31 | 0 of 15 | 11 of 15 | 20 of 20 | 9 | $0.03 |
+| GPT-6.1 Sol | 34 | 38 | 35 | 2 of 15 | 13 of 15 | 20 of 20 | 1 | $0.13 |
+| GPT-6.1 Terra | 32 | 30 | 35 | 2 of 15 | 13 of 15 | 20 of 20 | 8 | $0.06 |
+| GPT-6 Luna | 28 | 30 | 31 | 0 of 15 | 12 of 15 | 19 of 20 | 9 | $0.01 |
 
 - **Without a ChatGPT sign-in, G04 can't pass.** Before it acts on a browser window, Codex asks OpenAI whether the
-  page's site is allowed. Unsigned, it stops the turn the first time the agent reaches Chromium, and both models report
-  themselves blocked in all five of G04's trials, which cua-driver and agent-desktop pass 2 of 5. These runs keep Codex
-  as it ships.
-- **G02 passes 2 of 5 for each model**, against cua-driver's none and agent-desktop's 1, and **G03 none**. Sonnet's
-  three G02 failures and five G03 failures all end on the 45-turn limit, with 21% of its multi-app calls erring,
-  most of them in Codex: an element no longer in Codex's cached state, a point outside the window it acts on,
-  coordinate input without the window's geometry, or a window Codex failed to activate. GPT ends one trial on the
-  limit; it reports itself blocked in all five of G03's, after Codex's input fails in GnuCash and its dialogs, and two
-  of its G02 trials end done without the blocker recorded.
-- **Every interruption trial passes, and 13 of 15 precision trials.** MB-09's drag passes all five for each model. Codex's
-  API has no hover, and MB-10 fails 2 of 5 for each model: the overlay its click needs isn't showing when the click lands.
+  page's site is allowed. Unsigned, it stops the turn the first time the agent reaches Chromium, and every model
+  reports itself blocked in all five of G04's trials. These runs keep Codex as it ships.
+- **Codex's errors on Windows cost the multi-app tasks their turns.** G03 passes for no model, and G02 2 of 5 for
+  Opus, Sonnet, Sol and Terra and none for Haiku or Luna. Opus passes G02 4 of 5 through cua-driver on Windows and
+  through Codex on macOS, ending one of those ten trials on the 45-turn limit; through Codex on Windows it passes 2,
+  and three of its G02 trials and all five of its G03's end on the limit. Between 17% and 24% of each model's
+  multi-app calls err, most of them in Codex: coordinate input without the window's geometry, an element no longer in
+  Codex's cached state, a point outside the window it acts on, or a window Codex failed to activate. Five models end
+  23 of their 25 G03 trials on the limit; Sol instead reports itself blocked in all five, after Codex's input fails in
+  GnuCash and its dialogs.
+- **Every model passes at least 19 of 20 interruption trials, and MB-09's drag every time.** Codex's API has no hover:
+  MB-10 passes 1 of 5 for Opus and Haiku and 3 for the other four, its overlay not showing when the click lands.
 - No trial leaves the GUI, though Codex runs its JavaScript outside its sandbox on Windows (see the notes).
 
 **On macOS the driver decides whether the user stays undisturbed.** Four computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
 90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06; and
-`codex-computer-use-sonnet-5-5-2026-11-09`, Sonnet alone; macOS 26 on EC2 Macs). Through the four, Sonnet passes 39,
+`codex-computer-use-*`, Sonnet on 2026-11-09 and Opus and Haiku on 2026-11-11; macOS 26 on EC2 Macs). Through the four, Sonnet passes 39,
 35, 32 and 26 of 50 trials in the foreground, and 23, 8, 1 and 11 of 40 in the background.
 
 - **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 38 of 50 and 18 of 40.** Of 80 background trials it takes the user's keyboard in 1 and raises a window over theirs in 7.
@@ -217,6 +221,14 @@ with the OS, the model, the prompts, the seeds and the grade held fixed, each dr
   without their screenshots (as on Linux, below), so MB-10 and MB-11 pass none of their ten, and 19 of the 30 trials
   it stops in, reporting itself blocked, say its screenshots are empty. One trial leaves the GUI: in G04's foreground
   GPT runs a command through cua-driver's `launch_app`, and the trajectory check fails it. One ends on the turn limit.
+- **Codex Computer Use with Opus 5.5 and Haiku 5.5: Opus 34 of 50 in the foreground and 10 of 40 in the background,
+  Haiku 27 of 50 and 19 of 40** (runs `codex-computer-use-opus-5-5-2026-11-11` and
+  `codex-computer-use-haiku-5-5-2026-11-11`, on GPT's agentenv-framework 0.9.1482 and bench e7024f8), against 44 and
+  23, and 38 and 18, through cua-driver. In the background Codex does Opus's task in 35 of 40 trials and disturbs the
+  user in 30, and Haiku's in 28 and 21, so Haiku, doing less, passes one more there than through cua-driver. In the
+  foreground both pass G04 and all 20 interruption trials every time, and neither MB-10 nor MB-11, which need the
+  hover Codex hasn't; Opus passes G02 4 of 5 and Haiku no other multi-app trial. Opus ends one trial on the 45-turn
+  limit and Haiku 16; none leaves the GUI. A trial costs $0.45 for Opus and $0.04 for Haiku at list price.
 
 **Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.
 

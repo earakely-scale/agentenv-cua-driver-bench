@@ -697,12 +697,12 @@
         "cua-driver",
         "codex-computer-use"
       ],
-      "title": "How Codex Computer Use and cua-driver tie on Windows",
-      "lead": "Codex Computer Use acts on Windows only on the app in front, so it ran the 50 foreground trials alone. Sonnet passes 35 of them through it, as through cua-driver, and GPT-6.1 Sol 35 too, but the two drivers pass different tasks. Each reason below is read from the trials' tool calls and Codex's own replies.",
+      "title": "How Codex Computer Use and cua-driver compare on Windows",
+      "lead": "Codex Computer Use acts on Windows only on the app in front, so it ran the 50 foreground trials alone. Through it each of six models passes within four trials of its count through cua-driver, from Opus's 33 against 37 to Luna's 31 against 28, but the two drivers pass different tasks. Each reason below is read from the trials' tool calls and Codex's own replies.",
       "points": [
         {
           "head": "Without a ChatGPT sign-in, Codex won't act on a browser.",
-          "text": "Before it acts on a browser window, Codex asks OpenAI whether the page's site is allowed. Unsigned, it stops the turn the first time the agent reaches Chromium, and both models report themselves blocked in all five of G04's trials. cua-driver reads the page, and Sonnet passes 2 of 5 through it.",
+          "text": "Before it acts on a browser window, Codex asks OpenAI whether the page's site is allowed. Unsigned, it stops the turn the first time the agent reaches Chromium, and every model reports itself blocked in all five of G04's trials. cua-driver reads the page, and Sonnet passes 2 of 5 through it.",
           "examples": [
             "windows--codex-computer-use-sonnet-5-5-2026-11-10--cdb-g04-r1-foreground",
             "windows--codex-computer-use-gpt-6-1-sol-2026-11-10--cdb-g04-r1-foreground",
@@ -710,7 +710,7 @@
           ]
         },
         {
-          "head": "Through Codex, G02 passes twice where cua-driver's never does.",
+          "head": "For Sonnet, G02 passes twice through Codex where cua-driver's never does.",
           "text": "All five of Sonnet's G02 trials through cua-driver end on the 45-turn limit. Through Codex, Sonnet finishes two within it, and GPT two, though 21% of Sonnet's multi-app calls err, most of them in Codex: an element no longer in Codex's cached state, a point outside the window it acts on, or a window Codex failed to activate. Sonnet's other three G02 trials and all five of its G03's end on the limit.",
           "examples": [
             "windows--codex-computer-use-sonnet-5-5-2026-11-10--cdb-g02-r2-foreground",
@@ -719,8 +719,17 @@
           ]
         },
         {
-          "head": "Codex has no hover, so MB-10 fails 2 of 5.",
-          "text": "MB-10's actions show only while the pointer is over their strip. Codex's API has no hover, and in 2 of 5 for each model the overlay the click needs isn't showing when the click lands. Through cua-driver, Sonnet passes all five.",
+          "head": "Opus runs out of turns through Codex on Windows, not on macOS.",
+          "text": "Opus passes G02 4 of 5 through cua-driver on Windows, and 4 of 5 through Codex on macOS. Through Codex on Windows it passes 2, and three of its G02 trials and all five of its G03's end on the 45-turn limit, with 19% of its multi-app calls erring, most of them in Codex: coordinate input without the window's geometry, an element no longer in Codex's cached state, a point outside the window it acts on.",
+          "examples": [
+            "windows--codex-computer-use-opus-5-5-2026-11-10--cdb-g02-r1-foreground",
+            "windows--cua-driver-opus-5-5-2026-11-09--cdb-g02-r2-foreground",
+            "macos--codex-computer-use-opus-5-5-2026-11-11--cdb-g02-r1-foreground"
+          ]
+        },
+        {
+          "head": "Codex has no hover, so MB-10 passes 1 to 3 of 5.",
+          "text": "MB-10's actions show only while the pointer is over their strip. Codex's API has no hover, and the overlay the click needs isn't always showing when the click lands: MB-10 passes 1 of 5 for Opus and Haiku and 3 for Sonnet and the three GPT models. Through cua-driver, Sonnet passes all five.",
           "examples": [
             "windows--codex-computer-use-sonnet-5-5-2026-11-10--mb-10-r2-foreground",
             "windows--codex-computer-use-gpt-6-1-sol-2026-11-10--mb-10-r1-foreground",
@@ -728,8 +737,8 @@
           ]
         },
         {
-          "head": "GPT stops on G03 when Codex's input fails in GnuCash.",
-          "text": "GPT reports itself blocked in all five of G03's trials, after Codex's input fails in GnuCash and its dialogs. Sonnet runs out of turns there instead.",
+          "head": "Sol stops on G03 when Codex's input fails in GnuCash.",
+          "text": "GPT-6.1 Sol reports itself blocked in all five of G03's trials, after Codex's input fails in GnuCash and its dialogs. The other five models run out of turns there instead, in 23 of their 25 trials.",
           "examples": [
             "windows--codex-computer-use-gpt-6-1-sol-2026-11-10--cdb-g03-r3-foreground",
             "windows--codex-computer-use-gpt-6-1-sol-2026-11-10--cdb-g03-r5-foreground"
