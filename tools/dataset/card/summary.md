@@ -115,6 +115,33 @@ foreground, on agentenv-framework 0.9.1494):
   time, and MB-09 failed headless with the user undisturbed. Through cua-driver Haiku passes 35 of 50 and 8 of 40. A
   trial costs $0.04, against cua-driver's $0.09.
 
+**Opus 5.5 and the GPT models through agent-desktop on Windows, every trial of Bench v2** (runs
+`agent-desktop-opus-5-5-2026-11-11`, `agent-desktop-gpt-6.1-sol-2026-11-11`, `agent-desktop-gpt-6.1-terra-2026-11-11` and
+`agent-desktop-gpt-6-luna-2026-11-11`, agentenv-framework 0.9.1502; Opus in Claude Code at its default effort, the GPT
+models in Codex CLI 0.147.0 at medium effort through agent-desktop's Codex CLI twins,
+`tasks/codex-windows-agent-desktop-*.json`). Every model on the Windows board now has a run through each driver:
+
+| Model | Driver | Foreground | Background | Multi-app (fg) | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Opus 5.5 | cua-driver | 37 of 50 | 10 of 40 | 7 of 15 | 15 of 15 | 15 of 20 | 2 | $0.87 |
+| Opus 5.5 | agent-desktop | 45 of 50 | 0 of 40 | 10 of 15 | 15 of 15 | 20 of 20 | 0 | $0.64 |
+| GPT-6.1 Sol | cua-driver | 34 of 50 | 10 of 40 | 5 of 15 | 10 of 15 | 19 of 20 | 1 | $0.18 |
+| GPT-6.1 Sol | agent-desktop | 38 of 50 | 0 of 40 | 8 of 15 | 10 of 15 | 20 of 20 | 0 | $0.13 |
+| GPT-6.1 Terra | cua-driver | 32 of 50 | 11 of 40 | 2 of 15 | 10 of 15 | 20 of 20 | 5 | $0.10 |
+| GPT-6.1 Terra | agent-desktop | 30 of 50 | 0 of 40 | 0 of 15 | 10 of 15 | 20 of 20 | 0 | $0.06 |
+| GPT-6 Luna | cua-driver | 28 of 50 | 11 of 40 | 0 of 15 | 10 of 15 | 18 of 20 | 3 | $0.02 |
+| GPT-6 Luna | agent-desktop | 30 of 50 | 0 of 40 | 0 of 15 | 10 of 15 | 20 of 20 | 0 | $0.01 |
+
+- **Opus through agent-desktop passes 45 of 50 in the foreground, the most of any model and driver on Windows**: every
+  precision and interruption trial, and 10 of the 15 multi-app ones (G04 5 of 5, G02 3, G03 2).
+- **In the background no model passes a trial through agent-desktop**, as with Sonnet and Haiku: the window it acts on
+  takes the user's keyboard focus and activation. Opus still does the task in 24 of its 40 background trials.
+- **On the multi-app tasks Sol passes 8 of 15** (G02 and G04 4 of 5 each) against 5 through cua-driver, while Terra and
+  Luna end all 15 on the 45-turn limit.
+- **MB-11's tooltip fails all five times for each GPT model**, as through every driver on every OS.
+- No trial leaves the GUI; these four models' cua-driver runs leave it 11 times through `launch_app`. Two trials, Sol's
+  G02 and Opus's G03, were run again after the task's app wasn't ready within 210 seconds in each of three deploys.
+
 **On Windows, Codex Computer Use ties cua-driver in the foreground** (runs `codex-computer-use-sonnet-5-5-2026-11-10`
 and `codex-computer-use-gpt-6-1-sol-2026-11-10`: the 50 foreground trials of Bench v2 through OpenAI's Codex Computer
 Use, the Codex app 26.1103.7773.0's plugin with no ChatGPT sign-in, driven by Claude Sonnet 5.5 in Claude Code and by
@@ -278,6 +305,35 @@ Codex CLI 0.147.0 at medium effort, agent-desktop's trials through its Codex CLI
   screenshots and works on, while Astra reports itself blocked in all 15 multi-app trials.
 - **In the background neither driver separates them:** each passes IR-02's five and no other (‡).
 - No trial leaves the GUI; Fable's 11 slowest run out the 360 seconds, and one of Astra's ends on the turn limit.
+
+**Opus, Haiku, Sol, Terra and Luna through agent-desktop on Linux, every trial of Bench v2** (runs
+`agent-desktop-opus-5-5-2026-11-11`, `agent-desktop-haiku-5-5-2026-11-11`, `agent-desktop-gpt-6.1-sol-2026-11-11`,
+`agent-desktop-gpt-6.1-terra-2026-11-11` and `agent-desktop-gpt-6-luna-2026-11-11`, agentenv-framework 0.9.1502; the
+GPT models through `tasks/codex-agent-desktop-*.json`). Every model on the Linux board now has a run through each driver:
+
+| Model | Driver | Foreground | Background | Multi-app (fg) | Precision (fg) | Interruption (fg) | Left the GUI | Cost per trial |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Claude Opus 5.5 | cua-driver | 38 of 50 | 5 of 40 | 7 of 15 | 11 of 15 | 20 of 20 | 2 | $0.82 |
+| Claude Opus 5.5 | agent-desktop | 37 of 50 | 5 of 40 | 2 of 15 | 15 of 15 | 20 of 20 | 0 | $0.34 |
+| Claude Haiku 5.5 | cua-driver | 34 of 50 | 5 of 40 | 0 of 15 | 14 of 15 | 20 of 20 | 3 | $0.07 |
+| Claude Haiku 5.5 | agent-desktop | 37 of 50 | 3 of 40 | 2 of 15 | 15 of 15 | 20 of 20 | 0 | $0.03 |
+| GPT-6.1 Sol | cua-driver | 26 of 50 | 5 of 40 | 5 of 15 | 1 of 15 | 20 of 20 | 2 | $0.19 |
+| GPT-6.1 Sol | agent-desktop | 30 of 50 | 5 of 40 | 0 of 15 | 10 of 15 | 20 of 20 | 0 | $0.09 |
+| GPT-6.1 Terra | cua-driver | 26 of 50 | 5 of 40 | 1 of 15 | 6 of 15 | 19 of 20 | 3 | $0.11 |
+| GPT-6.1 Terra | agent-desktop | 30 of 50 | 5 of 40 | 0 of 15 | 10 of 15 | 20 of 20 | 0 | $0.05 |
+| GPT-6 Luna | cua-driver | 26 of 50 | 5 of 40 | 1 of 15 | 10 of 15 | 15 of 20 | 1 | $0.02 |
+| GPT-6 Luna | agent-desktop | 29 of 50 | 4 of 40 | 0 of 15 | 10 of 15 | 19 of 20 | 0 | $0.01 |
+
+- **Through agent-desktop each model but Opus passes more in the foreground**, Haiku 37 of 50 against 34 and the GPT
+  models 29 or 30 against 26, and no trial leaves the GUI, where 11 of these models' cua-driver trials do.
+- **The GPT models gain the precision tasks and lose the multi-app ones**, as Astra does: agent-desktop's text answers
+  carry MB-09's drag and MB-10's hover toolbar, 5 of 5 each, but not MB-11's tooltip, and none of Sol, Terra and Luna
+  passes a multi-app trial.
+- **Claude passes fewer multi-app trials through agent-desktop:** Opus 2 of 15 (G02 and G04 once each) against
+  cua-driver's 7, Haiku 2 (G04 twice). Haiku stops on the 45-turn limit in 11 of its 15.
+- **In the background agent-desktop matches cua-driver:** only IR-02 passes, 5 of 5 for Opus, Sol and Terra, 4 for
+  Luna and 3 for Haiku; the dialog tasks take the keyboard with either driver (‡).
+- **A trial costs less than half of cua-driver's for each model**, Opus $0.34 against $0.82.
 
 cua-driver's first Linux runs, which also offered its agents AgentEnv's seven `computer_*` tools beside its own 66,
 stay in the dataset but not on the board: Claude Sonnet 5.5 (`sonnet-5-5-2026-11-03`) passed 36 of 50 in the
