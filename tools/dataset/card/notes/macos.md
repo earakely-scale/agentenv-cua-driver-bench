@@ -2,9 +2,9 @@
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
 90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06;
-`codex-computer-use-sonnet-5-5-2026-11-09`, Sonnet alone; and `aside-*-2026-11-11`, seven models; macOS 26 on EC2
-Macs). Through the five, Sonnet passes 39, 35, 32, 26 and 50 of 50 trials in the foreground, and 23, 8, 1, 11 and 37
-of 40 in the background.
+`codex-computer-use-*`, Sonnet on 2026-11-09 and Opus and Haiku on 2026-11-11; and `aside-*-2026-11-11`, seven models;
+macOS 26 on EC2 Macs). Through the five, Sonnet passes 39, 35, 32, 26 and 50 of 50 trials in the foreground, and 23,
+8, 1, 11 and 37 of 40 in the background.
 
 - **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 38 of 50 and 18 of 40.** Of 80 background trials it takes the user's keyboard in 1 and raises a window over theirs in 7.
   Its background misses are the tasks: MB-09's drag moves the user's pointer (§), and it passes 1 of the 10 G02 and
@@ -47,6 +47,14 @@ of 40 in the background.
   without their screenshots (as on Linux, below), so MB-10 and MB-11 pass none of their ten, and 19 of the 30 trials
   it stops in, reporting itself blocked, say its screenshots are empty. One trial leaves the GUI: in G04's foreground
   GPT runs a command through cua-driver's `launch_app`, and the trajectory check fails it. One ends on the turn limit.
+- **Codex Computer Use with Opus 5.5 and Haiku 5.5: Opus 34 of 50 in the foreground and 10 of 40 in the background,
+  Haiku 27 of 50 and 19 of 40** (runs `codex-computer-use-opus-5-5-2026-11-11` and
+  `codex-computer-use-haiku-5-5-2026-11-11`, on GPT's agentenv-framework 0.9.1482 and bench e7024f8), against 44 and
+  23, and 38 and 18, through cua-driver. In the background Codex does Opus's task in 35 of 40 trials and disturbs the
+  user in 30, and Haiku's in 28 and 21, so Haiku, doing less, passes one more there than through cua-driver. In the
+  foreground both pass G04 and all 20 interruption trials every time, and neither MB-10 nor MB-11, which need the
+  hover Codex hasn't; Opus passes G02 4 of 5 and Haiku no other multi-app trial. Opus ends one trial on the 45-turn
+  limit and Haiku 16; none leaves the GUI. A trial costs $0.45 for Opus and $0.04 for Haiku at list price.
 
 - **Aside Computer Use (At Inc.): Claude Opus 5.5 passes 50 of 50 in the foreground and 38 of 40 in the background,
   and Sonnet 50 of 50 and 37 of 40, the most of any setup that ran every task** (runs `aside-*-2026-11-11`: Opus,
