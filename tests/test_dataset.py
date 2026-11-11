@@ -1,8 +1,8 @@
 """The dataset's exporter, tables and card, offline: a trial's cost at list price from the tokens its trajectory reports
 (a flat price from the totals, a tiered one call by call, the calls' own counts when the run was cut off before Claude
 Code's result), its timeline on the recording's clock, its workspace without an app's .runtime or a Windows home's
-desktop.ini, the rows the tables take from a trial folder and a task file, and the card's runs with their drivers, its
-drivers section, its failure section and gallery and its hero's link."""
+desktop.ini, the rows the tables take from a trial folder and a task file and the viewer's row of each, and the card's
+board, its runs with their drivers, its drivers section, its failure section and gallery and its hero's link."""
 import importlib.util
 import json
 from datetime import datetime, timezone
@@ -172,6 +172,7 @@ def test_a_trials_row_holds_every_half_of_its_grade_and_where_its_files_are(tabl
     facts = {"trial_id": folder.name, "os": "linux", "task": "ir-02", "probe": "IR-02", "condition": "background",
              "model": "anthropic/claude-haiku-5-5", "harness": "claude-code", "harness_version": "2.1.280",
              "reward": 1.0, "passed": True, "run_index": 3, "seed": 1, "started_at": "2026-11-02T17:00:00Z",
+             "duration_s": 41.6, "model_calls": 12,
              "grade": {"task": {"result": True, "score": 1.0, "checks": {"no_restart": True}},
                        "gui_only": {"result": True, "violations": []}, "sentinel": {"result": True},
                        "user_undisturbed": {"result": True, "criteria": criteria}},
@@ -191,6 +192,39 @@ def test_a_trials_row_holds_every_half_of_its_grade_and_where_its_files_are(tabl
     assert (row["on_board"], later["on_board"]) == (False, True)
     assert row["agent_window_s"] == 25.0 and row["recording"].endswith("ir-02-r3-background/recording.mp4")
     assert [(c["trial_id"], c["tool"]) for c in calls] == [(folder.name, "click")]
+    viewed = tables.board_row(later, cfg)
+    assert {k: viewed[k] for k in ("os", "driver", "model", "task", "condition", "run", "passed", "seconds")} == {
+        "os": "Linux", "driver": "cua-driver", "model": "Claude Haiku 5.5", "task": "IR-02", "condition": "background",
+        "run": 3, "passed": True, "seconds": 42}
+    assert viewed["replay"] == f"{tables.SPACE}#/linux/ir-02/background/anthropic%2Fclaude-haiku-5-5/r3"
+
+
+def test_the_cards_board_has_a_cell_per_model_and_setup_its_best_foreground_bold_and_what_a_pass_takes(tables):
+    card = _module(ROOT / "tools" / "dataset" / "card.py")
+    cell = lambda os_, driver, model, cond, passed, n: {"os": os_, "driver": driver, "model": model, "condition": cond,
+                                                        "passed": passed, "n_trials": n}
+    catalog = {"oses": [{"id": "linux", "name": "Linux"}, {"id": "omarchy", "name": "Omarchy"}],
+               "drivers": [{"id": "cua-driver", "name": "cua-driver"}, {"id": "macos-harness", "name": "browser-use (macos-harness)",
+                                                                        "label": "browser-use"}],
+               "models": [{"id": "a/one", "name": "One"}, {"id": "a/two", "name": "Two"}],
+               "board": [cell("linux", "cua-driver", "a/one", "foreground", 40, 50), cell("linux", "cua-driver", "a/one", "background", 5, 40),
+                         cell("linux", "cua-driver", "a/two", "foreground", 30, 50), cell("linux", "cua-driver", "a/two", "background", 4, 40),
+                         cell("omarchy", "cua-driver", "a/one", "foreground", 34, 35), cell("omarchy", "cua-driver", "a/one", "background", 5, 25),
+                         cell("omarchy", "cua-driver", "a/two", "foreground", 34, 35),
+                         cell("omarchy", "cua-driver", "a/two", "background", 3, 12)]}
+    trials = tables.pd.DataFrame([
+        {"os": "linux", "driver": "cua-driver", "on_board": True, "passed": True, "duration_s": 50.0, "model_calls": 16},
+        {"os": "linux", "driver": "cua-driver", "on_board": True, "passed": True, "duration_s": 60.0, "model_calls": 20},
+        {"os": "linux", "driver": "cua-driver", "on_board": True, "passed": False, "duration_s": 999.0, "model_calls": 99},
+        {"os": "omarchy", "driver": "cua-driver", "on_board": True, "passed": True, "duration_s": 26.0, "model_calls": 12}])
+
+    board = card._board(catalog, trials)
+
+    assert "| Model | Linux<br>cua-driver | Omarchy<br>cua-driver |" in board
+    assert "| One | **80** · 13 | **97** · 20 |" in board
+    assert "| Two | 60 · 10 | **97** · – |" in board
+    assert "Omarchy runs the seven BenchLab tasks alone." in board
+    assert "| Linux · cua-driver | 55 | 18 |" in board and "| Omarchy · cua-driver | 26 | 12 |" in board
 
 
 def test_a_trial_re_run_for_harness_errors_says_so_and_one_whose_re_runs_were_spent_is_a_missing_row(tables, tmp_path):
@@ -293,7 +327,7 @@ def test_the_heros_link_names_its_driver_first_unless_it_is_cua_driver(tables, d
     assert "in Claude Code on IR-02, Apply, in the background condition: the macOS desktop" in hero
 
 
-def test_a_reels_hero_names_each_setup_its_outcomes_and_links_its_two_replays(tables):
+def test_a_reels_hero_says_each_setups_outcomes_in_its_alt_text_and_links_the_space_in_one_line(tables):
     card = _module(ROOT / "tools" / "dataset" / "card.py")
     base = {"task": "ir-02", "probe": "IR-02", "title": "Apply", "model": "anthropic/claude-sonnet-5-5", "run_index": 2,
             "harness": "claude-code", "task_score": 1.0, "passed": True}
@@ -309,11 +343,12 @@ def test_a_reels_hero_names_each_setup_its_outcomes_and_links_its_two_replays(ta
 
     hero = card._hero(catalog, tables.pd.DataFrame(rows))
 
-    assert "Claude Sonnet 5.5 on IR-02, Apply, run 2, through 2 setups (Linux · cua-driver, macOS · agent-desktop)" in hero
-    assert "**Linux · cua-driver**: foreground a pass" in hero
-    assert "**macOS · agent-desktop**: foreground a pass" in hero
-    assert "background the task done but the user disturbed (key focus)" in hero
-    assert "(#/agent-desktop/macos/ir-02/background/anthropic%2Fclaude-sonnet-5-5/r2)" in hero.replace(card.SPACE, "")
+    alt, caption = hero.split("\n\n")
+    assert alt.startswith("[![Claude Sonnet 5.5 on IR-02, Apply, run 2, through 2 setups (Linux · cua-driver: foreground a "
+                          "pass, background a pass; macOS · agent-desktop: foreground a pass, background the task done "
+                          "but the user disturbed (key focus))")
+    assert caption == (f"<sub>Claude Sonnet 5.5 on IR-02 (Apply) through 2 setups, the desktop to itself beside a person "
+                       f"typing in their own window. **▶ [Replay every trial in the Space]({card.SPACE})**</sub>")
 
 
 def test_a_task_files_row_takes_its_title_from_its_brief_or_trycuas_probe(tables):

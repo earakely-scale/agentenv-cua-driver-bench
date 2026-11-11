@@ -1,7 +1,7 @@
-"""card.py OUT DATASET: the dataset's README in DATASET from the card template in card/ (front matter, intro, quick
-start, and the latest run's summary.md and body.md), what tools/space/build.py wrote to OUT (catalog, results and
-drivers tables, hero, figures) and the runs in DATASET's tables; with the licence files, and the figures and hero under
-assets/."""
+"""card.py OUT DATASET: the dataset's README in DATASET from the card template in card/ (front matter, the opening and its
+findings in story.md, each OS's run notes in notes/, and body.md), what tools/space/build.py wrote to OUT (catalog,
+results and drivers tables, hero, figures) and the runs in DATASET's tables; with the licence files, and the figures and
+hero under assets/."""
 import json
 import os
 import shutil
@@ -68,7 +68,8 @@ def main():
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{PAIRS}}", _pairs(catalog, trials))
     text = text.replace("{{STORY}}", _story(catalog))
-    text = text.replace("{{SUMMARY}}", (HERE / "card" / "summary.md").read_text().strip())
+    text = text.replace("{{BOARD}}", _board(catalog, trials))
+    text = text.replace("{{NOTES}}", _notes(catalog))
     models = json.loads((HERE.parent / "space" / "config.json").read_text())["models"]
     names = {**{k: v["name"] for k, v in models.items()}, **{m["id"]: m["name"] for m in catalog["models"]}}
     text = text.replace("{{RESULTS}}", _results(out, trials, missing, names,
@@ -167,17 +168,86 @@ def _reel(catalog, trials):
         scenes.append((setup, fg, bg, said))
     first = scenes[0][2]
     model = _model(catalog, first.model)
-    setups = ", ".join(setup for setup, *_ in scenes)
-    alt = (f"{model} on {first.probe}, {first.title}, run {int(first.run_index)}, through {len(scenes)} setups "
-           f"({setups}): each setup's foreground trial beside its background one, then each setup's passes over the "
-           f"whole bench")
-    lines = "; ".join(f"**{setup}**: foreground {'a pass' if fg.passed else 'not a pass'} "
-                      f"([replay]({_link(fg)})), background {said} ([replay]({_link(bg)}))"
-                      for setup, fg, bg, said in scenes)
-    caption = (f"{model} on {first.probe} {first.title}, run {int(first.run_index)}, on each operating system and "
-               f"driver, the desktop to itself beside a person typing in their own window, sped up and ending on the "
-               f"grades. {lines}.")
-    return (f"[![{alt}](assets/hero.gif)]({SPACE})\n\n<sub>{caption} **▶ [Every trial is in the replay Space]({SPACE})**.</sub>")
+    alt = (f"{model} on {first.probe}, {first.title}, run {int(first.run_index)}, through {len(scenes)} setups ("
+           + "; ".join(f"{setup}: foreground {'a pass' if fg.passed else 'not a pass'}, background {said}"
+                       for setup, fg, bg, said in scenes)
+           + "): each setup's foreground trial beside its background one, then each setup's passes over the whole bench")
+    caption = (f"{model} on {first.probe} ({first.title.rstrip('.')}) through {len(scenes)} setups, the desktop to "
+               f"itself beside a person typing in their own window.")
+    return f"[![{alt}](assets/hero.gif)]({SPACE})\n\n<sub>{caption} **▶ [Replay every trial in the Space]({SPACE})**</sub>"
+
+
+def _board(catalog, trials):
+    """The board: a row per model and a column per OS and driver, each cell the model's full pass there in the foreground
+    and the background over every trial of a condition the setup ran, the best foreground of each column in bold; then
+    what a pass takes, seconds and model calls, per OS and driver."""
+    conds = ("foreground", "background")
+    full = complete_counts(catalog["board"])
+    cells = {(b["os"], b["driver"], b["model"], b["condition"]): b for b in catalog["board"]
+             if b["n_trials"] == full[b["os"], b["condition"]]}
+    oses = [o for o in catalog["oses"] if any(k[0] == o["id"] for k in cells)]
+    setups = [(o, d) for o in oses for d in catalog["drivers"] if any(k[:2] == (o["id"], d["id"]) for k in cells)]
+    models = [m for m in catalog["models"] if any(k[2] == m["id"] for k in cells)]
+    label = lambda d: d.get("label") or d["name"]
+    best = {(o["id"], d["id"]): max((b["passed"] / b["n_trials"] for k, b in cells.items()
+                                     if k[:2] == (o["id"], d["id"]) and k[3] == "foreground"), default=None)
+            for o, d in setups}
+
+    def cell(model, o, d):
+        got = [cells.get((o["id"], d["id"], model["id"], c)) for c in conds]
+        if not any(got):
+            return ""
+        fg, bg = (_pct(b["passed"] / b["n_trials"]).rstrip("%") if b else "–" for b in got)
+        top = got[0] and got[0]["passed"] / got[0]["n_trials"] == best[o["id"], d["id"]]
+        return f"**{fg}** · {bg}" if top else f"{fg} · {bg}"
+
+    head = "| Model | " + " | ".join(f"{o['name']}<br>{label(d)}" for o, d in setups) + " |"
+    rule = "|---|" + "---:|" * len(setups)
+    rows = [f"| {m['name']} | " + " | ".join(cell(m, o, d) for o, d in setups) + " |" for m in models]
+    partial = [o["name"] for o in oses if full.get((o["id"], "foreground")) != max(n for (_, c), n in full.items()
+                                                                                  if c == "foreground")]
+    board = trials[trials.on_board & trials.passed]
+    speed = board.groupby(["os", "driver"]).agg(seconds=("duration_s", "median"), calls=("model_calls", "median"))
+    speed_rows = [f"| {o['name']} · {label(d)} | {speed.loc[(o['id'], d['id']), 'seconds']:.0f} | "
+                  f"{speed.loc[(o['id'], d['id']), 'calls']:.0f} |" for o, d in setups if (o["id"], d["id"]) in speed.index]
+    note = (f" {join_names(partial)} {'runs' if len(partial) == 1 else 'run'} the seven BenchLab tasks alone." if partial else "")
+    per = {c: max(n for (_, cond), n in full.items() if cond == c) for c in conds}
+    return f"""Each cell is a model's full pass through one driver on one operating system, as a share of its {per["foreground"]}
+foreground trials, then of its {per["background"]} background ones: the task done through the GUI only and, in the
+background, the user left undisturbed. The best foreground of each column is in bold.{note}
+
+{head}
+{rule}
+{chr(10).join(rows)}
+
+**What a pass takes.** The median passing trial's length and model calls, all models together:
+
+| OS · driver | Seconds | Model calls |
+|---|---:|---:|
+{chr(10).join(speed_rows)}"""
+
+
+def complete_counts(board):
+    """Each OS and condition's count of trials in a complete run, the most common among its board rows (the larger on
+    a tie), as the figures' ``decides`` takes it, so a run still uploading doesn't set it."""
+    counts = {}
+    for b in board:
+        counts.setdefault((b["os"], b["condition"]), []).append(b["n_trials"])
+    return {key: max(ns, key=lambda v: (ns.count(v), v)) for key, ns in counts.items()}
+
+
+def join_names(names):
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _notes(catalog):
+    """Each OS's run notes (card/notes/<os>.md), what each run found with its own tables, folded away under the board."""
+    blocks = [f"<details><summary><b>{o['name']}</b></summary>\n\n{(HERE / 'card' / 'notes' / (o['id'] + '.md')).read_text().strip()}"
+              f"\n\n</details>" for o in catalog["oses"] if (HERE / "card" / "notes" / f"{o['id']}.md").exists()]
+    if not blocks:
+        return ""
+    return "### Run notes\n\nWhat each run found, operating system by operating system, with its own tables.\n\n" + \
+        "\n\n".join(blocks)
 
 
 def _link(row):
@@ -203,9 +273,20 @@ def _results(out, trials, missing, names, drivers):
         f"{t.task_score:.2f} | {_mark(t.gui_only)} | {_mark(t.user_undisturbed)} | {_mark(t.passed)} | "
         f"{int(t.tool_calls)} | "
         f"{'' if pd.isna(t.cost_usd) else f'${t.cost_usd:.2f}'} |" for t in trials.itertuples())
+    found = (out / "results.md").read_text().strip().split("\n\n")
+    tables = "\n\n".join(b for b in found if b.lstrip().startswith("|"))
+    marks = "\n\n".join(b for b in found if not b.lstrip().startswith("|"))
     return f"""{figures}
 
-{(out / "results.md").read_text().strip()}
+<details><summary>Every setup, task by task</summary>
+
+{tables}
+
+{marks}
+
+</details>
+
+<details><summary>Every run</summary>
 
 | Run | Model | Driver | Harness | Trials | Missing | Passed | Mean task score | Cost |
 |---|---|---|---|---:|---:|---:|---:|---:|
@@ -214,6 +295,8 @@ def _results(out, trials, missing, names, drivers):
 Cost is at list price from the tokens each trial's trajectory reports: Anthropic's for Claude, OpenAI's for GPT-6
 (as LiteLLM's price map lists them). Claude Code's own figure is in `cost_usd_reported`; Codex reports none. A run with missing trials, which infrastructure cut short past their re-runs
 (`results/missing.parquet`), is incomplete and isn't ranked.
+
+</details>
 
 <details><summary>Every trial</summary>
 
@@ -237,11 +320,7 @@ def _drivers(out, catalog):
 
 The same tasks through other computer-use drivers, with the OS, the model, the tasks, their seeds and the grade held
 fixed. Each driver gives the agent its own tools (below), and each also serves AgentEnv's `computer_*` tools, which the
-grader and the recordings use; no driver's agents in the Space see them. cua-driver's first runs, on macOS
-(`sonnet-5-5-2026-11-05`, `sonnet-5-5-2026-11-05-multiapp` and `haiku-5-5-2026-11-05`) and on Linux
-(`sonnet-5-5-2026-11-03`, `haiku-5-5-2026-11-02` and the pilot `sonnet-4-5-2026-11-02`), also offered its agents seven
-of them beside its own tools, and its agents made some of their calls through them. They stay in the dataset, but not
-in the Space, whose cua-driver rows are its runs on its own tools alone (`cua-driver-*`).
+grader and the recordings use; no agent on the board sees them.
 
 {figures}
 

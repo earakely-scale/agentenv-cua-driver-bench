@@ -26,8 +26,12 @@ tags:
 - openai
 - anthropic
 configs:
-- config_name: trials
+- config_name: board
   default: true
+  data_files:
+  - split: eval
+    path: results/board.parquet
+- config_name: trials
   data_files:
   - split: eval
     path: results/trials.parquet
@@ -55,22 +59,33 @@ GUI: no terminal, no scripts, no way round the apps.
 
 {{STORY}}
 
-The tasks, prompts and scoring are [trycua](https://github.com/trycua/cua)'s Cua Driver Bench, all ten tasks of
-its Bench v2 (multi-app workflows, precision interactions, interruptions), run on Linux, macOS, Windows and Omarchy computers on the [AgentEnv Framework](https://www.agentenvframework.com) by
-[earakely-scale/agentenv-cua-driver-bench](https://github.com/earakely-scale/agentenv-cua-driver-bench). Each trial
-is graded by trycua's own evaluator, its A22 criteria for an undisturbed user and its GUI-only scan, run outside the
-computer. This dataset holds every trial: the screen recording, the agent's full trajectory, the user's log, the
-grade and the apps' final files. The [replay Space](https://huggingface.co/spaces/earakely-scale/CuaDriverBench-AgentEnv)
-plays each trial with the agent's tool calls and the user's typing beside it.
+These are [trycua](https://github.com/trycua/cua)'s Cua Driver Bench tasks, prompts and scoring, all ten tasks of its
+Bench v2 (multi-app workflows, precision interactions, interruptions), run on Linux, macOS, Windows and Omarchy
+computers on the [AgentEnv Framework](https://www.agentenvframework.com) by
+[earakely-scale/agentenv-cua-driver-bench](https://github.com/earakely-scale/agentenv-cua-driver-bench), and graded by
+trycua's own evaluator, its A22 criteria for an undisturbed user and its GUI-only scan, run outside the computer. They
+are AgentEnv's runs, not trycua's own, and results from the two runners aren't like-for-like. Every trial is here: the
+screen recording, the agent's full trajectory, the user's log, the grade and the apps' final files, and the
+[replay Space](https://huggingface.co/spaces/earakely-scale/CuaDriverBench-AgentEnv) plays each one with the agent's tool
+calls and the user's typing beside it.
 
-It covers Linux (Ubuntu 24.04), macOS 26, Windows 11 and Omarchy: Claude Haiku, Sonnet and Opus 5.5 and Claude Fable
-5.2 in Claude Code, and GPT-6 Astra, GPT-6 Luna, GPT-6.1 Terra and GPT-6.1 Sol in OpenAI's Codex CLI, through trycua's
-cua-driver, Vercel Labs' agent-desktop, browser-use's macOS harness and OpenAI's Codex Computer Use. Each run, one model through one computer-use driver on one
-operating system at one commit of the bench, is a folder of its own under `runs/`, so other operating systems, models
-and drivers are added beside it.
+## Results
 
-These are AgentEnv's runs of trycua's tasks, not trycua's own: trycua runs the bench with its own runner, on macOS,
-Linux and Windows, and results from the two runners aren't like-for-like.
+{{BOARD}}
+
+{{RESULTS}}
+
+{{NOTES}}
+
+{{PAIRS}}{{COMPARE}}
+
+{{DRIVERS}}
+
+{{FAILURES}}
+
+{{GALLERY}}
+
+{{PARTIAL}}
 
 ## How to run
 
@@ -80,7 +95,7 @@ runs it by name. On a Linux machine with Docker (we used an EC2 c6i.4xlarge on U
 OpenAI-compatible endpoint for the model:
 
 ```bash
-pip install 'agentenv-framework>=0.9.1454'
+pip install -U agentenv-framework
 export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
 # One trial, as the board's Linux rows ran it: cua-driver on its own tools alone
 agent-env run hf://earakely-scale/cua-driver-bench --task cdb-g02-background --model anthropic/claude-sonnet-5-5 \
@@ -92,7 +107,7 @@ agent-env run hf://earakely-scale/cua-driver-bench --eval bench-v2 --model anthr
 # GPT-6 in OpenAI's Codex CLI
 agent-env run hf://earakely-scale/cua-driver-bench --task codex-cdb-g02-background --model openai/gpt-6.1-sol \
   --set envs/desktop-s02.tools=driver
-# Vercel Labs' agent-desktop in cua-driver's place, as the Linux drivers comparison ran it (0.9.1456 or later)
+# Vercel Labs' agent-desktop in cua-driver's place, as the Linux drivers comparison ran it
 agent-env run hf://earakely-scale/cua-driver-bench --task agent-desktop-cdb-g02-background --model anthropic/claude-sonnet-5-5
 ```
 
@@ -102,13 +117,13 @@ run on macOS 26 (we used EC2 mac2-m2.metal hosts), in a logged-in session with
 Lume sandbox in a two-line config, `[sandbox]` with `default = "lume"` in `.agentenv/config.toml`, and run the
 `macos-` tasks: `macos-cua-driver-…` for cua-driver on its own tools, `macos-agent-desktop-…` for Vercel Labs'
 agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness and `macos-codex-computer-use-…` for OpenAI's
-Codex Computer Use (agentenv-framework 0.9.1482 or later), as the drivers comparison ran them, for
+Codex Computer Use, as the drivers comparison ran them, for
 example `agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background --model
 anthropic/claude-sonnet-5-5`. `macos-aside-…` runs Aside Computer Use through its one tool, `repl`, and opens only the
 apps the task names. It needs an agentenv-framework release that ships the `aside` driver.
 
 On Windows 11 the same tasks run as the `windows-` tasks, on a Linux machine with KVM (we used EC2 c8i hosts with
-nested virtualization) and Docker with a registry on `localhost:5000`, with agentenv-framework 0.9.1480 or later, as the
+nested virtualization) and Docker with a registry on `localhost:5000`, as the
 board's Windows rows ran them, for example `agent-env run hf://earakely-scale/cua-driver-bench --task
 windows-ir-01-r1-background --model anthropic/claude-sonnet-5-5 --set envs/desktop-benchlab-windows.tools=driver`. The
 first run fetches Microsoft's 90-day evaluation of Windows 11 Enterprise and installs it unattended, about 13 minutes,
@@ -119,30 +134,14 @@ Load our results:
 ```python
 from datasets import load_dataset
 
-trials = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "trials", split="eval")   # one row per trial
+board = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "board", split="eval")     # the board's trials, with replays
+trials = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "trials", split="eval")   # every trial, every column
 calls = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "calls", split="eval")     # one row per tool call
 tasks = load_dataset("earakely-scale/CuaDriverBench-AgentEnv", "tasks", split="eval")     # prompts and settings
-board = trials.filter(lambda t: t["on_board"])   # the trials the card's board and the replay Space count
 ```
 
 Running from a clone of the bench, other drivers and tool sets, and the sentinel's own checks are
 [further down](#running-from-a-clone).
-
-{{PAIRS}}## Results
-
-{{SUMMARY}}
-
-{{RESULTS}}
-
-{{COMPARE}}
-
-{{DRIVERS}}
-
-{{FAILURES}}
-
-{{GALLERY}}
-
-{{PARTIAL}}
 
 ## Running from a clone
 
@@ -150,7 +149,7 @@ The [bench's GitHub repo](https://github.com/earakely-scale/agentenv-cua-driver-
 tooling and tests; `agent-env run .` in a clone takes the same arguments as `hf://` above. On Linux:
 
 ```bash
-pip install 'agentenv-framework>=0.9.1412'
+pip install -U agentenv-framework
 git clone https://github.com/earakely-scale/agentenv-cua-driver-bench && cd agentenv-cua-driver-bench
 python tools/taskpack.py                       # fetch trycua's task pack at the pinned commit
 export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
@@ -162,7 +161,7 @@ The board's Linux rows run each trial with cua-driver's own tools alone, `--set 
 GPT-6 runs in Codex through the `codex-` task files, each its Linux twin with AgentEnv's `codex` agent:
 
 ```bash
-pip install 'agentenv-framework>=0.9.1454'
+pip install -U agentenv-framework
 agent-env run . --task codex-cdb-g02-background --model openai/gpt-6.1-sol --set envs/desktop-s02.tools=driver
 ```
 
@@ -174,7 +173,7 @@ a logged-in session, with [Lume](https://github.com/trycua/cua/tree/main/libs/lu
 will do):
 
 ```bash
-pip install 'agentenv-framework>=0.9.1446'
+pip install -U agentenv-framework
 mkdir -p .agentenv && printf '[sandbox]\ndefault = "lume"\n' > .agentenv/config.toml   # only a config picks the sandbox
 export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
 agent-env run . --task macos-ir-01-r1-foreground --model anthropic/claude-sonnet-5-5   # one trial
@@ -190,7 +189,7 @@ On Windows 11, the tasks run in a VM of Microsoft's evaluation of Windows 11 Ent
 KVM (`/dev/kvm`), Docker and a registry on `localhost:5000`:
 
 ```bash
-pip install 'agentenv-framework>=0.9.1480'
+pip install -U agentenv-framework
 docker run -d -p 5000:5000 public.ecr.aws/docker/library/registry:2
 export LITELLM_BASE_URL=https://your-litellm-or-openai-compatible-proxy LITELLM_API_KEY=...
 agent-env run . --task windows-ir-01-r1-foreground --model anthropic/claude-sonnet-5-5 \
@@ -205,14 +204,14 @@ computer, 7 to 9 minutes; later runs reuse both.
 
 ### Run another driver or tool set
 
-With agentenv-framework 0.9.1453 or later, `--set envs/NAME.KEY=VALUE` changes one of the bench's computer envs for a
+`--set envs/NAME.KEY=VALUE` changes one of the bench's computer envs for a
 single run and leaves the bench as written. Each task deploys one computer env: `desktop-benchlab` for the precision
 and interruption tasks on Linux, `desktop-s02`, `desktop-s03` and `desktop-s04` for the multi-app tasks, and the same
 names ending in `-macos` on macOS and `-windows` on Windows. What a setting changes runs under ids ending in it, such as
 `desktop-benchlab(desktop-benchlab.driver reference)`, so its trials stay apart from the bench's own.
 
 ```bash
-pip install 'agentenv-framework>=0.9.1453'
+pip install -U agentenv-framework
 # Linux: cua-driver on its own tools alone, as every row on the board ran it
 agent-env run . --task ir-01-r1-background --set envs/desktop-benchlab.tools=driver
 # Linux: AgentEnv's reference driver in cua-driver's place

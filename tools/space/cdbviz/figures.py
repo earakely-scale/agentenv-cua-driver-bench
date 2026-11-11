@@ -709,7 +709,8 @@ def decides_spec(cat):
     ran every trial of a condition, a row per OS and driver with two of them or more, so a row's spread is the model's
     part and the rows' gap is the setup's."""
     conds = [c for c in cat["conditions"] if c["id"] in catalog.CONDITIONS]
-    full = {c["id"]: max((b["n_trials"] for b in cat["board"] if b["condition"] == c["id"]), default=0) for c in conds}
+    whole = complete_counts(cat["board"])
+    full = {c["id"]: usual([n for (_, cond), n in whole.items() if cond == c["id"]]) for c in conds}
     names = {m["id"]: m["name"] for m in cat["models"]}
     rows = []
     for o in cat["oses"]:
@@ -717,7 +718,7 @@ def decides_spec(cat):
             cells = {}
             for c in conds:
                 got = [b for b in cat["board"] if (b["os"], b["driver"], b["condition"]) == (o["id"], d["id"], c["id"])
-                       and b["n_trials"] == full[c["id"]] and b["model"] in names]
+                       and b["n_trials"] == whole.get((o["id"], c["id"])) and b["model"] in names]
                 cells[c["id"]] = [{"model": b["model"], "name": names[b["model"]], "passed": b["passed"],
                                    "n": b["n_trials"], "lab": lab_of(b["model"])} for b in got]
             if max(len(v) for v in cells.values()) >= 2:
@@ -735,6 +736,20 @@ def decides_spec(cat):
                      for r in rows for c in conds if r["cells"][c["id"]])
     return {"title": "With the user typing, the setup decides, not the model", "subtitle": sub, "foot": foot,
             "desc": desc, "panels": rows, "conds": conds, "full": full, "draw": strips}
+
+
+def complete_counts(board):
+    """Each OS and condition's count of trials in a complete run of the bench: the most common among its board rows,
+    the larger on a tie, so a run still uploading, or two runs of one model merged, doesn't set it."""
+    counts = defaultdict(list)
+    for b in board:
+        counts[b["os"], b["condition"]].append(b["n_trials"])
+    return {key: usual(ns) for key, ns in counts.items()}
+
+
+def usual(values):
+    """The most common of ``values``, the larger on a tie; 0 for none."""
+    return max(values, key=lambda v: (values.count(v), v)) if values else 0
 
 
 def lab_of(model):
