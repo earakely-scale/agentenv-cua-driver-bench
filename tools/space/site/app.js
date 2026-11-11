@@ -39,6 +39,9 @@ const fmt = (t) => {
   return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 };
 const pct = (v) => (v == null ? "–" : `${Math.round(v * 100)}%`);
+const PEN = document.createElement("canvas").getContext("2d");
+/** A string's width in px in Inter at ``weight`` and ``size``, to lay out a chart's labels. */
+const textWidth = (s, weight, size) => { PEN.font = `${weight} ${size}px Inter, system-ui, sans-serif`; return PEN.measureText(s).width; };
 const mins = (s) => (s == null ? "–" : s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${Math.round(s)} s`);
 const ICON_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>';
@@ -49,10 +52,16 @@ let CAT = null;
 let PLAYER = null;
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 let TASKS = {}, CONDS = {}, MODELS = {}, OSES = {}, DRIVERS = {}, CRIT = [];
-// The board's state for this visit: the grid's driver, the comparison's OS and model, and where the board was left.
-const VIEW = { board: false, ready: false, driver: null, compare: null, y: null };
+// The board's state for this visit: the results' metric, the comparison's pivot and what each pivot holds fixed, the
+// trials' driver and filters, and where the board was left.
+const VIEW = { board: false, ready: false, metric: "pass", pivot: "driver", compare: null, byOs: null, byModel: null,
+  driver: null, trials: null, y: null };
 const settled = (el) => Promise.all([...el.querySelectorAll(".fig img")].map((img) =>
-  img.complete ? null : new Promise((r) => { img.addEventListener("load", r, { once: true }); img.addEventListener("error", r, { once: true }); })));
+  img.complete ? null : new Promise((r) => { img.addEventListener("load", r, { once: true }); img.addEventListener("error", r, { once: true }); })))
+  .then(() => el.querySelectorAll(".fig img").forEach(fitFigure));
+/** A figure far wider than tall, a row of many panels, keeps its own size and scrolls sideways rather than shrinking
+ * past reading. */
+const fitFigure = (img) => img.closest(".fig")?.classList.toggle("wide", img.naturalWidth > 4 * img.naturalHeight);
 
 async function boot() {
   try {
@@ -108,15 +117,41 @@ function best(sel) {
   return pool[0];
 }
 
+/** The board's routes: each sets the state its section opens in and names the section. */
+const ROUTES = {
+  drivers: (a) => { VIEW.pivot = "driver"; if (a.length) VIEW.compare = { os: a[0], model: a[1] }; return "compare"; },
+  oses: (a) => { VIEW.pivot = "os"; if (a.length) VIEW.byOs = { driver: a[0], model: a[1] }; return "compare"; },
+  models: (a) => { VIEW.pivot = "model"; if (a.length) VIEW.byModel = { os: a[0], driver: a[1] }; return "compare"; },
+  trials: (a) => {
+    if (a.length) {
+      const [driver, os, cond, ...models] = a;
+      if (DRIVERS[driver]) VIEW.driver = driver;
+      VIEW.trials = { os, cond, models };
+    }
+    return "trials";
+  },
+};
+/** The sections Results and Compare took in, so that links to them still land. */
+const MOVED = { drivers: ROUTES.drivers, os: ROUTES.oses, models: ROUTES.models, pairs: ROUTES.oses,
+  partial: () => { VIEW.metric = "score"; return "results"; } };
+const boardState = () => JSON.stringify([VIEW.metric, VIEW.pivot, VIEW.compare, VIEW.byOs, VIEW.byModel, VIEW.driver, VIEW.trials]);
+const routeOf = (head, ...args) => `#/${[head, ...args].map(enc).join("/")}`;
+/** The address bar follows a section's pickers only while it shows that section's route, as a shared link would. */
+const follow = (heads, hash) => {
+  if (heads.some((x) => location.hash.startsWith(`#/${x}`)) && location.hash !== hash) history.replaceState(null, "", hash);
+};
+
 function route() {
   if (PLAYER) { PLAYER.destroy(); PLAYER = null; }
   const raw = location.hash;
   const parts = raw.startsWith("#/") ? raw.slice(2).split("/").filter(Boolean).map(decodeURIComponent) : [];
-  if (!parts.length || parts[0] === "drivers") {
-    const [section, ...args] = parts.length ? parts : [raw.slice(1)];
+  if (!parts.length || ROUTES[parts[0]]) {
+    const [head, ...args] = parts.length ? parts : [raw.slice(1)];
     const back = VIEW.y != null && !VIEW.board;
-    if (args.length) VIEW.compare = { os: args[0], model: args[1] };
-    if (!VIEW.board || args.length) boardView();
+    const was = boardState();
+    const go = parts.length ? ROUTES[head] : MOVED[head];
+    const section = go ? go(args) : head;
+    if (!VIEW.board || boardState() !== was) boardView();
     settled($("#app")).then(() => {
       const el = section && document.getElementById(section);
       const glide = VIEW.ready && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto";
@@ -172,29 +207,16 @@ function osPhrase() {
   return names.length === 1 ? `a ${names[0]} desktop` : `a ${names.slice(0, -1).join(", ")} or ${names[names.length - 1]} desktop`;
 }
 
-const listOf = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const osesOf = (driver) => CAT.oses.filter((o) => CAT.trials.some((t) => t.driver === driver && t.os === o.id));
 const driverName = (id) => DRIVERS[id]?.name || id;
 const driverLabel = (id) => DRIVERS[id]?.label || driverName(id);
 const driverDot = (id) => h("span", { class: "dot", style: { background: `var(--s${(DRIVERS[id]?.slot ?? 0) % 8})` } });
 
-function driverClause() {
-  const arms = CAT.drivers.filter((d) => d.id !== CAT.driver);
-  if (!arms.length) return "the computer-use driver's clicks, keys and window reads";
-  const where = [...new Set(arms.flatMap((d) => osesOf(d.id).map((o) => o.name)))];
-  const on = where.length < CAT.oses.length ? `on ${listOf(where)} ` : "";
-  return `the clicks, keys and window reads of a computer-use driver: ${driverName(CAT.driver)}, and ${on}also ${listOf(arms.map((d) => d.name))}, to compare them`;
-}
-
 function boardView() {
   document.title = CAT.title;
   VIEW.board = true;
-  const os = osSection();
   const wrap = h("div", { class: "wrap" },
-    !os && (CAT.pairs || []).length ? pairsSection() : null,
-    resultsSection(), costSection(),
-    CAT.comparisons.length ? driversSection() : null,
-    os, modelsSection(), failuresSection(), partialSection(), trialsSection(), howSection());
+    resultsSection(), costSection(), compareSection(), failuresSection(), trialsSection(), howSection());
   $("#app").replaceChildren(h("div", { class: "wrap" }, landing()), sectionNav(wrap), wrap);
 }
 
@@ -227,12 +249,16 @@ function landing() {
   const hero = CAT.trials.find((t) => t.uid === CAT.hero);
   return h("section", { class: "landing" },
     h("p", { class: "kicker" }, "trycua's Cua Driver Bench · run on AgentEnv computers"),
-    h("h1", {}, "Can an AI agent do the office work without getting in your way?"),
+    h("h1", {}, "Can an AI agent use your computer while you're using it?"),
     h("p", { class: "lede" },
       `An agent gets real office tasks on ${osPhrase()} (mail, chat, a calendar, a spreadsheet, a ledger, a browser) and may work `,
-      h("b", {}, "only through the GUI"), `, with ${driverClause()}. `,
-      "In the ", h("b", {}, "background"), " runs a person is typing in their own window the whole time, and the agent must finish ",
-      h("b", {}, "without disturbing them"), ": no stolen focus, no window over theirs, no moved pointer, no touched clipboard."),
+      h("b", {}, "only through the GUI"), ", with the clicks, keys and window reads of a computer-use driver. In the ",
+      h("b", {}, "foreground"), " it has the desktop to itself; in the ", h("b", {}, "background"),
+      " a person types in their own window the whole time, and the agent must finish ", h("b", {}, "without disturbing them"),
+      ": no stolen focus, no window over theirs, no moved pointer, no touched clipboard."),
+    h("div", { class: "story" },
+      CAT.story ? h("div", { class: "finds" }, h("h2", {}, "What we found"), markdown(CAT.story)) : null,
+      decidesFigure()),
     h("div", { class: "cta" },
       hero && h("a", { class: "btn primary", href: hashOf(hero) }, h("span", { html: ICON_PLAY, style: { width: "14px", display: "inline-flex" } }), "Watch a background replay"),
       h("a", { class: "btn", href: "#results" }, "See the results"),
@@ -262,15 +288,302 @@ function reelFigure() {
       ...scenes.flatMap((s, i) => [i ? " · " : "", h("a", { href: hashOf(s.bg) }, setup(s))])));
 }
 
-function pairsSection() {
-  return h("section", { class: "pairs", "aria-labelledby": "pairs-h" },
-    h("div", { class: "section-head", id: "pairs" }, h("h2", { id: "pairs-h" }, "The same task in both conditions"),
-      h("p", {}, "One run of a task in the foreground, left, and in the background, right: the same model, driver, task and seed, at one speed.")),
-    pairList());
+/** The little markdown the card's story is written in: "- " bullets, whose indented lines carry on, and paragraphs,
+ * with **bold** and `code` in them. */
+function markdown(text) {
+  const blocks = [];
+  let open = false;
+  for (const line of text.split("\n")) {
+    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+    if (!line.trim()) {
+      open = false;
+      continue;
+    }
+    if (bullet || !open) blocks.push({ li: !!bullet, text: bullet ? bullet[1] : line.trim() });
+    else blocks[blocks.length - 1].text += ` ${line.trim()}`;
+    open = true;
+  }
+  const out = [];
+  for (const b of blocks) {
+    if (!b.li) out.push(h("p", {}, inline(b.text)));
+    else if (out[out.length - 1]?.tagName === "UL") out[out.length - 1].append(h("li", {}, inline(b.text)));
+    else out.push(h("ul", {}, h("li", {}, inline(b.text))));
+  }
+  return out;
 }
 
-function pairList() {
-  return h("div", { class: "pair-list" }, CAT.pairs.map((p) => {
+const inline = (s) => s.split("**").map((part, i) => (i % 2 ? h("b", {}, codeText(part)) : codeText(part)));
+
+/** A model's lab by its id's prefix, and the palette slot its dots take, as the card's figures colour them. */
+const LABS = [["anthropic/", "Claude", 0], ["openai/", "GPT", 1]];
+const labOf = (model) => {
+  const [, name, slot] = LABS.find(([prefix]) => model.startsWith(prefix)) || [null, "Other", 2];
+  return { name, slot };
+};
+/** The most common of ``ns``, the larger of a tie. */
+const commonest = (ns) => {
+  const seen = new Map();
+  for (const n of ns) seen.set(n, (seen.get(n) || 0) + 1);
+  return [...seen].reduce((a, b) => (b[1] > a[1] || (b[1] === a[1] && b[0] > a[0]) ? b : a), [0, 0])[0];
+};
+
+/** The card's opening figure, figures.decides_spec, from the board by the same rules, so the two can't disagree: a row
+ * per OS and driver where two models or more ran every trial of a condition, a model's dot its full passes. A model
+ * ran every trial when it ran as many as most of its OS's entries for the condition, the larger of a tie, so runs still
+ * landing on one OS can't drop another's rows; a condition's "trials a dot" is the most common of those counts. */
+function decidesData() {
+  const conds = CAT.conditions.filter((c) => c.id === "foreground" || c.id === "background");
+  const ran = (o, c) => CAT.board.filter((b) => b.os === o.id && b.condition === c.id);
+  const full = Object.fromEntries(CAT.oses.map((o) => [o.id, Object.fromEntries(conds.map((c) => [c.id, commonest(ran(o, c).map((b) => b.n_trials))]))]));
+  const each = Object.fromEntries(conds.map((c) => [c.id, commonest(CAT.oses.filter((o) => ran(o, c).length).map((o) => full[o.id][c.id]))]));
+  const rows = [];
+  for (const o of CAT.oses) {
+    for (const d of CAT.drivers) {
+      const cells = Object.fromEntries(conds.map((c) => [c.id, ran(o, c)
+        .filter((b) => b.driver === d.id && b.n_trials === full[o.id][c.id] && MODELS[b.model])
+        .map((b) => ({ model: b.model, passed: b.passed, n: b.n_trials }))]));
+      if (Math.max(...Object.values(cells).map((v) => v.length)) >= 2) rows.push({ os: o, driver: d, cells });
+    }
+  }
+  return { conds, each, rows };
+}
+
+/** The decides chart: each row's dots, a dot per full-pass count shared by its models, in their lab's colour (half and
+ * half when both labs tie); hovering or focusing one names its models, and clicking opens their trials. */
+function decidesFigure() {
+  const data = decidesData();
+  if (!data.rows.length) return null;
+  const plot = h("div", { class: "dzplot" });
+  const tip = h("div", { class: "ptip dztip", hidden: true, role: "tooltip" });
+  const stage = h("div", { class: "dzstage" }, plot, tip);
+  let dots = [], cur = null, pinned = null, pointer = "mouse", width = 0;
+
+  const highlight = (dot) => {
+    stage.classList.toggle("dim", !!dot);
+    for (const d of dots) d.el.classList.toggle("hl", !!dot && d.models.some((m) => dot.models.includes(m)));
+  };
+  const show = (dot, pin) => {
+    cur = dot;
+    pinned = pin ? dot : null;
+    for (const d of dots) d.el.classList.toggle("on", d === dot);
+    tip.replaceChildren(...decidesTip(dot, pin).filter(Boolean));
+    tip.classList.toggle("pinned", !!pin);
+    tip.hidden = false;
+    const r = dot.el.querySelector(".dzg").getBoundingClientRect(), box = stage.getBoundingClientRect();
+    const half = tip.offsetWidth / 2, x = Math.min(Math.max(r.left + r.width / 2 - box.left, half + 2), box.width - half - 2);
+    const below = r.top - box.top < tip.offsetHeight + 14;
+    tip.classList.toggle("below", below);
+    tip.style.left = `${x}px`;
+    tip.style.top = `${(below ? r.bottom : r.top) - box.top}px`;
+    highlight(dot);
+  };
+  const hide = () => {
+    cur = pinned = null;
+    tip.hidden = true;
+    for (const d of dots) d.el.classList.remove("on");
+    highlight(null);
+  };
+  /** The dot a pointer means: the nearest of its row's dots in that condition, within reach. */
+  const near = (e) => {
+    const band = e.target.closest("[data-band]");
+    if (!band) return null;
+    const x = e.clientX - plot.getBoundingClientRect().left;
+    const mine = dots.filter((d) => d.band === band.dataset.band);
+    const best = mine.reduce((a, d) => (!a || Math.abs(d.cx - x) < Math.abs(a.cx - x) ? d : a), null);
+    return best && Math.abs(best.cx - x) <= 30 ? best : null;
+  };
+  const draw = (force) => {
+    const w = plot.clientWidth;
+    if (!w || (!force && w === width)) return;
+    width = w;
+    const band = cur?.band;
+    hide();
+    const built = decidesSvg(data, w);
+    dots = built.dots;
+    plot.replaceChildren(built.svg);
+    (dots.find((d) => d.band === band) || dots[0])?.el.setAttribute("tabindex", "0");
+  };
+
+  stage.addEventListener("pointerdown", (e) => { pointer = e.pointerType; });
+  stage.addEventListener("pointermove", (e) => {
+    if (pinned || e.pointerType === "touch") return;
+    const dot = near(e);
+    if (dot && dot !== cur) show(dot, false);
+    else if (!dot && cur) hide();
+  });
+  stage.addEventListener("pointerleave", () => { if (!pinned) hide(); });
+  /** Opens a dot's trials, again too when they are already the address, which a link alone would ignore. */
+  const open = (dot) => (location.hash === dot.href ? route() : (location.hash = dot.href));
+  stage.addEventListener("click", (e) => {
+    const link = e.target.closest("a");
+    if (link && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return;
+    if (e.target.closest(".dztip")) {
+      if (link && pinned) { e.preventDefault(); open(pinned); }
+      return;
+    }
+    e.preventDefault();
+    const dot = e.detail ? near(e) : dots.find((d) => d.el === link);
+    if (!dot) hide();
+    else if (e.detail && pointer === "touch" && pinned !== dot) show(dot, true);
+    else open(dot);
+  });
+  stage.addEventListener("focusin", (e) => {
+    const dot = dots.find((d) => d.el === e.target.closest("a.dzd"));
+    if (dot && !pinned) show(dot, false);
+  });
+  stage.addEventListener("focusout", (e) => { if (!stage.contains(e.relatedTarget)) hide(); });
+  stage.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { hide(); return; }
+    const at = dots.findIndex((d) => d.el === e.target.closest("a.dzd"));
+    if (at < 0) return;
+    const go = decidesStep(dots, at, e.key);
+    if (go == null) return;
+    e.preventDefault();
+    dots[at].el.setAttribute("tabindex", "-1");
+    dots[go].el.setAttribute("tabindex", "0");
+    dots[go].el.focus();
+  });
+  new ResizeObserver(() => requestAnimationFrame(() => draw(false))).observe(plot);
+  document.fonts?.ready.then(() => draw(true));
+
+  const { each } = data;
+  const touch = matchMedia("(hover: none)").matches;
+  return h("figure", { class: "decides" },
+    h("div", { class: "dzhead" },
+      h("h3", {}, "With the user typing, the setup decides, not the model"),
+      h("p", {}, "Full passes per model, a dot each, for every operating system and driver that ran the whole bench.")),
+    h("div", { class: "dzkey", "aria-hidden": "true" },
+      LABS.map(([, name, slot]) => h("span", {}, h("i", { style: { background: `var(--s${slot})` } }), name)),
+      h("span", {}, h("i", { class: "tie" }), "Claude and GPT tied")),
+    stage,
+    h("figcaption", {}, `A dot is one model's ${each.foreground} foreground or ${each.background} background trials, and tied models share it, with their count above; each row's range is at its right. `,
+      h("b", {}, touch ? "Tap a dot" : "Hover or focus a dot"), " for its models, and ", h("b", {}, touch ? "tap it again" : "click it"),
+      " for their trials. A full pass is the task done, through the GUI only, and in the background with the user undisturbed."));
+}
+
+/** Where an arrow key moves from the ``at``th dot: along its row, from one condition's dots to the next, or to the
+ * nearest dot of the row above or below in the same condition. */
+function decidesStep(dots, at, key) {
+  const d = dots[at];
+  const row = (k, i) => dots.filter((x) => x.k === k && x.i === i).sort((a, b) => a.cx - b.cx);
+  if (key === "Home") return 0;
+  if (key === "End") return dots.length - 1;
+  if (key === "ArrowRight" || key === "ArrowLeft") {
+    const step = key === "ArrowRight" ? 1 : -1;
+    const mine = row(d.k, d.i), j = mine.indexOf(d) + step;
+    if (mine[j]) return dots.indexOf(mine[j]);
+    const next = row(d.k + step, d.i);
+    return next.length ? dots.indexOf(step > 0 ? next[0] : next[next.length - 1]) : null;
+  }
+  if (key === "ArrowDown" || key === "ArrowUp") {
+    const step = key === "ArrowDown" ? 1 : -1;
+    for (let i = d.i + step; dots.some((x) => x.i === i); i += step) {
+      const there = row(d.k, i);
+      if (there.length) return dots.indexOf(there.reduce((a, x) => (Math.abs(x.cx - d.cx) < Math.abs(a.cx - d.cx) ? x : a)));
+    }
+  }
+  return null;
+}
+
+function decidesTip(dot, pin) {
+  const many = dot.models.length > 1;
+  const share = `${dot.passed} of ${dot.n}${many ? " each" : ""} · ${pct(dot.passed / dot.n)}`;
+  return [
+    h("div", { class: "thead" }, many ? `${dot.models.length} models tie` : [h("span", { class: "dot", style: { background: `var(--s${labOf(dot.models[0]).slot})` } }), MODELS[dot.models[0]]?.name]),
+    many ? h("ul", { class: "dzwho" }, dot.models.map((m) => h("li", {}, h("span", { class: "dot", style: { background: `var(--s${labOf(m).slot})` } }), MODELS[m]?.name || m))) : null,
+    h("div", { class: "tsub" }, dot.where),
+    h("div", { class: "trow" }, h("span", {}, "Full pass"), h("b", {}, share)),
+    pin ? h("div", { class: "tlinks" }, h("a", { href: dot.href }, `${many ? "Their" : "Its"} ${dot.n} trials →`))
+      : h("div", { class: "thint" }, `Click for ${many ? "their" : "its"} trials`),
+  ];
+}
+
+/** The chart at ``W`` px: the conditions side by side after the row names, or on a phone one under the other with each
+ * row's name over its dots; the SVG and its dots, each a link to its models' trials. */
+function decidesSvg({ conds, each, rows }, W) {
+  const narrow = W < 600;
+  const r = narrow ? 6.5 : 7, rowH = narrow ? 58 : 40, headH = 46, axisH = 24, apart = 28;
+  const parts = (row) => [`${row.os.name} · `, driverLabel(row.driver.id)];
+  const labelW = narrow ? 0 : Math.max(...rows.map((row) => textWidth(parts(row)[0], 700, 13.5) + textWidth(parts(row)[1], 500, 13.5))) + 26;
+  const gap = narrow ? 0 : 34;
+  const pw = narrow ? W : (W - labelW - gap * (conds.length - 1)) / conds.length;
+  const rangeW = textWidth("00–00", 650, 12) + 14;
+  const ys = [];
+  let span = 0;
+  rows.forEach((row, i) => {
+    if (!narrow && i && row.os.id !== rows[i - 1].os.id) span += 10;
+    ys.push(span);
+    span += rowH;
+  });
+  const block = headH + span + axisH;
+  const H = narrow ? conds.length * block + (conds.length - 1) * apart : block;
+  const svg = sv("svg", { class: "dzsvg", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "group",
+    "aria-label": "Full passes per model, a row per operating system and driver: the foreground, then the background" });
+  const label = (row, x, y) => sv("text", { class: "dzname", x: fx(x), y: fx(y) },
+    sv("tspan", { class: "dzos" }, parts(row)[0]), sv("tspan", { class: "dzdrv" }, parts(row)[1]));
+  const dots = [];
+  conds.forEach((c, k) => {
+    const x0 = narrow ? 0 : labelW + k * (pw + gap), top = narrow ? k * (block + apart) : 0;
+    const tl = x0 + r + 4, tr = x0 + pw - rangeW;
+    const X = (v) => tl + v * (tr - tl);
+    const per = `${each[c.id]} trials a dot`;
+    const gloss = `${c.id === "foreground" ? "the desktop to itself" : "the user typing in their own window"} · ${per}`;
+    svg.append(sv("text", { class: "dzcond", x: fx(x0), y: top + 15 }, c.name),
+      sv("text", { class: "dzgloss", x: fx(x0), y: top + 33 }, textWidth(gloss, 400, 12) <= pw - 4 ? gloss : per));
+    const bottom = top + headH + span;
+    for (const g of [0, 0.25, 0.5, 0.75, 1]) {
+      svg.append(sv("line", { class: g ? "dzgrid" : "dzaxis", x1: fx(X(g)), x2: fx(X(g)), y1: top + headH - 6, y2: fx(bottom) }),
+        sv("text", { class: "dztick", x: fx(X(g)), y: fx(bottom + 17), "text-anchor": "middle" }, pct(g)));
+    }
+    rows.forEach((row, i) => {
+      const ry = top + headH + ys[i];
+      const cy = narrow ? ry + 38 : ry + rowH / 2;
+      if (narrow) svg.append(label(row, x0, ry + 13));
+      else if (k === 0) svg.append(label(row, 0, cy + 4.5));
+      const cell = row.cells[c.id] || [];
+      if (!cell.length) {
+        svg.append(sv("text", { class: "dznone", x: fx(tl + 2), y: fx(cy + 4) }, "not run"));
+        return;
+      }
+      const band = `${k}:${i}`;
+      svg.append(sv("rect", { class: "dzband", "data-band": band, x: fx(x0), y: fx(cy - rowH / 2 + 2), width: fx(pw), height: rowH - 4 }));
+      const n = cell[0].n;
+      const counts = cell.map((p) => p.passed), lo = Math.min(...counts), hi = Math.max(...counts);
+      if (hi > lo) svg.append(sv("line", { class: "dzspan", x1: fx(X(lo / n)), x2: fx(X(hi / n)), y1: fx(cy), y2: fx(cy) }));
+      const last = { above: -1e9, below: -1e9 }, countW = textWidth("8", 700, 11) + 6;
+      for (const passed of [...new Set(counts)].sort((a, b) => a - b)) {
+        const models = CAT.models.map((m) => m.id).filter((m) => cell.some((p) => p.model === m && p.passed === passed));
+        const slots = [...new Set(models.map((m) => labOf(m).slot))].sort((a, b) => a - b);
+        const cx = X(passed / n);
+        const where = `${row.os.name} · ${driverLabel(row.driver.id)} · ${c.name.toLowerCase()}`;
+        const href = routeOf("trials", row.driver.id, row.os.id, c.id, ...models);
+        const shape = slots.length === 1
+          ? sv("circle", { class: "dzc", cx: fx(cx), cy: fx(cy), r, style: `fill: var(--s${slots[0]})` })
+          : sv("g", {},
+            sv("path", { d: `M${fx(cx)},${fx(cy - r)}A${r},${r} 0 0 0 ${fx(cx)},${fx(cy + r)}Z`, style: `fill: var(--s${slots[0]})` }),
+            sv("path", { d: `M${fx(cx)},${fx(cy - r)}A${r},${r} 0 0 1 ${fx(cx)},${fx(cy + r)}Z`, style: `fill: var(--s${slots[1]})` }),
+            sv("circle", { class: "dzring", cx: fx(cx), cy: fx(cy), r }));
+        const a = sv("a", { class: "dzd", href, tabindex: "-1", "data-band": band,
+          "aria-label": `${where}: ${models.map((m) => MODELS[m]?.name || m).join(", ")}, ${passed} of ${n} trials pass${models.length > 1 ? " each" : ""}, ${pct(passed / n)}. Open ${models.length > 1 ? "their" : "its"} trials.` },
+        sv("g", { class: "dzg" }, shape));
+        if (models.length > 1) {
+          const side = cx - last.above >= countW ? "above" : cx - last.below >= countW ? "below" : null;
+          if (side) {
+            a.append(sv("text", { class: "dzn", x: fx(cx), y: fx(side === "above" ? cy - r - 4 : cy + r + 11), "text-anchor": "middle" }, String(models.length)));
+            last[side] = cx;
+          }
+        }
+        svg.append(a);
+        dots.push({ el: a, k, i, band, cx, models, passed, n, where, href });
+      }
+      svg.append(sv("text", { class: "dzrange", x: fx(tr + 12), y: fx(cy + 4) }, lo === hi ? `${lo}` : `${lo}–${hi}`));
+    });
+  });
+  return { svg, dots };
+}
+
+function pairList(pairs) {
+  return h("div", { class: "pair-list" }, pairs.map((p) => {
     const fg = CAT.trials.find((t) => t.uid === p.foreground), bg = CAT.trials.find((t) => t.uid === p.background);
     if (!fg || !bg) return null;
     const task = TASKS[fg.task] || {};
@@ -290,16 +603,34 @@ function figures(keys, alt) {
     h("source", { media: "(max-width: 480px) and (prefers-color-scheme: dark)", srcset: `figures/${f}-phone-dark.svg` }),
     h("source", { media: "(max-width: 480px)", srcset: `figures/${f}-phone.svg` }),
     h("source", { media: "(prefers-color-scheme: dark)", srcset: `figures/${f}-dark.svg` }),
-    h("img", { src: `figures/${f}.svg`, alt: alt(f) })),
+    h("img", { src: `figures/${f}.svg`, alt: alt(f), onload: (e) => fitFigure(e.target) })),
     CAT.compare_notes?.[f] ? h("p", { class: "fnote" }, CAT.compare_notes[f].join(" ")) : null)));
 }
 
+/** The results by either metric: the full pass, the strict one and the page's own, or trycua's task score, its partial
+ * credit; how the two differ under both, and where the credit goes under the second. */
 function resultsSection() {
   const lines = CAT.models.filter((m) => m.board).length > 1 ? ", a line per model" : "";
+  const via = `All through ${driverName(CAT.driver)}: a panel per OS${lines}.`;
+  const sub = h("p", { class: "lead" });
+  const body = h("div", {});
+  const tabs = h("div", { class: "tabs", role: "group", "aria-label": "Metric" },
+    [["pass", "Full pass"], ["score", "Partial credit"]].map(([id, label]) =>
+      h("button", { "data-id": id, onclick: () => { VIEW.metric = id; render(); } }, label)));
+  const render = () => {
+    const score = VIEW.metric === "score";
+    for (const b of tabs.children) b.setAttribute("aria-pressed", String(b.dataset.id === VIEW.metric));
+    sub.textContent = score
+      ? `trycua's task score, its partial credit: the share of a task's weighted checks that held, from 0 to 100%, however the agent got there and whatever it did to the user. ${via}`
+      : `The share of trials that fully pass: the task done, through the GUI only, and in the background with the user undisturbed. ${via}`;
+    body.replaceChildren(...[
+      figures(CAT.figures.filter((f) => f === (score ? "task-score" : "full-pass")), () => (score ? "Task score by condition" : "Full pass by condition")),
+      levels(score), score ? partialDetail() : []].flat(Infinity).filter(Boolean));
+  };
+  render();
   return h("section", { class: "results", "aria-labelledby": "results-h" },
-    h("div", { class: "section-head", id: "results", "data-nav": "Results" }, h("h2", { id: "results-h" }, "Results"),
-      h("p", {}, `The share of trials that fully pass: the task done, through the GUI only, and in the background with the user undisturbed. All through ${driverName(CAT.driver)}: a panel per OS${lines}.`)),
-    figures(CAT.figures.filter((f) => f !== "task-score"), () => "Full pass by condition"));
+    h("div", { class: "section-head", id: "results", "data-nav": "Results" }, h("h2", { id: "results-h" }, "Results"), tabs, sub),
+    body);
 }
 
 // The cost section's filters for this visit: the condition counted and the OSes, drivers and models hidden.
@@ -368,8 +699,6 @@ function costSection() {
   const table = h("div", { class: "ptable-wrap" });
   const prev = new Map();
   let panels = [], pinned = null, sort = { key: "share", dir: -1 };
-  const ctx = document.createElement("canvas").getContext("2d");
-  const measure = (s, weight, size) => { ctx.font = `${weight} ${size}px Inter, system-ui, sans-serif`; return ctx.measureText(s).width; };
 
   const highlight = (match) => {
     stage.classList.toggle("dim", !!match);
@@ -424,7 +753,7 @@ function costSection() {
       const plot = fig.querySelector(".pplot");
       if (!plot?.clientWidth || (!force && +plot.dataset.w === plot.clientWidth)) continue;
       plot.dataset.w = plot.clientWidth;
-      plot.replaceChildren(costPlane(panels[i], lo, hi, plot.clientWidth, prev, measure));
+      plot.replaceChildren(costPlane(panels[i], lo, hi, plot.clientWidth, prev, textWidth));
     }
     requestAnimationFrame(() => {
       for (const g of stage.querySelectorAll(".pt")) { g.style.transform = g.dataset.to; prev.set(g.dataset.key, g.dataset.to); }
@@ -633,11 +962,24 @@ function costTable(panels, sort, onsort) {
       h("td", {}, q.frontier ? h("span", { class: "fyes", "aria-label": "on the frontier" }, "✓") : "")))));
 }
 
-/** How trycua's task score, its partial credit, differs from a full pass: the three levels, where the credit goes from
- * one to the next on each OS and condition, how the trials that fail still score, and the task-score figures. */
-function partialSection() {
+/** How trycua's task score, its partial credit, differs from a full pass: three levels of one grade, the one shown
+ * above marked. */
+function levels(score) {
+  return [h("div", { class: "subhead" }, h("h3", {}, "Full pass and partial credit"), h("p", {}, "Three levels of the same grade, from the loosest to the strictest.")),
+    h("div", { class: "levels" },
+      h("article", { class: score ? "on" : null }, h("span", { class: "lvl" }, "Partial credit"), h("h3", {}, "Task score"),
+        h("p", {}, "trycua's evaluator runs weighted checks on the files the apps left. The task score is the share of points that held, from 0 to 100%: a run that fixed the calendar but not the workbook still scores.")),
+      h("article", {}, h("span", { class: "lvl" }, "trycua's success"), h("h3", {}, "Task done"),
+        h("p", {}, "Every one of the task's checks held: a task score of 100%. Anything less is partial credit and counts as the task not done.")),
+      h("article", { class: `full${score ? "" : " on"}` }, h("span", { class: "lvl" }, "What this page counts"), h("h3", {}, "Full pass"),
+        h("p", {}, "The task done, through the GUI only, and in the background with the user undisturbed on all eight of trycua's criteria. A trial can score 100% on the task and still fail.")))];
+}
+
+/** Where the partial credit goes from one level to the next on each OS and condition, how the trials that fail still
+ * score, and the drivers' task score. */
+function partialDetail() {
   const runs = CAT.trials.filter((t) => MODELS[t.model]?.board && t.grade?.task);
-  if (!runs.length) return null;
+  if (!runs.length) return [];
   const rows = CAT.oses.flatMap((o) => CAT.conditions.map((c) => {
     const r = runs.filter((t) => t.os === o.id && t.condition === c.id);
     if (!r.length) return null;
@@ -661,23 +1003,14 @@ function partialSection() {
   histTabs.append(...[["all", "Both"], ["foreground", "Foreground"], ["background", "Background"]].map(([id, label]) =>
     h("button", { "data-id": id, onclick: () => pickHist(id) }, label)));
   pickHist("all");
-  const figs = [...CAT.figures, ...(CAT.driver_figures || [])].filter((f) => f.endsWith("task-score"));
-  return h("section", { class: "partial", "aria-labelledby": "partial-h" },
-    h("div", { class: "section-head", id: "partial", "data-nav": "Partial credit" }, h("h2", { id: "partial-h" }, "Partial credit"),
-      h("p", {}, "trycua's task score, how it differs from a full pass, and where the gap comes from.")),
-    h("div", { class: "levels" },
-      h("article", {}, h("span", { class: "lvl" }, "Partial credit"), h("h3", {}, "Task score"),
-        h("p", {}, "trycua's evaluator runs weighted checks on the files the apps left. The task score is the share of points that held, from 0 to 100%: a run that fixed the calendar but not the workbook still scores.")),
-      h("article", {}, h("span", { class: "lvl" }, "trycua's success"), h("h3", {}, "Task done"),
-        h("p", {}, "Every one of the task's checks held: a task score of 100%. Anything less is partial credit and counts as the task not done.")),
-      h("article", { class: "full" }, h("span", { class: "lvl" }, "What this page counts"), h("h3", {}, "Full pass"),
-        h("p", {}, "The task done, through the GUI only, and in the background with the user undisturbed on all eight of trycua's criteria. A trial can score 100% on the task and still fail."))),
+  const figs = (CAT.driver_figures || []).filter((f) => f.endsWith("task-score"));
+  return [
     h("div", { class: "subhead" }, h("h3", {}, "Where the credit goes"), h("p", {}, "Every trial on the board, each OS and condition, from the mean task score down to the full pass.")),
     ladder,
     h("div", { class: "subhead" }, h("h3", {}, "How the trials that fail still score"), h("p", {}, "Every trial that didn't fully pass, by its task score, a column per tenth."), histTabs),
     hist,
-    figs.length ? [h("div", { class: "subhead" }, h("h3", {}, "Task score by condition and by driver"), h("p", {}, "The results and drivers figures, scored by partial credit instead of full pass.")),
-      figures(figs, (f) => (f.startsWith("drivers") ? "Task score by driver" : "Task score by condition"))] : null);
+    figs.length ? [h("div", { class: "subhead" }, h("h3", {}, "Task score by driver"), h("p", {}, "The drivers figure, scored by partial credit instead of full pass.")),
+      figures(figs, () => "Task score by driver")] : null];
 }
 
 function scoreHist(runs, cond) {
@@ -698,33 +1031,189 @@ function scoreHist(runs, cond) {
       " still scored half the task's points or more, and ", h("b", {}, `${done}`), ` did the whole task but ${NAMES.done.replace("task done, then ", "")}. Both count toward the task score and not toward a full pass.`) : null);
 }
 
-function driversSection() {
-  const c = CAT.comparisons.find((x) => x.model === leadModel() && x.tasks.length === CAT.comparisons[0].tasks.length) || CAT.comparisons[0];
-  const runs = CAT.trials.filter((t) => t.os === c.os && t.model === c.model && c.tasks.includes(t.task) && c.drivers.some((d) => d.id === t.driver));
-  const depth = Math.max(...runs.map((t) => t.of));
-  const cards = tips(h("div", { class: "xcards" }, c.drivers.map((d) => driverCard(d, runs.filter((t) => t.driver === d.id), c.tasks, depth))));
-  const extra = (CAT.failure_figures || []).filter((f) => f === "disturbances");
-  return h("section", { class: "drivers", "aria-labelledby": "drivers-h" },
-    h("div", { class: "section-head", id: "drivers", "data-nav": "Drivers" }, h("h2", { id: "drivers-h" }, "How the drivers differ"),
-      h("p", {}, `${OSES[c.os]?.name || c.os} · ${MODELS[c.model]?.name || c.model} · the same ${c.tasks.length} tasks and seeds; only the computer-use driver changes.`)),
-    cards, outcomeKey(cards),
-    figures(CAT.driver_figures.filter((f) => !f.endsWith("task-score")), () => "Full pass by driver"),
-    extra.length ? h("div", { class: "solo" }, figures(extra, () => "Which of the user's eight criteria each driver broke in the background")) : null,
-    h("p", { class: "dnote" }, "Every driver also serves AgentEnv's ", h("code", {}, "computer_*"),
-      " tools, which the grader and the recordings use; no driver's agents here see them. cua-driver's first runs on ",
-      "macOS and Linux, which offered seven of them too, are in the dataset but not here."),
-    compareView());
+/** The routes of Compare's pivots, which the address bar follows. */
+const PIVOT_ROUTES = ["drivers", "oses", "models"];
+
+/** One comparison at a time, holding two of an OS, a driver and a model fixed: the drivers, the operating systems or
+ * the models side by side, each with its picker for what it holds. */
+function compareSection() {
+  const pivots = [["driver", "By driver", CAT.comparisons.length], ["os", "By OS", osSets().length], ["model", "By model", modelSets().length]]
+    .filter(([, , n]) => n);
+  if (!pivots.length) return null;
+  if (!pivots.some(([id]) => id === VIEW.pivot)) VIEW.pivot = pivots[0][0];
+  const sub = h("p", { class: "lead" });
+  const body = h("div", {});
+  const tabs = h("div", { class: "tabs", role: "group", "aria-label": "Compare" }, pivots.map(([id, label]) =>
+    h("button", { "data-id": id, onclick: () => { VIEW.pivot = id; render(); } }, label)));
+  const views = {
+    driver: ["The same OS, model, tasks and seeds; only the computer-use driver changes.", driverPivot],
+    os: ["The same driver, model and tasks; only the operating system changes.", osPivot],
+    model: ["The same OS, driver and tasks; only the model and its harness change.", modelPivot],
+  };
+  const render = () => {
+    for (const b of tabs.children) b.setAttribute("aria-pressed", String(b.dataset.id === VIEW.pivot));
+    const [what, view] = views[VIEW.pivot];
+    sub.textContent = what;
+    body.replaceChildren(view());
+  };
+  render();
+  return h("section", { class: "comparing", "aria-labelledby": "compare-h" },
+    h("div", { class: "section-head", id: "compare", "data-nav": "Compare" }, h("h2", { id: "compare-h" }, "Compare"), tabs, sub),
+    body);
 }
 
-function driverCard(d, runs, tasks, depth) {
-  const dv = DRIVERS[d.id] || { name: d.id };
+/** A pivot's content, drawn again whenever its picker changes what it holds. */
+function pivotView(draw) {
+  const host = h("div", { class: "pivot" });
+  const render = () => host.replaceChildren(...[draw(render)].flat(Infinity).filter(Boolean));
+  render();
+  return host;
+}
+
+/** What a comparison holds fixed, each with a picker, and what it compares. */
+function fixbar(fixed, scope, compared) {
+  return h("div", { class: "fixbar" },
+    h("div", { class: "cmp-row" },
+      h("span", { class: "cmp-k" }, h("span", { html: ICON_LOCK, "aria-hidden": "true", style: { display: "inline-flex" } }), "Held fixed"),
+      h("div", { class: "cmp-picks" },
+        fixed.map(([label, ids, cur, name, pick]) => h("div", { class: "cmp-pick" }, h("small", {}, label),
+          h("div", { class: "tabs", role: "group", "aria-label": label },
+            ids.map((id) => h("button", { "aria-pressed": String(id === cur), onclick: () => pick(id) }, name(id)))))),
+        h("span", { class: "cmp-scope" }, scope))),
+    h("div", { class: "cmp-row" }, h("span", { class: "cmp-k" }, "Compared"), h("div", { class: "cmp-drivers" }, compared)));
+}
+
+const scopeOf = (tasks, of, depth) => `${tasks.length} task${tasks.length === 1 ? "" : "s"}${tasks.length < of ? ` of ${of}` : ""} · ${depth} run${depth === 1 ? "" : "s"} each`;
+
+/** The drivers of an OS and model, over the tasks every one of them ran: a card per driver, then task by task. */
+function driverPivot() {
+  return pivotView((render) => {
+    const all = CAT.comparisons, lead = leadModel(), want = VIEW.compare || {};
+    const c = all.find((x) => x.os === want.os && x.model === want.model) || all.find((x) => x.os === want.os && x.model === lead)
+      || all.find((x) => x.os === want.os) || all.find((x) => x.model === lead && x.tasks.length === all[0].tasks.length) || all[0];
+    VIEW.compare = { os: c.os, model: c.model };
+    follow(PIVOT_ROUTES, routeOf("drivers", c.os, c.model));
+    const runs = CAT.trials.filter((t) => t.os === c.os && t.model === c.model && c.tasks.includes(t.task) && c.drivers.some((d) => d.id === t.driver));
+    const depth = Math.max(...runs.map((t) => t.of));
+    const cards = tips(h("div", { class: "xcards" }, c.drivers.map((d) => {
+      const dv = DRIVERS[d.id] || { name: d.id };
+      return setupCard(dv.name, dv.detail?.split(";")[0], dv.detail, dv.slot ?? 0, runs.filter((t) => t.driver === d.id), c.tasks, depth);
+    })));
+    const extra = (CAT.failure_figures || []).filter((f) => f === "disturbances");
+    const n = Math.round(Math.max(...c.drivers.map((d) => (d.foreground || d.background).n / c.tasks.length)));
+    return [
+      fixbar([
+        ["OS", [...new Set(all.map((x) => x.os))], c.os, (id) => OSES[id]?.name || id, (id) => { VIEW.compare = { os: id, model: c.model }; render(); }],
+        ["Model", all.filter((x) => x.os === c.os).map((x) => x.model), c.model, (id) => MODELS[id]?.name || id, (id) => { VIEW.compare = { os: c.os, model: id }; render(); }],
+      ], `${scopeOf(c.tasks, c.of, n)} · same seeds, prompts and grade`, c.drivers.map((d) => h("span", { class: "dchip" }, driverDot(d.id), driverName(d.id)))),
+      cards, outcomeKey(cards),
+      h("div", { class: "compare", role: "region", "aria-label": "Each task by driver" }, compareGrid(c), ...compareWhy(c), compareFoot(c)),
+      h("div", { class: "subhead" }, h("h3", {}, "Every comparison at once"), h("p", {}, "Each OS and model that two drivers or more ran, over the tasks all of them ran.")),
+      figures(CAT.driver_figures.filter((f) => !f.endsWith("task-score")), () => "Full pass by driver"),
+      extra.length ? h("div", { class: "solo" }, figures(extra, () => "Which of the user's eight criteria each driver broke in the background")) : null,
+      h("p", { class: "dnote" }, "Every driver also serves AgentEnv's ", h("code", {}, "computer_*"),
+        " tools, which the grader and the recordings use; no driver's agents here see them. cua-driver's first runs on ",
+        "macOS and Linux, which offered seven of them too, are in the dataset but not here."),
+    ];
+  });
+}
+
+/** Each driver and model that ran on two operating systems or more, with those OSes. */
+function osSets() {
+  return CAT.drivers.flatMap((d) => CAT.models.filter((m) => m.board).map((m) => ({ driver: d.id, model: m.id,
+    oses: CAT.oses.filter((o) => CAT.board.some((b) => b.os === o.id && b.driver === d.id && b.model === m.id)) })))
+    .filter((s) => s.oses.length >= 2);
+}
+
+/** The operating systems one driver and model ran on: a card per OS over every task any of them ran, a gap where one
+ * hasn't run it yet; which background tasks pass at all on each; the bench's own driver's every model by OS; and the
+ * driver's one run on each OS in both conditions. */
+function osPivot() {
+  return pivotView((render) => {
+    const sets = osSets(), lead = leadModel(), want = VIEW.byOs || { driver: CAT.driver, model: lead };
+    const s = sets.find((x) => x.driver === want.driver && x.model === want.model) || sets.find((x) => x.driver === want.driver && x.model === lead)
+      || sets.find((x) => x.driver === want.driver) || sets.find((x) => x.model === lead) || sets[0];
+    VIEW.byOs = { driver: s.driver, model: s.model };
+    follow(PIVOT_ROUTES, routeOf("oses", s.driver, s.model));
+    const runs = CAT.trials.filter((t) => t.driver === s.driver && t.model === s.model && s.oses.some((o) => o.id === t.os));
+    const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
+    const depth = Math.max(...runs.map((t) => t.of));
+    const cards = tips(h("div", { class: "xcards" }, s.oses.map((o) =>
+      setupCard(o.name, o.detail, o.detail, osSlot(o.id), runs.filter((t) => t.os === o.id), tasks, depth))));
+    const gap = s.driver === CAT.driver ? (CAT.compare_figures || []).filter((f) => f === "os-gap") : [];
+    const pairs = (CAT.pairs || []).filter((p) => CAT.trials.find((t) => t.uid === p.foreground)?.driver === s.driver);
+    return [
+      fixbar([
+        ["Driver", [...new Set(sets.map((x) => x.driver))], s.driver, driverLabel, (id) => { VIEW.byOs = { driver: id, model: s.model }; render(); }],
+        ["Model", sets.filter((x) => x.driver === s.driver).map((x) => x.model), s.model, (id) => MODELS[id]?.name || id, (id) => { VIEW.byOs = { driver: s.driver, model: id }; render(); }],
+      ], `${scopeOf(tasks, CAT.tasks.length, depth)} · same tasks, prompts and grade`,
+      s.oses.map((o) => h("span", { class: "dchip" }, h("span", { class: "dot", style: { background: `var(--s${osSlot(o.id)})` } }), o.name))),
+      cards, outcomeKey(cards),
+      bgTasks(s.oses, s.driver),
+      gap.length ? [h("div", { class: "subhead" }, h("h3", {}, `Every model through ${driverName(CAT.driver)}, by OS`),
+        h("p", {}, "Each model the bench's driver ran on two OSes or more, over the tasks all of them ran.")),
+      figures(gap, () => "Full pass by operating system, a panel per model")] : null,
+      pairs.length ? [h("div", { class: "subhead" }, h("h3", {}, "One run on each OS, foreground beside background"),
+        h("p", {}, "The same model, driver, task and seed in both conditions, at one speed.")), pairList(pairs)] : null,
+    ];
+  });
+}
+
+/** An OS's colour, its place among the bench's OSes, as the OS figure draws its lines. */
+const osSlot = (id) => Math.max(0, CAT.oses.findIndex((o) => o.id === id)) % 8;
+
+/** Each OS and driver that two models or more ran, with those models. */
+function modelSets() {
+  return CAT.oses.flatMap((o) => CAT.drivers.map((d) => ({ os: o.id, driver: d.id,
+    models: CAT.models.filter((m) => m.board && CAT.board.some((b) => b.os === o.id && b.driver === d.id && b.model === m.id)) })))
+    .filter((s) => s.models.length >= 2);
+}
+
+/** The models one OS and driver ran: a card per model, and for the bench's own driver its passes by task and model. */
+function modelPivot() {
+  return pivotView((render) => {
+    const sets = modelSets(), want = VIEW.byModel || { os: widestOs(), driver: CAT.driver };
+    const s = sets.find((x) => x.os === want.os && x.driver === want.driver) || sets.find((x) => x.os === want.os && x.driver === CAT.driver)
+      || sets.find((x) => x.os === want.os) || sets[0];
+    VIEW.byModel = { os: s.os, driver: s.driver };
+    follow(PIVOT_ROUTES, routeOf("models", s.os, s.driver));
+    const runs = CAT.trials.filter((t) => t.os === s.os && t.driver === s.driver && s.models.some((m) => m.id === t.model));
+    const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
+    const depth = Math.max(...runs.map((t) => t.of));
+    const cards = tips(h("div", { class: "xcards" }, s.models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth))));
+    const grid = s.driver !== CAT.driver ? null : (CAT.compare_figures || []).includes(`models-tasks-${s.os}`) ? `models-tasks-${s.os}`
+      : s.os === widestOs() && (CAT.compare_figures || []).includes("models-tasks") ? "models-tasks" : null;
+    return [
+      fixbar([
+        ["OS", [...new Set(sets.map((x) => x.os))], s.os, (id) => OSES[id]?.name || id, (id) => { VIEW.byModel = { os: id, driver: s.driver }; render(); }],
+        ["Driver", sets.filter((x) => x.os === s.os).map((x) => x.driver), s.driver, driverLabel, (id) => { VIEW.byModel = { os: s.os, driver: id }; render(); }],
+      ], `${scopeOf(tasks, CAT.tasks.length, depth)} · same tasks, prompts and grade`,
+      s.models.map((m) => h("span", { class: "dchip" }, h("span", { class: "dot", style: { background: slotOf(m.id) } }), m.name))),
+      cards, outcomeKey(cards),
+      s.driver === CAT.driver && s.models.some((m) => m.harness === "codex-cli") ? h("p", { class: "dnote" }, "Codex CLI hands the model a tool's structured result alone, so GPT never sees ",
+        `${driverName(CAT.driver)}'s window screenshots, only its accessibility tree.`) : null,
+      grid ? figures([grid], () => "Passes by task and model: a row per task and a column per model, foreground and background") : null,
+    ];
+  });
+}
+
+/** The OS where the bench's own driver ran the most models in both conditions, the first of a tie, as the figures pick
+ * it for their passes by task and model. */
+function widestOs() {
+  const both = (o) => CAT.models.filter((m) => CAT.conditions.every((c) => CAT.board.some((b) => b.driver === CAT.driver && b.os === o.id && b.model === m.id && b.condition === c.id))).length;
+  return CAT.oses.reduce((a, o) => (both(o) > both(a) ? o : a), CAT.oses[0]).id;
+}
+
+/** A card for one setup of a comparison: its trials as squares per condition, how often it disturbed the user and
+ * which of the criteria most, its most common failure, and its pace. */
+function setupCard(name, what, title, slot, runs, tasks, depth) {
   const bg = runs.filter((t) => t.condition === "background" && t.grade?.user_undisturbed);
   const hurt = bg.filter((t) => !t.grade.user_undisturbed.result);
   const broke = CRIT.map((c) => [c, hurt.filter((t) => t.grade.user_undisturbed.criteria[c.id] === false).length])
     .filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  return h("article", { class: "xcard", style: { "--dc": `var(--s${(dv.slot ?? 0) % 8})` } },
-    h("h3", {}, h("span", { class: "dot" }), dv.name),
-    dv.detail && h("p", { class: "what", title: dv.detail }, dv.detail.split(";")[0]),
+  return h("article", { class: "xcard", style: { "--dc": `var(--s${slot % 8})` } },
+    h("h3", {}, h("span", { class: "dot" }), name),
+    what && h("p", { class: "what", title }, what),
     waffles(runs, tasks, depth),
     bg.length ? h("div", { class: "xline" }, h("span", {}, "Disturbed the user in ", h("b", {}, `${hurt.length} of ${bg.length}`), " background trials"),
       broke.map(([c, n]) => h("span", { class: "cchip", title: `${c.broken} in ${n} of them` }, c.short, h("b", {}, n)))) : null,
@@ -818,60 +1307,19 @@ function outcomeKey(cards) {
     h("span", { class: "okey-note" }, "A square per trial: a column per task, a row per run. A trial that broke several halves shows the first of GUI only, the user and the task. Click one to replay it."));
 }
 
-function osSection() {
-  const gap = osGap();
-  if (!gap) return null;
-  const label = gap.oses.map((o) => o.name).join(" vs ");
-  const figs = (CAT.compare_figures || []).filter((f) => f === "os-gap");
-  return h("section", { class: "oses", "aria-labelledby": "os-h" },
-    h("div", { class: "section-head", id: "os", "data-nav": label }, h("h2", { id: "os-h" }, label),
-      h("p", {}, `The same driver, model and tasks on two desktops: ${driverName(CAT.driver)} and ${gap.model.name}.`)),
-    h("div", { class: `os-top${figs.length ? "" : " bare"}` },
-      h("div", { class: "facts" }, gapFact(gap), taskFact(gap.oses)),
-      figs.length ? figures(figs, () => `Full pass on ${label}, in the foreground and the background`) : null),
-    (CAT.pairs || []).length ? [h("div", { class: "subhead" }, h("h3", {}, "One run on each, foreground beside background"),
-      h("p", {}, "The same model, driver, task and seed in both conditions, at one speed.")), pairList()] : null);
-}
-
-function osGap() {
-  const rows = CAT.board.filter((r) => r.driver === CAT.driver);
-  const oses = CAT.oses.filter((o) => rows.some((r) => r.os === o.id));
-  if (oses.length !== 2) return null;
-  const row = (os, model, cond) => rows.find((r) => r.os === os.id && r.model === model && r.condition === cond);
-  const shared = CAT.models.filter((m) => CAT.conditions.every((k) => oses.every((o) => row(o, m.id, k.id))));
-  if (!shared.length) return null;
-  const size = (m) => rows.filter((r) => r.model === m.id).reduce((s, r) => s + r.n_trials, 0);
-  const model = shared.find((m) => m.id === leadModel()) || shared.reduce((a, b) => (size(b) > size(a) ? b : a));
-  const conds = Object.fromEntries(CAT.conditions.map((k) => {
-    const both = oses.map((o) => row(o, model.id, k.id));
-    const tasks = Object.keys(both[0].tasks).filter((t) => t in both[1].tasks);
-    return [k.id, { tasks, by: both.map((r) => ({ k: tasks.reduce((s, t) => s + r.tasks[t].passed, 0), n: tasks.reduce((s, t) => s + r.tasks[t].n, 0) })) }];
-  }));
-  return { oses, model, conds };
-}
-
-function gapFact({ oses, model, conds }) {
-  const share = (x) => (x.n ? x.k / x.n : null);
-  const { background: bg, foreground: fg } = conds;
-  return h("article", { class: "fact" },
-    h("h3", {}, "Background full pass"),
-    h("p", { class: "fsub" }, `${model.name} through ${driverName(CAT.driver)}, the same ${bg.tasks.length} tasks while a user types`),
-    h("div", { class: "fnums" }, oses.map((o, i) => h("div", { class: "fnum" },
-      h("small", {}, o.name), h("b", {}, pct(share(bg.by[i]))),
-      h("span", { class: "meter" }, h("i", { style: { width: pct(share(bg.by[i]) || 0) } })),
-      h("span", {}, `${bg.by[i].k} of ${bg.by[i].n} trials`)))),
-    h("p", { class: "fnote" }, `In the foreground, the desktop to itself: ${oses.map((o, i) => `${pct(share(fg.by[i]))} on ${o.name}`).join(", ")}.`));
-}
-
-function taskFact(oses) {
-  const rows = CAT.board.filter((r) => r.driver === CAT.driver && r.condition === "background");
-  const tasks = CAT.tasks.filter((k) => oses.every((o) => rows.some((r) => r.os === o.id && r.tasks[k.id])));
-  const lines = oses.map((o) => {
+/** Which of the bench's background tasks any model passed through ``driver``, on each of ``oses``: what an OS lets pass
+ * at all while the user types, and the caveats of those it can't. */
+function bgTasks(oses, driver) {
+  const rows = CAT.board.filter((r) => r.driver === driver && r.condition === "background");
+  const tasks = CAT.tasks.filter((k) => k.conditions.includes("background") && rows.some((r) => r.tasks[k.id]));
+  const lines = oses.filter((o) => rows.some((r) => r.os === o.id)).map((o) => {
     const mine = rows.filter((r) => r.os === o.id);
     return { o, models: mine.length, cells: tasks.map((k) => mine.map((r) => r.tasks[k.id]).filter(Boolean)) };
   });
+  if (!lines.length || !tasks.length) return null;
   const marks = new Map();
   const cell = (l, k, i) => {
+    if (!l.cells[i].length) return h("span", { class: "tc na", "data-tip": `${probeOf(k.id)} on ${l.o.name}: no background trial yet` }, "–");
     const passed = l.cells[i].reduce((s, p) => s + p.passed, 0), n = l.cells[i].reduce((s, p) => s + p.n, 0);
     const cv = caveatOf(l.o.id, "background", k.id);
     if (cv && !passed) marks.set(cv.mark, cv);
@@ -881,47 +1329,16 @@ function taskFact(oses) {
   const grid = tips(h("div", { class: "tstrip", style: { "--n": tasks.length } },
     h("span"), tasks.map((k) => h("span", { class: "th" }, probeOf(k.id))), h("span"),
     lines.map((l) => [h("span", { class: "rl" }, l.o.name), tasks.map((k, i) => cell(l, k, i)),
-      h("b", { class: "rc" }, `${l.cells.filter((ps) => ps.some((p) => p.passed)).length} of ${tasks.length}`)])));
+      h("b", { class: "rc" }, `${l.cells.filter((ps) => ps.some((p) => p.passed)).length} of ${l.cells.filter((ps) => ps.length).length}`)])));
   return h("article", { class: "fact" },
     h("h3", {}, "Background tasks any model passed"),
-    h("p", { class: "fsub" }, `Through ${driverName(CAT.driver)}: ${lines.map((l) => `${l.models} model${l.models === 1 ? "" : "s"} on ${l.o.name}`).join(", ")}`),
+    h("p", { class: "fsub" }, `Through ${driverName(driver)}: ${lines.map((l) => `${l.models} model${l.models === 1 ? "" : "s"} on ${l.o.name}`).join(", ")}`),
     grid,
     [...marks.values()].map((cv) => h("p", { class: "fnote", title: cv.reason }, h("b", {}, `${cv.mark} ${cv.short}. `),
       cv.reason.replace(/\s*\([^)]*\)/g, "").split(/(?<=\.)\s+/).slice(0, 2).join(" "))));
 }
 
 const HARNESS_NAMES = { "claude-code": "Claude Code", "codex-cli": "Codex CLI" };
-
-function modelsSection() {
-  const rows = CAT.board.filter((r) => r.driver === CAT.driver);
-  const on = (o) => CAT.models.filter((m) => m.board && rows.some((r) => r.os === o.id && r.model === m.id));
-  const oses = CAT.oses.filter((o) => on(o).length >= 2).sort((a, b) => on(b).length - on(a).length);
-  if (!oses.length) return null;
-  const sub = h("p", {});
-  const body = h("div", {});
-  const tabs = oses.length > 1 ? h("div", { class: "tabs", role: "group", "aria-label": "Operating system" },
-    oses.map((o) => h("button", { "aria-pressed": "false", onclick: () => show(o) }, o.name))) : null;
-  const show = (os) => {
-    VIEW.modelsOs = os.id;
-    if (tabs) [...tabs.children].forEach((b, i) => b.setAttribute("aria-pressed", String(oses[i] === os)));
-    const models = on(os);
-    const runs = CAT.trials.filter((t) => t.os === os.id && t.driver === CAT.driver && models.some((m) => m.id === t.model));
-    const tasks = CAT.tasks.filter((k) => runs.some((t) => t.task === k.id)).map((k) => k.id);
-    const depth = Math.max(...runs.map((t) => t.of));
-    const cards = tips(h("div", { class: "xcards" }, models.map((m) => modelCard(m, runs.filter((t) => t.model === m.id), tasks, depth))));
-    const key = os === oses[0] ? "models-tasks" : `models-tasks-${os.id}`;
-    const figs = (CAT.compare_figures || []).filter((f) => f === key);
-    sub.textContent = `${os.name} · ${driverName(CAT.driver)} · the same ${tasks.length} tasks; only the model and its harness change.`;
-    body.replaceChildren(...[cards, outcomeKey(cards),
-      models.some((m) => m.harness === "codex-cli") ? h("p", { class: "dnote" }, "Codex CLI hands the model a tool's structured result alone, so GPT never sees ",
-        `${driverName(CAT.driver)}'s window screenshots, only its accessibility tree.`) : null,
-      figs.length ? figures(figs, () => "Passes by task and model: a row per task and a column per model, foreground and background") : null].filter(Boolean));
-  };
-  show(oses.find((o) => o.id === VIEW.modelsOs) || oses[0]);
-  return h("section", { class: "models", "aria-labelledby": "models-h" },
-    h("div", { class: "section-head", id: "models", "data-nav": "Models" }, h("h2", { id: "models-h" }, "How the models differ"), sub),
-    tabs, body);
-}
 
 function modelCard(m, runs, tasks, depth) {
   const effort = runs.find((t) => t.effort)?.effort || (m.harness === "claude-code" ? "medium" : null);
@@ -1004,21 +1421,29 @@ function playWhenSeen(videos) {
   for (const v of videos) io.observe(v);
 }
 
+/** Every trial of one driver on one OS, a row per task, its models and conditions filtered; a route sets the filters,
+ * as the opening chart's dots do, and the address bar follows them while it shows one. */
 function trialsSection() {
   const head = h("div", { class: "section-head", id: "trials", "data-nav": "Trials" }, h("h2", {}, "Every trial"), h("p", {}, resultsNote()));
   const ranOn = (driver, os) => osesOf(driver).some((o) => o.id === os);
-  let osSel = store.get("cdb-os", CAT.oses[0]?.id);
+  const want = VIEW.trials || {};
+  let osSel = OSES[want.os] ? want.os : store.get("cdb-os", CAT.oses[0]?.id);
   if (!OSES[osSel]) osSel = CAT.oses[0]?.id;
   if (!osesOf(VIEW.driver).length) VIEW.driver = CAT.driver;
   if (!ranOn(VIEW.driver, osSel)) osSel = osesOf(VIEW.driver)[0]?.id ?? osSel;
   const boardModels = CAT.models.filter((m) => m.board).map((m) => m.id);
-  let shown = boardModels.slice();
+  let shown = boardModels.filter((m) => (want.models || []).includes(m));
+  if (!shown.length) shown = boardModels.slice();
+  let cond = CONDS[want.cond] ? want.cond : "all";
   const gridHost = h("div");
   const controls = h("div", { class: "controls" });
   const groups = [];
   const sync = () => {
+    const models = shown.length === boardModels.length ? [] : shown;
+    VIEW.trials = { os: osSel, cond, models };
+    follow(["trials"], routeOf("trials", VIEW.driver, osSel, cond, ...models));
     for (const [g, cur] of groups) for (const b of g.children) b.setAttribute("aria-pressed", String(b.dataset.id === cur()));
-    gridHost.replaceChildren(boardGrid(osSel, shown, VIEW.driver));
+    gridHost.replaceChildren(boardGrid(osSel, shown, VIEW.driver, cond));
   };
   const group = (label, items, cur, onpick, cls = "") => {
     const g = h("div", { class: `tabs ${cls}`, role: "group", "aria-label": label },
@@ -1035,7 +1460,7 @@ function trialsSection() {
   if (boardModels.length > 1) {
     const chips = h("div", { class: "tabs models", role: "group", "aria-label": "Models" });
     for (const mid of boardModels) {
-      chips.append(h("button", { "aria-pressed": "true", onclick: (e) => {
+      chips.append(h("button", { "aria-pressed": String(shown.includes(mid)), onclick: (e) => {
         const on = shown.includes(mid);
         if (on && shown.length === 1) return;
         shown = on ? shown.filter((x) => x !== mid) : boardModels.filter((x) => x === mid || shown.includes(x));
@@ -1051,6 +1476,9 @@ function trialsSection() {
       store.set("cdb-os", id);
       if (!ranOn(VIEW.driver, id)) VIEW.driver = CAT.driver;
     });
+  }
+  if (CAT.conditions.length > 1) {
+    group("Condition", [["all", "Both"], ...CAT.conditions.map((c) => [c.id, c.name])], () => cond, (id) => { cond = id; });
   }
   if (controls.children.length) head.append(controls);
   sync();
@@ -1069,16 +1497,17 @@ function howSection() {
         h("ul", { class: "crit-list" }, CRIT.map((c) => h("li", {}, h("b", {}, c.short), " ", h("code", {}, c.id)))))));
 }
 
-function boardGrid(os, shown, driver) {
-  const conds = CAT.conditions;
+function boardGrid(os, shown, driver, cond) {
+  const conds = CAT.conditions.filter((c) => cond === "all" || c.id === cond);
   const multi = shown.length > 1;
-  const grid = h("div", { class: "board", style: { "--cols": conds.length } });
+  const grid = h("div", { class: `board${conds.length === 1 ? " one" : ""}`, style: { "--cols": conds.length } });
   grid.append(h("div", { class: "bh" }, h("b", {}, "Task")));
   for (const c of conds) grid.append(h("div", { class: "bh" }, h("b", {}, c.name), h("span", {}, c.short)));
   let fam = null;
   const fams = new Set(CAT.tasks.map((t) => t.family));
   for (const task of CAT.tasks) {
-    const ts = CAT.trials.filter((t) => t.driver === driver && t.os === os && t.task === task.id && shown.includes(t.model));
+    const ts = CAT.trials.filter((t) => t.driver === driver && t.os === os && t.task === task.id && shown.includes(t.model)
+      && conds.some((c) => c.id === t.condition));
     if (!ts.length) continue;
     if (fams.size > 1 && task.family !== fam) {
       fam = task.family;
@@ -1113,46 +1542,6 @@ function boardGrid(os, shown, driver) {
 function missingOf(driver, os, task, cond, models) {
   const runs = new Set(CAT.trials.filter((t) => t.driver === driver && models.includes(t.model)).map((t) => t.run));
   return (CAT.missing || []).filter((x) => x.driver === driver && x.os === os && x.task === task && x.condition === cond && runs.has(x.run)).length;
-}
-
-function compareView() {
-  const host = h("div", { class: "compare", role: "region", "aria-label": "Compare drivers" });
-  const pick = () => {
-    const all = CAT.comparisons;
-    const want = VIEW.compare || {};
-    return all.find((c) => c.os === want.os && c.model === want.model) || all.find((c) => c.os === want.os) || all[0];
-  };
-  const select = (patch) => {
-    const cur = pick();
-    VIEW.compare = { os: cur.os, model: cur.model, ...patch };
-    const next = pick();
-    VIEW.compare = { os: next.os, model: next.model };
-    if (location.hash.startsWith("#/drivers")) history.replaceState(null, "", `#/drivers/${enc(next.os)}/${enc(next.model)}`);
-    render();
-  };
-  const render = () => {
-    const c = pick();
-    host.replaceChildren(compareHead(c, select), compareGrid(c), ...compareWhy(c), compareFoot(c));
-  };
-  render();
-  return host;
-}
-
-function compareHead(c, select) {
-  const oses = [...new Set(CAT.comparisons.map((x) => x.os))];
-  const models = CAT.comparisons.filter((x) => x.os === c.os).map((x) => x.model);
-  const tabs = (label, ids, cur, name, patch) => h("div", { class: "tabs", role: "group", "aria-label": label },
-    ids.map((id) => h("button", { "aria-pressed": String(id === cur), onclick: () => select(patch(id)) }, name(id))));
-  const n = Math.round(Math.max(...c.drivers.map((d) => (d.foreground || d.background).n / c.tasks.length)));
-  return h("div", { class: "cmp-head" },
-    h("div", { class: "cmp-row" },
-      h("span", { class: "cmp-k" }, h("span", { html: ICON_LOCK, "aria-hidden": "true", style: { display: "inline-flex" } }), "Held fixed"),
-      h("div", { class: "cmp-pick" }, h("small", {}, "OS"), tabs("Operating system", oses, c.os, (id) => OSES[id]?.name || id, (id) => ({ os: id }))),
-      h("div", { class: "cmp-pick" }, h("small", {}, "Model"), tabs("Model", models, c.model, (id) => MODELS[id]?.name || id, (id) => ({ model: id }))),
-      h("span", { class: "cmp-scope" }, `${c.tasks.length} task${c.tasks.length === 1 ? "" : "s"}${c.tasks.length < c.of ? ` of ${c.of}` : ""} · ${n} run${n === 1 ? "" : "s"} each · same seeds, prompts and grade`)),
-    h("div", { class: "cmp-row" },
-      h("span", { class: "cmp-k" }, "Compared"),
-      h("div", { class: "cmp-drivers" }, c.drivers.map((d) => h("span", { class: "dchip" }, driverDot(d.id), driverName(d.id))))));
 }
 
 const cellRuns = (c, driver, task, cond) => CAT.trials.filter((t) => t.driver === driver && t.os === c.os && t.model === c.model && t.task === task && t.condition === cond);

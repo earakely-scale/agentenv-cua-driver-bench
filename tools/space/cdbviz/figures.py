@@ -694,6 +694,187 @@ def gap_notes(gaps, names, osn, via, marks):
                                       if marks else "") + ".")
     return out
 
+
+#: A model's lab, by its id's prefix, and the series slot its dots take.
+LABS = {"anthropic/": ("Claude", 0), "openai/": ("GPT", 1)}
+
+
+def story_specs(cat):
+    """The card's opening figure, ``decides``: whether the model or the setup decides a result."""
+    return {"decides": decides_spec(cat)}
+
+
+def decides_spec(cat):
+    """Full pass per model, a dot each, for each OS and driver over the whole bench in each condition: the models that
+    ran every trial of a condition, a row per OS and driver with two of them or more, so a row's spread is the model's
+    part and the rows' gap is the setup's."""
+    conds = [c for c in cat["conditions"] if c["id"] in catalog.CONDITIONS]
+    whole = complete_counts(cat["board"])
+    full = {c["id"]: usual([n for (_, cond), n in whole.items() if cond == c["id"]]) for c in conds}
+    names = {m["id"]: m["name"] for m in cat["models"]}
+    rows = []
+    for o in cat["oses"]:
+        for d in cat["drivers"]:
+            cells = {}
+            for c in conds:
+                got = [b for b in cat["board"] if (b["os"], b["driver"], b["condition"]) == (o["id"], d["id"], c["id"])
+                       and b["n_trials"] == whole.get((o["id"], c["id"])) and b["model"] in names]
+                cells[c["id"]] = [{"model": b["model"], "name": names[b["model"]], "passed": b["passed"],
+                                   "n": b["n_trials"], "lab": lab_of(b["model"])} for b in got]
+            if max(len(v) for v in cells.values()) >= 2:
+                rows.append({"os": o["name"], "driver": label_of(cat, d["id"]),
+                             "label": f"{o['name']} · {label_of(cat, d['id'])}", "cells": cells})
+    sub = ("Full passes per model, a dot each, for every operating system and driver that ran the whole bench. With the "
+           "desktop to itself the models spread out; with the user typing in their own window they bunch together, at "
+           "a level the driver and the operating system set.")
+    foot = (f"A dot is one model's {full.get('foreground', 0)} foreground or {full.get('background', 0)} background "
+            "trials; tied models share a dot, with their count above it. Full pass: the task done, through the GUI only, "
+            "and in the background with the user undisturbed on all eight of trycua's criteria. Tasks by trycua's Cua "
+            "Driver Bench, run on AgentEnv; not trycua's official results.")
+    desc = "; ".join(f"{r['label']}, {c['name'].lower()}: " + ", ".join(f"{p['name']} {p['passed']} of {p['n']}"
+                                                                         for p in r["cells"][c["id"]])
+                     for r in rows for c in conds if r["cells"][c["id"]])
+    return {"title": "With the user typing, the setup decides, not the model", "subtitle": sub, "foot": foot,
+            "desc": desc, "panels": rows, "conds": conds, "full": full, "draw": strips}
+
+
+def complete_counts(board):
+    """Each OS and condition's count of trials in a complete run of the bench: the most common among its board rows,
+    the larger on a tie, so a run still uploading, or two runs of one model merged, doesn't set it."""
+    counts = defaultdict(list)
+    for b in board:
+        counts[b["os"], b["condition"]].append(b["n_trials"])
+    return {key: usual(ns) for key, ns in counts.items()}
+
+
+def usual(values):
+    """The most common of ``values``, the larger on a tie; 0 for none."""
+    return max(values, key=lambda v: (values.count(v), v)) if values else 0
+
+
+def lab_of(model):
+    return next((lab for prefix, lab in LABS.items() if model.startswith(prefix)), ("Other", 2))
+
+
+def strips(spec, theme, phone):
+    """The opening figure: a row per OS and driver, a track per condition from none to every trial, each model's full
+    pass a dot on it in its lab's colour, tied models one dot (split between labs when both tied) with their count, and
+    the row's lowest to highest printed beside them. Side by side on a desktop, one condition under the other on a
+    phone."""
+    s = PHONE if phone else DESKTOP
+    t, colors = THEMES[theme], SERIES[theme]
+    rows, conds, full = spec["panels"], spec["conds"], spec["full"]
+    margin = 16 if phone else 28
+    r = 5.5 if phone else 6.5
+    W = 360 if phone else 900
+    legend_h = s["sub"] + 14
+    head_h = s["cond"] + s["sub"] + 18
+    axis_h = s["tick"] + 12
+    if phone:
+        rh = s["sub"] + 6 + s["sub"] + 2 * r + 12
+        block = head_h + len(rows) * rh + axis_h
+        body = legend_h + len(conds) * block + (len(conds) - 1) * 22
+    else:
+        rh = 2 * r + 30
+        gaps = sum(1 for a, b in zip(rows, rows[1:]) if a["os"] != b["os"])
+        body = legend_h + head_h + len(rows) * rh + gaps * 10 + axis_h
+    svg, y0 = frame(spec, W, body, theme, phone)
+    lx = margin
+    for name, slot in (("Claude", 0), ("GPT", 1)):
+        svg.add(f'<circle cx="{lx + r:.1f}" cy="{y0 + s["sub"] * 0.45:.1f}" r="{r}" fill="{colors[slot]}"/>')
+        svg.text(lx + 2 * r + 6, y0 + s["sub"] * 0.8, name, s["sub"], 600, "ink2")
+        lx += 2 * r + 6 + width(name, 600, s["sub"]) + 18
+    split_dot(svg, lx + r, y0 + s["sub"] * 0.45, r, colors[0], colors[1], t["surface"], 0)
+    svg.text(lx + 2 * r + 6, y0 + s["sub"] * 0.8, "Claude and GPT tied", s["sub"], 600, "ink2")
+    y0 += legend_h
+    label_w = 0 if phone else max(width(f"{row['os']} · ", 700, s["name"]) + width(row["driver"], 400, s["name"])
+                                  for row in rows) + 24
+    gap = 36
+    pw = W - 2 * margin if phone else (W - 2 * margin - label_w - gap * (len(conds) - 1)) / len(conds)
+    pad = r + 4
+    range_w = width("00–00", 600, s["tick"]) + 12
+    for k, c in enumerate(conds):
+        if phone:
+            x0, top = margin, y0 + k * (head_h + len(rows) * rh + axis_h + 22)
+        else:
+            x0, top = margin + label_w + k * (pw + gap), y0
+        track_l, track_r = x0 + pad, x0 + pw - range_w
+        X = lambda share: track_l + share * (track_r - track_l)
+        gloss = "the desktop to itself" if c["id"] == "foreground" else "the user typing in their own window"
+        svg.text(x0, top + s["cond"] * 0.8, c["name"], s["cond"], 700)
+        svg.text(x0, top + s["cond"] + 6 + s["sub"] * 0.8, f"{gloss} · {full[c['id']]} trials a dot", s["sub"], 400,
+                 "ink3")
+        ry = top + head_h
+        centres = []
+        for i, row in enumerate(rows):
+            if not phone and i and row["os"] != rows[i - 1]["os"]:
+                ry += 10
+            if phone:
+                svg.text(x0, ry + s["sub"] * 0.8, row["os"] + " · ", s["sub"], 700, "ink")
+                svg.text(x0 + width(row["os"] + " · ", 700, s["sub"]), ry + s["sub"] * 0.8, row["driver"], s["sub"],
+                         400, "ink2")
+                cy = ry + s["sub"] + 6 + s["sub"] + r + 2
+            else:
+                cy = ry + rh / 2
+                if k == 0:
+                    os_w = width(f"{row['os']} · ", 700, s["name"])
+                    svg.text(margin, cy + s["name"] * 0.36, f"{row['os']} · ", s["name"], 700)
+                    svg.text(margin + os_w, cy + s["name"] * 0.36, row["driver"], s["name"], 400, "ink2")
+            centres.append((cy, row))
+            ry += rh
+        bottom = ry
+        for g in (0, 0.25, 0.5, 0.75, 1.0):
+            gx = X(g)
+            svg.add(f'<line x1="{gx:.1f}" x2="{gx:.1f}" y1="{top + head_h - 6:.1f}" y2="{bottom:.1f}" '
+                    f'stroke="{t["axis"] if g == 0 else t["grid"]}" stroke-width="1"/>')
+            svg.text(gx, bottom + s["tick"] + 4, pct(g), s["tick"], 400, "ink3", "middle", num=True)
+        for cy, row in centres:
+            cell = row["cells"].get(c["id"]) or []
+            if not cell:
+                svg.text(track_l + 4, cy + s["tick"] * 0.36, "not run", s["tick"], 400, "ink3")
+                continue
+            n = cell[0]["n"]
+            lo, hi = min(p["passed"] for p in cell), max(p["passed"] for p in cell)
+            if hi > lo:
+                svg.add(f'<line x1="{X(lo / n):.1f}" x2="{X(hi / n):.1f}" y1="{cy:.1f}" y2="{cy:.1f}" '
+                        f'stroke="{t["ink3"]}" stroke-opacity=".4" stroke-width="{3 if phone else 4}" '
+                        f'stroke-linecap="round"/>')
+            groups = defaultdict(list)
+            for p in cell:
+                groups[p["passed"]].append(p)
+            last = {"above": -1e9, "below": -1e9}
+            count_w = width("8", 700, s["sub"] - 1.5) + 6
+            for passed, ps in sorted(groups.items()):
+                cx = X(passed / n)
+                slots = sorted({p["lab"][1] for p in ps})
+                tip = escape(f"{row['label']}, {c['name'].lower()}: " + ", ".join(p["name"] for p in ps)
+                             + f" passed {passed} of {n}")
+                svg.add(f"<g><title>{tip}</title>")
+                if len(slots) == 1:
+                    svg.add(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r}" fill="{colors[slots[0]]}" '
+                            f'stroke="{t["surface"]}" stroke-width="1.5"/>')
+                else:
+                    split_dot(svg, cx, cy, r, colors[slots[0]], colors[slots[1]], t["surface"], 1.5)
+                svg.add("</g>")
+                if len(ps) > 1:
+                    where = next((w for w in ("above", "below") if cx - last[w] >= count_w), None)
+                    if where:
+                        ty = cy - r - 4 if where == "above" else cy + r + (s["sub"] - 1.5) * 0.8 + 3
+                        svg.text(cx, ty, str(len(ps)), s["sub"] - 1.5, 700, "ink2", "middle", num=True)
+                        last[where] = cx
+            said = f"{lo}" if lo == hi else f"{lo}–{hi}"
+            svg.text(track_r + 12, cy + s["tick"] * 0.36, said, s["tick"], 600, "ink2", num=True)
+    return svg.render(spec["title"], spec["desc"])
+
+
+def split_dot(svg, cx, cy, r, left, right, ring, ring_w):
+    """A dot half ``left`` and half ``right``, for labs tied on one value."""
+    svg.add(f'<path d="M{cx:.1f},{cy - r:.1f}A{r},{r} 0 0 0 {cx:.1f},{cy + r:.1f}Z" fill="{left}"/>'
+            f'<path d="M{cx:.1f},{cy - r:.1f}A{r},{r} 0 0 1 {cx:.1f},{cy + r:.1f}Z" fill="{right}"/>'
+            + (f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r}" fill="none" stroke="{ring}" stroke-width="{ring_w:.1f}"/>'
+               if ring_w else ""))
+
+
 def widest(cat):
     """The OS on which the bench's first driver ran the most models in both conditions, the first of a tie, and those
     models."""
@@ -799,14 +980,17 @@ def frame(spec, W, body, theme, phone):
     Svg, and the y where the panels start."""
     s = PHONE if phone else DESKTOP
     margin = 16 if phone else 28
+    titles = balanced(spec["title"], 800, s["title"], W - 2 * margin)
+    lift = (len(titles) - 1) * (s["title"] + 4)
     head_lines = wrap(spec["subtitle"], 400, s["subtitle"], W - 2 * margin)
-    head = margin + s["title"] + 8 + len(head_lines) * (s["subtitle"] + 5)
+    head = margin + s["title"] + lift + 8 + len(head_lines) * (s["subtitle"] + 5)
     foot_lines = wrap(spec["foot"], 400, s["foot"], W - 2 * margin)
     H = head + 16 + body + 14 + len(foot_lines) * (s["foot"] + 5) + margin - 6
     svg = Svg(W, round(H), theme)
-    svg.text(margin, margin + s["title"] * 0.8, spec["title"], s["title"], 800)
+    for k, line in enumerate(titles):
+        svg.text(margin, margin + s["title"] * 0.8 + k * (s["title"] + 4), line, s["title"], 800)
     for k, line in enumerate(head_lines):
-        svg.text(margin, margin + s["title"] + 10 + k * (s["subtitle"] + 5) + s["subtitle"] * 0.75, line,
+        svg.text(margin, margin + s["title"] + lift + 10 + k * (s["subtitle"] + 5) + s["subtitle"] * 0.75, line,
                  s["subtitle"], 400, "ink2")
     fy = H - margin + 6 - (len(foot_lines) - 1) * (s["foot"] + 5) - 4
     for k, line in enumerate(foot_lines):
@@ -1120,9 +1304,11 @@ def outside(a, bounds):
 def write_all(cat, out_dirs):
     """Each figure with a panel, in light and dark, desktop and phone, into every one of ``out_dirs``: the keys written,
     as the catalog's results, drivers, comparison and failure figures, and the comparison figures' notes."""
-    written = {"figures": [], "driver_figures": [], "compare_figures": [], "failure_figures": [], "compare_notes": {}}
+    written = {"figures": [], "driver_figures": [], "compare_figures": [], "failure_figures": [], "story_figures": [],
+               "compare_notes": {}}
     for group, all_specs in (("figures", specs(cat)), ("driver_figures", driver_specs(cat)),
-                             ("compare_figures", compare_specs(cat)), ("failure_figures", failure_specs(cat))):
+                             ("compare_figures", compare_specs(cat)), ("failure_figures", failure_specs(cat)),
+                             ("story_figures", story_specs(cat))):
         for key, spec in all_specs.items():
             if not spec["panels"]:
                 continue

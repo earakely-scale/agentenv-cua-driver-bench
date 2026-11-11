@@ -13,9 +13,19 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+STORY = HERE.parent / "dataset" / "card" / "story.md"
 sys.path.insert(0, str(HERE))
 
 from cdbviz import catalog, clip, failures, figures, hero, media, pair, reel, trials  # noqa: E402
+
+
+def story(path=STORY):
+    """The card's findings as the Space opens with them, from the card's own file so the two can't disagree: without
+    its heading and its figure's slot, since the Space heads them itself and draws the figure as a chart of its own."""
+    lines = path.read_text().strip().splitlines()
+    if lines and lines[0].startswith("#"):
+        lines = lines[1:]
+    return "\n".join(line for line in lines if line.strip() != "{{FIGURE}}").strip()
 
 
 def pick_hero(metas, cfg):
@@ -171,6 +181,7 @@ def main():
               f"web.mp4 {entry.get('video_mb', '–')} MB{', Space copy' if keep_local else ''}")
     cat = catalog.build(metas, cfg, hero_uid, files, [m for m in trials.discover_missing(args.data)
                                                      if f"{m['os']}/{m['run']}" not in skip])
+    cat["story"] = story()
     cat["failures"] = failures.build(loaded, cat)
     keep = {m["uid"] for m in metas}
     for stale in (data / "trials").iterdir():

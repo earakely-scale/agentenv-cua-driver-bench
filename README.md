@@ -472,16 +472,17 @@ it encodes only the trials that have none, then writes:
 - the card (`tools/dataset/card.py`);
 - and uploads them all.
 
-The card is `tools/dataset/card/README.md` with its slots filled: the latest run's summary (`card/summary.md`, written
-by hand for each run), the hero and its caption, the figures, the results, the drivers comparison once two drivers ran
-one OS and model (`drivers.md` and the drivers figures), and `card/body.md`.
+The card is `tools/dataset/card/README.md` with its slots filled: the opening's findings (`card/story.md`, by hand) and
+its `decides` figure, the hero and its caption, the board (a row per model, a column per OS and driver), the figures,
+each OS's run notes (`card/notes/<os>.md`, by hand, folded away under the board), the drivers comparison once two drivers
+ran one OS and model (`drivers.md` and the drivers figures), and `card/body.md`.
 
 **Another model, OS or driver.** A new run is a new run id, so its trials go beside the others under
 `runs/<os>/<run>/`, and `publish.sh` puts them on the board.
 
 - Give the model's name and price to `tools/space/config.json` (`models`) and to `tools/dataset/export.py`
   (`PRICES`, or `TIERED` for a price that depends on the prompt's size).
-- Write the run's `summary.md`.
+- Add the run's notes to its OS's `card/notes/<os>.md`, and update `card/story.md` if a finding changes.
 - A new OS adds its name to `config.json` (`oses`), and any cells that can't pass there to `caveats`.
 - A new driver adds its name, what it is and its colour's slot in the figures' palette to `config.json` (`drivers`),
   and its trials name it in `trial.json` (`driver`); a trial that names none ran on cua-driver. The board's grid shows

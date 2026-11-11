@@ -97,6 +97,7 @@ The A22 criteria:
 ## Dataset structure
 
 ```
+results/board.parquet        one row per trial the board counts, as the dataset viewer shows it: OS, driver, model, task, condition, run, the grade's halves, seconds, model calls, cost and its replay in the Space
 results/trials.parquet       one row per trial: model, driver, harness, condition, every half of the grade, A22 criteria, cost, turns, paths, and on_board: whether the board and the Space count it
 results/calls.parquet        one row per tool call, keyed by os, run and trial_id as trials.parquet is: when it was issued and answered on the recording's clock, its input, its result
 results/missing.parquet      one row per trial whose re-runs were spent, so its run is incomplete
@@ -123,6 +124,13 @@ runs/<os>/<run>/<trial>/
 - Few trials per cell: trycua's schedule runs each task 5 times per condition, and a cell's rate rests on those 5.
   The pilot run `sonnet-4-5-2026-11-02` covers only the three multi-app tasks, once per condition, and its prompts
   lack trycua's closing line with the time and turn limits, which later runs have.
+- **Runs not on the board.** cua-driver's first runs on each OS also offered its agents AgentEnv's `computer_*` tools
+  beside its own, and its agents made some of their calls through them. They stay in the dataset but not on the board
+  or in the Space, whose cua-driver rows ran its own tools alone (`cua-driver-*`): on Linux Claude Sonnet 5.5
+  (`sonnet-5-5-2026-11-03`, 36 of 50 in the foreground, 2 of them multi-app, and 5 of 40 in the background), Claude
+  Haiku 5.5 (`haiku-5-5-2026-11-02`, 36 of 50 and 5 of 40) and the Sonnet 4.5 pilot (`sonnet-4-5-2026-11-02`, none);
+  on macOS `sonnet-5-5-2026-11-05`, `sonnet-5-5-2026-11-05-multiapp` and `haiku-5-5-2026-11-05`; on Windows
+  `sonnet-5-5-2026-11-09` (63 trials).
 - **On macOS, Claude Haiku 5.5 ran the seven BenchLab tasks on 2026-11-05 and the three multi-app tasks on
   2026-11-06** (runs `*-haiku-5-5-2026-11-06-multiapp`), on every driver; Claude Opus 5.5 ran with cua-driver alone.
   GPT-6 ran on Linux alone. The macOS runs used agentenv-framework builds from just before its 0.9.1446 release; each

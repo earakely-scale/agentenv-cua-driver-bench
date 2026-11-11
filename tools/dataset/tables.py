@@ -1,12 +1,16 @@
 """tables.py BENCH DATASET: the dataset's tables from its runs/ folders and the bench's committed trial tasks.
 
 tasks/tasks.parquet (one row per trial task), results/trials.parquet (one row per graded trial, with the harness errors
-it was re-run for and whether the board counts it, as the Space's config.json says), results/calls.parquet (one row per tool call, keyed by os, run and trial_id as trials are), and
+it was re-run for and whether the board counts it, as the Space's config.json says), results/board.parquet (the trials
+the board counts, in the few columns the dataset viewer opens on, each with its replay in the Space),
+results/calls.parquet (one row per tool call, keyed by os, run and trial_id as trials are), and
 results/missing.parquet (one row per trial
 whose re-runs were spent, so the run it belongs to is incomplete)."""
 import json
+import os
 import re
 import sys
+import urllib.parse
 from pathlib import Path
 
 import pandas as pd
@@ -16,6 +20,7 @@ STEM = re.compile(r"^(?:(?P<os>macos)-)?(?:(?P<driver>agent-desktop|macos-harnes
                   r"(?P<task>(?:cdb-g|mb-|ir-)\d\d)(?:-r(?P<run>\d))?-(?P<condition>foreground|background)$")
 #: The driver of a trial that names none, the bench's first arm.
 DRIVER = "cua-driver"
+SPACE = f"https://huggingface.co/spaces/{os.environ.get('HF_REPO') or 'earakely-scale/CuaDriverBench-AgentEnv'}"
 
 
 def main():
@@ -34,6 +39,9 @@ def main():
         calls.extend(trial_calls)
     missing = [missing_row(folder) for folder in sorted(p.parent for p in dataset.glob("runs/*/*/*/missing.json"))]
     pd.DataFrame(rows).to_parquet(dataset / "results" / "trials.parquet", index=False)
+    board = sorted((board_row(row, cfg) for row in rows if row["on_board"]),
+                   key=lambda r: (r["os"], r["driver"], r["model"], r["task"], r["condition"], r["run"] or 0))
+    pd.DataFrame(board).to_parquet(dataset / "results" / "board.parquet", index=False)
     pd.DataFrame(calls).to_parquet(dataset / "results" / "calls.parquet", index=False)
     pd.DataFrame(missing, columns=MISSING).to_parquet(dataset / "results" / "missing.parquet", index=False)
     print(len(rows), "trials,", len(calls), "calls,", len(missing), "missing")
@@ -126,6 +134,31 @@ def trial_row(dataset, folder, titles, cfg):
               "tool": c["tool"], "server": c["server"], "input": json.dumps(c["input"]), "error": c["error"],
               "result": c["result"], "image": c["image"]} for c in timeline["calls"]]
     return row, calls
+
+
+def board_row(row, cfg):
+    """A trial as the dataset viewer opens on it: readable names, the grade's halves, what it took, and its replay."""
+    lead = "" if row["driver"] == DRIVER else f"{row['driver']}/"
+    replay = (f"{SPACE}#/{lead}{row['os']}/{row['task']}/{row['condition']}/{urllib.parse.quote(row['model'], safe='')}"
+              f"/r{row['run_index']}")
+    driver = cfg["drivers"].get(row["driver"]) or {}
+    return {
+        "os": (cfg["oses"].get(row["os"]) or {}).get("name", row["os"]),
+        "driver": driver.get("label") or driver.get("name") or row["driver"],
+        "model": ((cfg.get("models") or {}).get(row["model"]) or {}).get("name", row["model"]),
+        "task": row["probe"],
+        "title": row["title"],
+        "condition": row["condition"],
+        "run": row["run_index"],
+        "passed": row["passed"],
+        "task_done": row["task_passed"],
+        "gui_only": row["gui_only"],
+        "user_undisturbed": row["user_undisturbed"],
+        "seconds": None if row["duration_s"] is None else round(row["duration_s"]),
+        "model_calls": row["model_calls"],
+        "cost_usd": row["cost_usd"],
+        "replay": replay,
+    }
 
 
 MISSING = ("run", "os", "name", "task_file", "run_index", "kind", "harness_errors")
