@@ -1,9 +1,10 @@
-**On macOS the driver decides whether the user stays undisturbed.** Four computer-use drivers ran trycua's tasks
+**On macOS the driver decides whether the user stays undisturbed.** Five computer-use drivers ran trycua's tasks
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
-90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06; and
-`codex-computer-use-*`, Sonnet on 2026-11-09 and Opus and Haiku on 2026-11-11; macOS 26 on EC2 Macs). Through the four, Sonnet passes 39,
-35, 32 and 26 of 50 trials in the foreground, and 23, 8, 1 and 11 of 40 in the background.
+90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06;
+`codex-computer-use-*`, Sonnet on 2026-11-09 and Opus and Haiku on 2026-11-11; and `aside-*-2026-11-11`, seven models;
+macOS 26 on EC2 Macs). Through the five, Sonnet passes 39, 35, 32, 26 and 50 of 50 trials in the foreground, and 23,
+8, 1, 11 and 37 of 40 in the background.
 
 - **cua-driver (trycua): Sonnet 39 of 50 in the foreground and 23 of 40 in the background, Haiku 38 of 50 and 18 of 40.** Of 80 background trials it takes the user's keyboard in 1 and raises a window over theirs in 7.
   Its background misses are the tasks: MB-09's drag moves the user's pointer (§), and it passes 1 of the 10 G02 and
@@ -54,5 +55,21 @@ with the OS, the model, the prompts, the seeds and the grade held fixed, each dr
   foreground both pass G04 and all 20 interruption trials every time, and neither MB-10 nor MB-11, which need the
   hover Codex hasn't; Opus passes G02 4 of 5 and Haiku no other multi-app trial. Opus ends one trial on the 45-turn
   limit and Haiku 16; none leaves the GUI. A trial costs $0.45 for Opus and $0.04 for Haiku at list price.
+
+- **Aside Computer Use (At Inc.): Claude Opus 5.5 passes 50 of 50 in the foreground and 38 of 40 in the background,
+  and Sonnet 50 of 50 and 37 of 40, the most of any setup that ran every task** (runs `aside-*-2026-11-11`: Opus,
+  Sonnet and Haiku 5.5 in Claude Code 2.1.280, GPT-6 Astra and Luna and GPT-6.1 Sol and Terra in Codex CLI 0.147.0 at
+  medium effort). It is Aside 1.26.1111.1046 with no Aside sign-in: the agent writes JavaScript against Aside's
+  `computer` API through its one tool, `repl`, Aside opens only the task's apps, and it hovers only once the agent has
+  asked for the foreground. All seven models pass all 15 precision trials, MB-10's and MB-11's hover included, and
+  none leaves the GUI. In the background Sonnet does the task in all 40 trials and Opus in 39, and each disturbs the
+  user only by raising a window over theirs, Sonnet in 3 and Opus in 1. Haiku passes 46 of 50 and 27 of 40 at $0.01 a
+  trial, against Opus's $0.29: it misses 4 of G03's 5 in the foreground. The GPT models pass 41 to 47 of 50 and 28 to
+  31 of 40: Astra 47 and 31 at $0.44 a trial, Sol 46 and 28 at $0.07, Terra 44 and 31 at $0.04, Luna 41 and 28 at
+  $0.01. Aside's screenshots come as plain images rather than structured results, Codex hands them to GPT, and the GPT
+  models read MB-11's tooltip in all 20 of their trials. Terra leaves IR-01's permission prompt unanswered in 9 of its
+  10 trials, and Luna runs out of its 45 turns in 14, 9 of them G03's. Across the seven models, background trials
+  raise a window over the user's in 36 of 280, 22 of them in G03 and IR-02, and Sol and Haiku each take the user's
+  keyboard in 4 of G04's 5.
 
 **Claude Opus 5.5 with cua-driver** (run `cua-driver-opus-5-5-2026-11-06`) passes 44 of 50 in the foreground and 23 of 40 in the background, against Sonnet's 39 of 50 and 23 of 40.

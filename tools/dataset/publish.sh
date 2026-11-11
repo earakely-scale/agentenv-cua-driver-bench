@@ -7,6 +7,7 @@
 # their recordings, so only a trial without one, or whose recording is newer, is encoded again. Both downloads read one
 # commit of the dataset, recorded with the tables as results/snapshot.json; the upload is refused when the dataset
 # already holds a publish built from a later commit, since a slow download would otherwise put older tables over newer.
+# A download the Hub cuts short resumes: at a pinned commit, the files already fetched are kept without asking again.
 set -euo pipefail
 bench=${BENCH:-$(cd "$(dirname "$0")/../.." && pwd)}
 work=${WORK:-$HOME/publish}
@@ -15,15 +16,23 @@ python=$work/venv/bin/python
 [ -x "$python" ] || { python3 -m venv "$work/venv" && "$work/venv/bin/pip" install -q -r "$bench/tools/space/requirements.txt" -r "$bench/tools/dataset/requirements.txt"; }
 rm -rf "$work/dataset" "$work/out"
 "$python" - "$work/dataset" <<'PY'
-import json, os, sys
+import json, os, sys, time
 from pathlib import Path
 from huggingface_hub import HfApi, snapshot_download
 info = HfApi().repo_info(os.environ["HF_REPO"], repo_type="dataset")
-snapshot_download(os.environ["HF_REPO"], repo_type="dataset", local_dir=sys.argv[1], allow_patterns=["runs/**"],
-                  ignore_patterns=["**/trajectory.json", "**/workspace/**", "**/web.mp4"], max_workers=16,
-                  revision=info.sha)
-snapshot_download(os.environ["HF_REPO"], repo_type="dataset", local_dir=sys.argv[1], allow_patterns=["runs/**/web.mp4"],
-                  max_workers=16, revision=info.sha)
+for attempt in range(8):
+    try:
+        snapshot_download(os.environ["HF_REPO"], repo_type="dataset", local_dir=sys.argv[1], allow_patterns=["runs/**"],
+                          ignore_patterns=["**/trajectory.json", "**/workspace/**", "**/web.mp4"], max_workers=16,
+                          revision=info.sha)
+        snapshot_download(os.environ["HF_REPO"], repo_type="dataset", local_dir=sys.argv[1],
+                          allow_patterns=["runs/**/web.mp4"], max_workers=16, revision=info.sha)
+        break
+    except Exception as error:
+        if attempt == 7:
+            raise
+        print(f"download cut short ({str(error)[:120]}); resuming in {60 * (attempt + 1)} s", flush=True)
+        time.sleep(60 * (attempt + 1))
 (Path(sys.argv[1]) / "results").mkdir(parents=True, exist_ok=True)
 (Path(sys.argv[1]) / "results" / "snapshot.json").write_text(
     json.dumps({"commit": info.sha, "committed_at": info.last_modified.isoformat()}) + "\n")

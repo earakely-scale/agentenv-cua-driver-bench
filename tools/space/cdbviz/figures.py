@@ -700,14 +700,53 @@ LABS = {"anthropic/": ("Claude", 0), "openai/": ("GPT", 1)}
 
 
 def story_specs(cat):
-    """The card's opening figure, ``decides``: whether the model or the setup decides a result."""
-    return {"decides": decides_spec(cat)}
+    """The card's opening figure, ``decides``: whether the model or the setup decides a result; and its showcase of the
+    operating systems, ``by-os``."""
+    return {"decides": decides_spec(cat), "by-os": os_spec(cat)}
+
+
+def os_spec(cat):
+    """Full pass per model, a dot each, a row per OS, the bench's first driver held fixed: the models it ran on every
+    one of those OSes in both conditions, each condition over the tasks every one of them ran there, so a row's spread is
+    the model's part and the rows' gap is the OS's."""
+    conds = [c for c in cat["conditions"] if c["id"] in catalog.CONDITIONS]
+    rows_by = {(r["os"], r["model"], r["condition"]): r for r in cat["board"] if r["driver"] == cat["driver"]}
+    oses = [o for o in cat["oses"] if any((o["id"], m["id"], c) in rows_by for m in cat["models"] for c in catalog.CONDITIONS)]
+    models = [m for m in cat["models"] if all((o["id"], m["id"], c) in rows_by for o in oses for c in catalog.CONDITIONS)]
+    tasks = {c["id"]: [t["id"] for t in cat["tasks"] if c["id"] in t["conditions"] and all(
+        t["id"] in rows_by[(o["id"], m["id"], c["id"])]["tasks"] for o in oses for m in models)] for c in conds}
+    via = label_of(cat, cat["driver"])
+    rows = []
+    if len(oses) > 1 and models:
+        for o in oses:
+            cells = {c["id"]: [{"model": m["id"], "name": m["name"], "lab": lab_of(m["id"]),
+                                **{k: v for k, v in catalog.summary(rows_by[(o["id"], m["id"], c["id"])], tasks[c["id"]]).items()
+                                   if k in ("passed", "n")}} for m in models] for c in conds if tasks[c["id"]]}
+            rows.append({"os": o["name"], "driver": via, "label": o["name"], "os_id": o["id"], "driver_id": cat["driver"],
+                         "cells": cells})
+    full = {c: usual([p["n"] for r in rows for p in r["cells"].get(c, [])]) for c in catalog.CONDITIONS}
+    short = {t["id"]: catalog.short(t) for t in cat["tasks"]}
+    span = {c: catalog.ranges([short[t] for t in ts]) for c, ts in tasks.items()}
+    sub = (f"The same models and driver, {via}, on each operating system: full passes per model, a dot each, over the "
+           "tasks every one of them ran. Every row holds the same models, so the rows' gap is the operating system's.")
+    foot = (f"A dot is one model's {full.get('foreground', 0)} foreground or {full.get('background', 0)} background "
+            f"trials ({span.get('foreground', '')} in the foreground, {span.get('background', '')} in the background); "
+            "tied models share a dot, with their count above it. Full pass: the task done, through the GUI only, and in "
+            "the background with the user undisturbed on all eight of trycua's criteria. Tasks by trycua's Cua Driver "
+            "Bench, run on AgentEnv; not trycua's official results.")
+    desc = "; ".join(f"{r['label']}, {c['name'].lower()}: " + ", ".join(f"{p['name']} {p['passed']} of {p['n']}"
+                                                                         for p in r["cells"][c["id"]])
+                     for r in rows for c in conds if r["cells"].get(c["id"]))
+    return {"title": "The same models and driver on each operating system", "subtitle": sub, "foot": foot, "desc": desc,
+            "panels": rows, "conds": conds, "full": full, "tasks": tasks, "models": [m["id"] for m in models],
+            "draw": strips}
 
 
 def decides_spec(cat):
     """Full pass per model, a dot each, for each OS and driver over the whole bench in each condition: the models that
     ran every trial of a condition, a row per OS and driver with two of them or more, so a row's spread is the model's
-    part and the rows' gap is the setup's."""
+    part and the rows' gap is the setup's. An OS whose complete count isn't the bench's, one that runs part of it or
+    merges two runs of a model, has no row."""
     conds = [c for c in cat["conditions"] if c["id"] in catalog.CONDITIONS]
     whole = complete_counts(cat["board"])
     full = {c["id"]: usual([n for (_, cond), n in whole.items() if cond == c["id"]]) for c in conds}
@@ -718,7 +757,7 @@ def decides_spec(cat):
             cells = {}
             for c in conds:
                 got = [b for b in cat["board"] if (b["os"], b["driver"], b["condition"]) == (o["id"], d["id"], c["id"])
-                       and b["n_trials"] == whole.get((o["id"], c["id"])) and b["model"] in names]
+                       and b["n_trials"] == whole.get((o["id"], c["id"])) == full[c["id"]] and b["model"] in names]
                 cells[c["id"]] = [{"model": b["model"], "name": names[b["model"]], "passed": b["passed"],
                                    "n": b["n_trials"], "lab": lab_of(b["model"])} for b in got]
             if max(len(v) for v in cells.values()) >= 2:

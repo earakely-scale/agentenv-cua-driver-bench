@@ -38,6 +38,8 @@ STORY_FIGURES = {
     "decides": "Dot strips of full passes per model, a row per operating system and driver, the foreground beside the "
                "background: with the desktop to itself the models spread out along each row, and with the user typing "
                "they bunch together at a level that changes from row to row",
+    "by-os": "Dot strips of full passes per model, a row per operating system with the driver and the models held fixed, "
+             "the foreground beside the background: where the rows part, the operating system decides",
 }
 COMPARE_FIGURES = {
     "models-tasks": "Grid of how many of each task's five runs passed, a row per task in its family and a column per "
@@ -68,6 +70,8 @@ def main():
     text = text.replace("{{HERO}}", _hero(catalog, trials))
     text = text.replace("{{PAIRS}}", _pairs(catalog, trials))
     text = text.replace("{{STORY}}", _story(catalog))
+    oses = _oses(catalog)
+    text = text.replace("{{OSES}}\n\n", f"{oses}\n\n" if oses else "")
     text = text.replace("{{BOARD}}", _board(catalog, trials))
     text = text.replace("{{NOTES}}", _notes(catalog))
     models = json.loads((HERE.parent / "space" / "config.json").read_text())["models"]
@@ -93,6 +97,15 @@ def _story(catalog):
     text = (HERE / "card" / "story.md").read_text().strip()
     shown = "decides" in (catalog.get("story_figures") or [])
     return text.replace("{{FIGURE}}", _picture("decides", STORY_FIGURES["decides"]) if shown else "").strip()
+
+
+def _oses(catalog):
+    """The card's showcase of the operating systems (card/os.md), with its figure of the same models and driver on each,
+    or nothing until the board holds a driver and its models on two OSes or more."""
+    if "by-os" not in (catalog.get("story_figures") or []):
+        return ""
+    text = (HERE / "card" / "os.md").read_text().strip()
+    return text.replace("{{FIGURE}}", _picture("by-os", STORY_FIGURES["by-os"])).strip()
 
 
 def _pairs(catalog, trials):
@@ -204,14 +217,13 @@ def _board(catalog, trials):
     head = "| Model | " + " | ".join(f"{o['name']}<br>{label(d)}" for o, d in setups) + " |"
     rule = "|---|" + "---:|" * len(setups)
     rows = [f"| {m['name']} | " + " | ".join(cell(m, o, d) for o, d in setups) + " |" for m in models]
-    partial = [o["name"] for o in oses if full.get((o["id"], "foreground")) != max(n for (_, c), n in full.items()
-                                                                                  if c == "foreground")]
+    per = {c: usual([n for (_, cond), n in full.items() if cond == c]) for c in conds}
+    partial = [o["name"] for o in oses if full.get((o["id"], "foreground")) != per["foreground"]]
     board = trials[trials.on_board & trials.passed]
     speed = board.groupby(["os", "driver"]).agg(seconds=("duration_s", "median"), calls=("model_calls", "median"))
     speed_rows = [f"| {o['name']} · {label(d)} | {speed.loc[(o['id'], d['id']), 'seconds']:.0f} | "
                   f"{speed.loc[(o['id'], d['id']), 'calls']:.0f} |" for o, d in setups if (o["id"], d["id"]) in speed.index]
     note = (f" {join_names(partial)} {'runs' if len(partial) == 1 else 'run'} the seven BenchLab tasks alone." if partial else "")
-    per = {c: max(n for (_, cond), n in full.items() if cond == c) for c in conds}
     return f"""Each cell is a model's full pass through one driver on one operating system, as a share of its {per["foreground"]}
 foreground trials, then of its {per["background"]} background ones: the task done through the GUI only and, in the
 background, the user left undisturbed. The best foreground of each column is in bold.{note}
@@ -233,7 +245,12 @@ def complete_counts(board):
     counts = {}
     for b in board:
         counts.setdefault((b["os"], b["condition"]), []).append(b["n_trials"])
-    return {key: max(ns, key=lambda v: (ns.count(v), v)) for key, ns in counts.items()}
+    return {key: usual(ns) for key, ns in counts.items()}
+
+
+def usual(values):
+    """The most common of ``values``, the larger on a tie."""
+    return max(values, key=lambda v: (values.count(v), v))
 
 
 def join_names(names):

@@ -14,6 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 STORY = HERE.parent / "dataset" / "card" / "story.md"
+OS_STORY = HERE.parent / "dataset" / "card" / "os.md"
 sys.path.insert(0, str(HERE))
 
 from cdbviz import catalog, clip, failures, figures, hero, media, pair, reel, trials  # noqa: E402
@@ -26,6 +27,18 @@ def story(path=STORY):
     if lines and lines[0].startswith("#"):
         lines = lines[1:]
     return "\n".join(line for line in lines if line.strip() != "{{FIGURE}}").strip()
+
+
+def os_showcase(cat):
+    """The card's figure of the same models and driver on each OS as the Space draws it, a row per OS: the conditions,
+    a dot's trials in each, and each row's OS, driver and models' passes; None until two OSes hold them."""
+    spec = figures.os_spec(cat)
+    if not spec["panels"]:
+        return None
+    return {"conds": [c["id"] for c in spec["conds"]], "each": spec["full"], "tasks": spec["tasks"],
+            "rows": [{"os": r["os_id"], "driver": r["driver_id"],
+                      "cells": {c: [{"model": p["model"], "passed": p["passed"], "n": p["n"]} for p in ps]
+                                for c, ps in r["cells"].items()}} for r in spec["panels"]]}
 
 
 def pick_hero(metas, cfg):
@@ -182,6 +195,8 @@ def main():
     cat = catalog.build(metas, cfg, hero_uid, files, [m for m in trials.discover_missing(args.data)
                                                      if f"{m['os']}/{m['run']}" not in skip])
     cat["story"] = story()
+    cat["os_story"] = story(OS_STORY)
+    cat["os_showcase"] = os_showcase(cat)
     cat["failures"] = failures.build(loaded, cat)
     keep = {m["uid"] for m in metas}
     for stale in (data / "trials").iterdir():

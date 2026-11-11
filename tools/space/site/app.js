@@ -216,7 +216,7 @@ function boardView() {
   document.title = CAT.title;
   VIEW.board = true;
   const wrap = h("div", { class: "wrap" },
-    resultsSection(), costSection(), compareSection(), failuresSection(), trialsSection(), howSection());
+    osSection(), resultsSection(), costSection(), compareSection(), failuresSection(), trialsSection(), howSection());
   $("#app").replaceChildren(h("div", { class: "wrap" }, landing()), sectionNav(wrap), wrap);
 }
 
@@ -327,10 +327,33 @@ const commonest = (ns) => {
   return [...seen].reduce((a, b) => (b[1] > a[1] || (b[1] === a[1] && b[0] > a[0]) ? b : a), [0, 0])[0];
 };
 
+/** The operating systems' chart, as the card draws it (catalog.os_showcase): a row per OS, the bench's driver and its
+ * models held fixed, over the tasks every one of them ran; none until two OSes hold them. */
+function osData() {
+  const s = CAT.os_showcase;
+  if (!s) return { conds: [], each: {}, rows: [] };
+  const conds = CAT.conditions.filter((c) => s.conds.includes(c.id));
+  const rows = s.rows.filter((r) => OSES[r.os]).map((r) => ({ os: OSES[r.os], driver: DRIVERS[r.driver] || { id: r.driver, name: r.driver }, cells: r.cells }));
+  return { conds, each: s.each, rows };
+}
+
+/** The showcase of the operating systems: the card's findings about them (card/os.md), and their chart. */
+function osSection() {
+  const data = osData();
+  if (data.rows.length < 2) return null;
+  const n = data.rows[0].cells[data.conds[0]?.id]?.length || 0;
+  const fig = decidesFigure(data, { title: "The same models and driver on each operating system",
+    sub: `Full passes per model, a dot each: ${n} model${n === 1 ? "" : "s"} through ${driverLabel(data.rows[0].driver.id)} on every row, over the tasks every operating system ran.` });
+  return h("section", { class: "showcase", "aria-labelledby": "by-os-h" },
+    h("div", { class: "section-head", id: "by-os", "data-nav": "By OS" }, h("h2", { id: "by-os-h" }, "By operating system")),
+    h("div", { class: "story" }, CAT.os_story ? h("div", { class: "finds" }, markdown(CAT.os_story)) : null, fig));
+}
+
 /** The card's opening figure, figures.decides_spec, from the board by the same rules, so the two can't disagree: a row
  * per OS and driver where two models or more ran every trial of a condition, a model's dot its full passes. A model
  * ran every trial when it ran as many as most of its OS's entries for the condition, the larger of a tie, so runs still
- * landing on one OS can't drop another's rows; a condition's "trials a dot" is the most common of those counts. */
+ * landing on one OS can't drop another's rows; a condition's "trials a dot" is the most common of those counts, and an
+ * OS whose count isn't, one that runs part of the bench or merges two runs of a model, has no row. */
 function decidesData() {
   const conds = CAT.conditions.filter((c) => c.id === "foreground" || c.id === "background");
   const ran = (o, c) => CAT.board.filter((b) => b.os === o.id && b.condition === c.id);
@@ -340,7 +363,7 @@ function decidesData() {
   for (const o of CAT.oses) {
     for (const d of CAT.drivers) {
       const cells = Object.fromEntries(conds.map((c) => [c.id, ran(o, c)
-        .filter((b) => b.driver === d.id && b.n_trials === full[o.id][c.id] && MODELS[b.model])
+        .filter((b) => b.driver === d.id && b.n_trials === full[o.id][c.id] && full[o.id][c.id] === each[c.id] && MODELS[b.model])
         .map((b) => ({ model: b.model, passed: b.passed, n: b.n_trials }))]));
       if (Math.max(...Object.values(cells).map((v) => v.length)) >= 2) rows.push({ os: o, driver: d, cells });
     }
@@ -350,8 +373,11 @@ function decidesData() {
 
 /** The decides chart: each row's dots, a dot per full-pass count shared by its models, in their lab's colour (half and
  * half when both labs tie); hovering or focusing one names its models, and clicking opens their trials. */
-function decidesFigure() {
-  const data = decidesData();
+/** The opening chart's heading, and the heading of the operating systems' chart the same drawing serves. */
+const DECIDES_HEAD = { title: "With the user typing, the setup decides, not the model",
+  sub: "Full passes per model, a dot each, for every operating system and driver that ran the whole bench." };
+
+function decidesFigure(data = decidesData(), head = DECIDES_HEAD) {
   if (!data.rows.length) return null;
   const plot = h("div", { class: "dzplot" });
   const tip = h("div", { class: "ptip dztip", hidden: true, role: "tooltip" });
@@ -450,8 +476,8 @@ function decidesFigure() {
   const touch = matchMedia("(hover: none)").matches;
   return h("figure", { class: "decides" },
     h("div", { class: "dzhead" },
-      h("h3", {}, "With the user typing, the setup decides, not the model"),
-      h("p", {}, "Full passes per model, a dot each, for every operating system and driver that ran the whole bench.")),
+      h("h3", {}, head.title),
+      h("p", {}, head.sub)),
     h("div", { class: "dzkey", "aria-hidden": "true" },
       LABS.map(([, name, slot]) => h("span", {}, h("i", { style: { background: `var(--s${slot})` } }), name)),
       h("span", {}, h("i", { class: "tie" }), "Claude and GPT tied")),

@@ -203,14 +203,15 @@ def test_the_cards_board_has_a_cell_per_model_and_setup_its_best_foreground_bold
     card = _module(ROOT / "tools" / "dataset" / "card.py")
     cell = lambda os_, driver, model, cond, passed, n: {"os": os_, "driver": driver, "model": model, "condition": cond,
                                                         "passed": passed, "n_trials": n}
-    catalog = {"oses": [{"id": "linux", "name": "Linux"}, {"id": "omarchy", "name": "Omarchy"}],
+    catalog = {"oses": [{"id": "linux", "name": "Linux"}, {"id": "windows", "name": "Windows"}, {"id": "omarchy", "name": "Omarchy"}],
                "drivers": [{"id": "cua-driver", "name": "cua-driver"}, {"id": "macos-harness", "name": "browser-use (macos-harness)",
                                                                         "label": "browser-use"}],
                "models": [{"id": "a/one", "name": "One"}, {"id": "a/two", "name": "Two"}],
                "board": [cell("linux", "cua-driver", "a/one", "foreground", 40, 50), cell("linux", "cua-driver", "a/one", "background", 5, 40),
                          cell("linux", "cua-driver", "a/two", "foreground", 30, 50), cell("linux", "cua-driver", "a/two", "background", 4, 40),
-                         cell("omarchy", "cua-driver", "a/one", "foreground", 34, 35), cell("omarchy", "cua-driver", "a/one", "background", 5, 25),
-                         cell("omarchy", "cua-driver", "a/two", "foreground", 34, 35),
+                         cell("windows", "cua-driver", "a/one", "foreground", 45, 50), cell("windows", "cua-driver", "a/one", "background", 0, 40),
+                         cell("omarchy", "cua-driver", "a/one", "foreground", 68, 70), cell("omarchy", "cua-driver", "a/one", "background", 5, 25),
+                         cell("omarchy", "cua-driver", "a/two", "foreground", 68, 70),
                          cell("omarchy", "cua-driver", "a/two", "background", 3, 12)]}
     trials = tables.pd.DataFrame([
         {"os": "linux", "driver": "cua-driver", "on_board": True, "passed": True, "duration_s": 50.0, "model_calls": 16},
@@ -220,9 +221,10 @@ def test_the_cards_board_has_a_cell_per_model_and_setup_its_best_foreground_bold
 
     board = card._board(catalog, trials)
 
-    assert "| Model | Linux<br>cua-driver | Omarchy<br>cua-driver |" in board
-    assert "| One | **80** · 13 | **97** · 20 |" in board
-    assert "| Two | 60 · 10 | **97** · – |" in board
+    assert "| Model | Linux<br>cua-driver | Windows<br>cua-driver | Omarchy<br>cua-driver |" in board
+    assert "| One | **80** · 13 | **90** · 0 | **97** · 20 |" in board
+    assert "| Two | 60 · 10 |  | **97** · – |" in board
+    assert "as a share of its 50\nforeground trials, then of its 40 background ones" in board
     assert "Omarchy runs the seven BenchLab tasks alone." in board
     assert "| Linux · cua-driver | 55 | 18 |" in board and "| Omarchy · cua-driver | 26 | 12 |" in board
 
