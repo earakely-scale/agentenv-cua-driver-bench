@@ -205,17 +205,29 @@ def test_every_linux_trial_has_its_codex_twin():
     agent_desktop = (ROOT / "evals" / "agent-desktop-bench-v2-trials.txt").read_text().split()
 
     linux = {path.stem for path in (ROOT / "tasks").glob("codex-*.json")
-             if not path.stem.startswith(("codex-macos-", "codex-windows-"))}
+             if not path.stem.startswith(("codex-macos-", "codex-windows-", "codex-agent-desktop-"))}
 
     assert linux == {f"codex-{name}" for name in trials | set(agent_desktop)}
     assert (ROOT / "evals" / "codex-agent-desktop-bench-v2-trials.txt").read_text().split() == [
         f"codex-{name}" for name in agent_desktop]
 
 
+@pytest.mark.parametrize("arm, kinds", [("agent-desktop", ("bench-v2",)),
+                                        ("windows-agent-desktop", ("bench-v2", "benchlab"))])
+def test_every_agent_desktop_trial_has_its_codex_twin_and_their_lists_are_its(arm, kinds):
+    trials = (ROOT / "evals" / f"{arm}-bench-v2-trials.txt").read_text().split()
+    twins = {path.stem for path in (ROOT / "tasks").glob(f"codex-{arm}-*.json")}
+
+    assert twins == {f"codex-{name}" for name in trials}
+    for kind in kinds:
+        assert (ROOT / "evals" / f"codex-{arm}-{kind}-trials.txt").read_text().split() == [
+            f"codex-{name}" for name in (ROOT / "evals" / f"{arm}-{kind}-trials.txt").read_text().split()]
+
+
 def test_every_windows_trial_has_its_codex_twin_and_their_lists_are_its():
     windows = (ROOT / "evals" / "windows-bench-v2-trials.txt").read_text().split()
     twins = {path.stem for path in (ROOT / "tasks").glob("codex-windows-*.json")
-             if not path.stem.startswith("codex-windows-codex-computer-use-")}
+             if not path.stem.startswith(("codex-windows-codex-computer-use-", "codex-windows-agent-desktop-"))}
 
     assert twins == {f"codex-{name}" for name in windows}
     for kind in ("bench-v2", "benchlab"):
