@@ -240,6 +240,8 @@ def test_another_drivers_calls_read_in_the_lane_as_steps_on_elements_points_and_
                                                                              None)
     assert said("desktop_batch", {"commands_json": '[{"command": "hover", "args": {"xy": "160,180"}}]'}) == (
         "Hover", "at (160, 180)", None)
+    assert said("desktop_batch", {"commands_json": '[{"command": "skills", "args": ["get", "platform"]}]'})[:2] == (
+        "Skills", "")
     assert said("macos_harness", {"commands": [["click", "--app", "BenchLab", "--element_index", "1"],
                                                ["get_app_state", "--app", "BenchLab"]]}) == (
         "Run 2 steps", "click element 1 → read window", "BenchLab")

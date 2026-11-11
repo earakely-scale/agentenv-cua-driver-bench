@@ -351,7 +351,8 @@ def arm_steps(tool, inp):
         return [("js_reset", {})]
     if tool == "desktop_batch":
         batch = jparse(inp.get("commands_json")) or []
-        return [(str(c.get("command")), c.get("args") or {}) for c in batch if isinstance(c, dict)] or [("batch", {})]
+        return [(str(c.get("command")), c["args"] if isinstance(c.get("args"), dict) else {}) for c in batch
+                if isinstance(c, dict)] or [("batch", {})]
     if tool.startswith("desktop_"):
         return [(tool.removeprefix("desktop_"), inp)]
     if tool == "macos_harness":
