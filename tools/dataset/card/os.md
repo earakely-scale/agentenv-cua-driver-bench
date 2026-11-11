@@ -12,7 +12,7 @@ where the rows part, the operating system decides.
   they pass none. macOS and Omarchy keep the dialogs off the user: IR-01 to IR-04 pass most of the time there. MB-09's
   drag passes on neither: on macOS it moves the user's pointer, and on Omarchy cua-driver's drag never drops into
   BenchLab's list.
-- **With the desktop to itself the OSes hardly part for Claude Sonnet 5.5**, who passes 33 to 35 of 35 on each. Opus and
+- **With the desktop to itself the OSes hardly part for Claude Sonnet 5.5.** It passes 33 to 35 of 35 on each. Opus and
   Haiku pass 30 to 35 on Linux, macOS and Windows but 22 and 26 on Omarchy. There Opus passes none of MB-10's five hover
   trials. In 3 of its 4 IR-01 misses it presses Submit, finds BenchLab's window unchanged and reports no confirmation,
   leaving the permission dialog that opened beside it unanswered.
