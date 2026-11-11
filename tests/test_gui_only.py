@@ -235,6 +235,7 @@ def test_its_table_pins_trycuas_scan_at_the_locks_commit():
 
 
 JS = "mcp__desktop-s02-macos-codex-computer-use__js"
+REPL = "mcp__desktop-s02-macos-aside__repl"
 
 
 def test_codexs_js_driving_apps_through_the_cua_api_is_gui_only(gui_only):
@@ -246,6 +247,16 @@ def test_codexs_js_driving_apps_through_the_cua_api_is_gui_only(gui_only):
     assert result["result"] is True and result["violations"] == []
 
 
+def test_asides_repl_driving_apps_through_the_computer_api_is_gui_only(gui_only):
+    code = ('const mail = await computer.getApp("Copperfield Mail");'
+            ' await mail.type("Please process the refs.json export by Friday.");')
+
+    result = gui_only(_trajectory(_tool(REPL, code=code, title="Type the reply")))
+
+    assert result["result"] is True and result["violations"] == []
+
+
+@pytest.mark.parametrize("tool, arm", [(JS, "codex"), (REPL, "aside")], ids=["codex", "aside"])
 @pytest.mark.parametrize("code, violation", [
     ('const fs = require("fs"); nodeRepl.write(fs.readFileSync("/Users/lume/cdb-s02/a.csv", "utf8"));', "require"),
     ("nodeRepl.write(fs.readdirSync('/Users/lume/cdb-s02').join(' '));", "module:fs"),
@@ -256,7 +267,7 @@ def test_codexs_js_driving_apps_through_the_cua_api_is_gui_only(gui_only):
     ('import fs from "fs";', "import"),
 ], ids=["require", "a module as the REPL's global", "another", "the process", "the process through globalThis",
         "a dynamic import", "a static import"])
-def test_codexs_js_reaching_out_of_the_gui_fails(gui_only, code, violation):
-    result = gui_only(_trajectory(_tool(JS, code=code)))
+def test_codexs_js_or_asides_repl_reaching_out_of_the_gui_fails(gui_only, tool, arm, code, violation):
+    result = gui_only(_trajectory(_tool(tool, code=code)))
 
-    assert result["result"] is False and f"{JS}:codex:{violation}" in result["violations"]
+    assert result["result"] is False and f"{tool}:{arm}:{violation}" in result["violations"]

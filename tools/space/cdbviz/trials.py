@@ -26,8 +26,10 @@ ARM_VERBS = {"snapshot": "Read window", "get_app_state": "Read window", "find": 
              "right_click": "Right-click", "perform_secondary_action": "Secondary action", "type": "Type",
              "type_text": "Type", "set_value": "Set value", "press": "Press", "press_key": "Press", "scroll": "Scroll",
              "drag": "Drag", "hover": "Hover", "mouse_move": "Move pointer", "focus_window": "Focus window",
-             "wait": "Wait", "batch": "Run steps", "js": "Run JavaScript", "js_reset": "Reset the REPL"}
-#: The cua API calls of Codex Computer Use's ``js`` the lane shows, and the step each is; others are its own code.
+             "wait": "Wait", "batch": "Run steps", "js": "Run JavaScript", "js_reset": "Reset the REPL",
+             "repl": "Run JavaScript"}
+#: The cua API calls of Codex Computer Use's ``js``, and Aside's ``computer`` calls of the same names in its ``repl``, the
+#: lane shows, and the step each is; others are their own code.
 CUA_STEPS = {"getApp": "get_app_state", "getState": "get_app_state", "getAXState": "get_app_state",
              "getAXStateAndScreenshot": "get_app_state", "getScreenshot": "screenshot", "click": "click",
              "doubleClick": "double_click", "rightClick": "right_click", "setValue": "set_value",
@@ -342,11 +344,12 @@ def step_parts(st):
 
 def arm_steps(tool, inp):
     """Another driver's call as the steps it takes, each a name and its arguments: an agent-desktop tool less its
-    ``desktop_`` prefix, or its batch's commands, the command lines macos-harness's one tool runs, and the cua calls
-    Codex Computer Use's JavaScript makes; None for cua-driver's."""
+    ``desktop_`` prefix, or its batch's commands, the command lines macos-harness's one tool runs, and the app calls
+    Codex Computer Use's and Aside Computer Use's JavaScript makes, whose APIs share their methods' names; None for
+    cua-driver's."""
     inp = inp if isinstance(inp, dict) else {}
-    if tool == "js":
-        return cua_steps(inp.get("code")) or [("js", {})]
+    if tool in ("js", "repl"):
+        return cua_steps(inp.get("code")) or [(tool, {})]
     if tool == "js_reset":
         return [("js_reset", {})]
     if tool == "desktop_batch":

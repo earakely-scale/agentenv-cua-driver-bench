@@ -100,7 +100,8 @@ Lume sandbox in a two-line config, `[sandbox]` with `default = "lume"` in `.agen
 agent-desktop, `macos-macos-harness-…` for browser-use's macOS harness and `macos-codex-computer-use-…` for OpenAI's
 Codex Computer Use (agentenv-framework 0.9.1482 or later), as the drivers comparison ran them, for
 example `agent-env run hf://earakely-scale/cua-driver-bench --task macos-agent-desktop-ir-01-r1-background --model
-anthropic/claude-sonnet-5-5`.
+anthropic/claude-sonnet-5-5`. `macos-aside-…` runs Aside Computer Use through its one tool, `repl`, and opens only the
+apps the task names. It needs an agentenv-framework release that ships the `aside` driver.
 
 On Windows 11 the same tasks run as the `windows-` tasks, on a Linux machine with KVM (we used EC2 c8i hosts with
 nested virtualization) and Docker with a registry on `localhost:5000`, with agentenv-framework 0.9.1480 or later, as the
@@ -178,7 +179,8 @@ agent-env run . --eval macos-bench-v2 --model anthropic/claude-sonnet-5-5       
 
 The first run pulls Cua's macOS base (about 29 GB) and composes the task's computer, about 7 minutes. The drivers
 comparison's trials name their driver: `macos-agent-desktop-ir-01-r1-foreground`, `macos-macos-harness-…`,
-`macos-codex-computer-use-…`, and cua-driver on its own tools alone, `macos-cua-driver-…`.
+`macos-codex-computer-use-…`, and cua-driver on its own tools alone, `macos-cua-driver-…`. Aside Computer Use's
+trials are `macos-aside-…`.
 
 On Windows 11, the tasks run in a VM of Microsoft's evaluation of Windows 11 Enterprise on a Linux amd64 machine with
 KVM (`/dev/kvm`), Docker and a registry on `localhost:5000`:
@@ -224,7 +226,8 @@ the Linux and Windows rows on the board ran with `driver`, and the first Linux r
 --set envs/desktop-s03.driver=reference --set envs/desktop-s04.driver=reference`. The `macos-agent-desktop-…`,
 `macos-macos-harness-…`, `macos-codex-computer-use-…` and `macos-cua-driver-…` task files are these settings written
 out, and they are what the macOS rows ran; in the foreground they also start agent-desktop headed, and Codex's trials
-name the apps it may act on, which `--set` can't. A driver that doesn't run
+name the apps it may act on, which `--set` can't. The `macos-aside-…` task files are written out the same way, and
+name the apps Aside may open. A driver that doesn't run
 on the computer, such as macos-harness on Linux, is refused before any task runs.
 
 {{BODY}}
