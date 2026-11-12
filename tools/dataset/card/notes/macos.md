@@ -2,7 +2,8 @@
 with the OS, the model, the prompts, the seeds and the grade held fixed, each driver's agent on its own tools alone
 (runs `cua-driver-*`, `agent-desktop-*` and `macos-harness-*` of 2026-11-05: Claude Sonnet 5.5 in Claude Code on all
 90 trials of Bench v2, Claude Haiku 5.5 on all 90 as well, its multi-app tasks run on 2026-11-06;
-`codex-computer-use-*`, Sonnet on 2026-11-09 and Opus and Haiku on 2026-11-11; `aside-*-2026-11-11`, seven models;
+`codex-computer-use-*`, Sonnet and GPT-6.1 Sol on 2026-11-09, Opus and Haiku on 2026-11-11 and GPT-6.1 Terra on
+2026-11-12; `aside-*-2026-11-11`, seven models;
 and `cua-driver-0-47-10-*-2026-11-11`, the same seven on cua-driver 0.47.10; macOS 26 on EC2 Macs). Through the five,
 Sonnet passes 43, 35, 32, 26 and 50 of 50 trials in the foreground, and 23, 8, 1, 11 and 37 of 40 in the background.
 
@@ -48,6 +49,14 @@ Sonnet passes 43, 35, 32, 26 and 50 of 50 trials in the foreground, and 23, 8, 1
   the background Codex still raises a window over the user's in 24 of 40. One trial leaves the GUI: in G04's
   background GPT imports Node's `fs` through `js` and reads the task's files, and the trajectory check fails it. None
   ends on the turn limit.
+- **Codex Computer Use with GPT-6.1 Terra: 21 of 50 in the foreground and 16 of 40 in the background** (run
+  `codex-computer-use-gpt-6-1-terra-2026-11-12`, Codex CLI 0.147.0 at medium effort, the same app as Sol's), against
+  Sol's 28 and 8 through the same driver, and its own 33 and 22 through cua-driver 0.47.10, at $0.06 a trial. In the
+  background it does the task in 27 of 40 trials and disturbs the user in 20, each time raising a window over theirs,
+  and it passes MB-09's background drag 2 of 5, where Sol stopped in all five. In the foreground it passes 14 of the 20
+  interruption trials: in IR-04 it declines the consent prompt and then ends without submitting the form in 4 of 5, and
+  in IR-02 its Apply lands before its menu choice in 2. MB-10 and MB-11, which need the hover Codex hasn't, fail all
+  ten, and 19 of its 90 trials, all multi-app, end on the 45-turn limit. None leaves the GUI.
 - **cua-driver 0.38.0 with the same model: GPT-6.1 Sol in Codex CLI passes 30 of 50 in the foreground and 16 of 40 in
   the background** (run `cua-driver-gpt-6-1-sol-2026-11-09`, Codex CLI 0.147.0 at medium effort), against 28 and 8
   through Codex Computer Use, at $0.18 a trial against $0.10. In the background it does the task in 25 of 40 trials
